@@ -1,69 +1,118 @@
-import Image from "next/image";
+"use client";
+
+import { useMemo, useRef, useState } from "react";
+import { HoldingsTable } from "@/components/HoldingsTable";
+import { PerformanceChart } from "@/components/PerformanceChart";
+import { SummaryCards } from "@/components/SummaryCards";
+import { TransactionForm } from "@/components/TransactionForm";
+import { TransactionList } from "@/components/TransactionList";
+import { buttonClass } from "@/components/ui";
+import { BASE_CURRENCIES } from "@/lib/currency";
+import { buildHistory, summarize } from "@/lib/portfolio";
+import { parseImport, savePortfolio, usePortfolio } from "@/lib/storage";
+import type { Transaction } from "@/lib/types";
+import { useMarketData } from "@/lib/useMarketData";
 
 export default function Home() {
+  const portfolio = usePortfolio();
+  const { transactions, settings } = portfolio;
+  const base = settings.baseCurrency;
+  const [refreshKey, setRefreshKey] = useState(0);
+  const market = useMarketData(transactions, base, refreshKey);
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  const summary = useMemo(() => summarize(transactions, market.quotes, market.fx), [transactions, market.quotes, market.fx]);
+  const history = useMemo(() => {
+    const currencies = Object.fromEntries(Object.values(market.quotes).map((q) => [q.symbol, q.currency]));
+    return buildHistory(transactions, market.prices, currencies, market.fxHistory, base);
+  }, [transactions, market.prices, market.quotes, market.fxHistory, base]);
+
+  const setTransactions = (next: Transaction[]) => savePortfolio({ ...portfolio, transactions: next });
+
+  function exportJson() {
+    const blob = new Blob([JSON.stringify(portfolio, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `portfolio-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  async function importJson(file: File) {
+    try {
+      const data = parseImport(await file.text());
+      if (transactions.length && !confirm(`Replace your ${transactions.length} transactions with ${data.transactions.length} from the file?`)) return;
+      savePortfolio(data);
+    } catch (e) {
+      alert(`Import failed: ${(e as Error).message}`);
+    }
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="mx-auto w-full max-w-7xl flex-1 space-y-4 px-4 py-6">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Portfolio</h1>
+          <p className="text-xs text-zinc-500">
+            {market.loading
+              ? "Updating prices…"
+              : market.error
+                ? `Price update failed: ${market.error}`
+                : market.updatedAt
+                  ? `Prices from Yahoo Finance · updated ${market.updatedAt.toLocaleTimeString("de-CH")}`
+                  : ""}
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            className={buttonClass}
+            value={base}
+            onChange={(e) => savePortfolio({ ...portfolio, settings: { ...settings, baseCurrency: e.target.value } })}
+            aria-label="Base currency"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            {BASE_CURRENCIES.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+          <button className={buttonClass} onClick={() => setRefreshKey((k) => k + 1)} disabled={market.loading}>
+            Refresh
+          </button>
+          <button className={buttonClass} onClick={exportJson}>
+            Export
+          </button>
+          <button className={buttonClass} onClick={() => fileInput.current?.click()}>
+            Import
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="application/json"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) importJson(f);
+              e.target.value = "";
+            }}
+          />
         </div>
-      </main>
-    </div>
+      </header>
+
+      <SummaryCards summary={summary} currency={base} />
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="min-w-0 space-y-4 lg:col-span-2">
+          <PerformanceChart history={history} currency={base} loading={market.loading} />
+          <HoldingsTable holdings={summary.holdings} currency={base} />
+        </div>
+        <div className="min-w-0 space-y-4">
+          <TransactionForm onAdd={(t) => setTransactions([...transactions, t])} />
+          <TransactionList
+            transactions={transactions}
+            quotes={market.quotes}
+            onDelete={(id) => setTransactions(transactions.filter((t) => t.id !== id))}
+          />
+        </div>
+      </div>
+    </main>
   );
 }
