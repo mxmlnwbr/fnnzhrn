@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { AccountMenu } from "@/components/AccountMenu";
 import { HoldingsTable } from "@/components/HoldingsTable";
 import { PerformanceChart } from "@/components/PerformanceChart";
 import { SummaryCards } from "@/components/SummaryCards";
@@ -64,6 +65,7 @@ export default function Home() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <AccountMenu />
           <select
             className={buttonClass}
             value={base}
