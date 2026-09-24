@@ -70,7 +70,7 @@ Sign-in and sync use [Supabase](https://supabase.com) (the free tier is plenty).
 
 1. **Create the project.** In Vercel, open the project → **Storage** → **Create Database** → **Supabase**, and connect it to this project. This adds `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to the project's environment variables. (Or create a project at supabase.com and add `NEXT_PUBLIC_SUPABASE_URL` plus `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from **Project Settings → API Keys** yourself; see `.env.example`.)
 2. **Create the table.** In the Supabase dashboard, open **SQL Editor**, paste [`supabase/schema.sql`](supabase/schema.sql) and run it. Row-level security limits every user to their own row.
-3. **Put the code in the email.** Under **Authentication → Emails → Magic Link**, add `{{ .Token }}` to the template, e.g. `<p>Your code: <strong>{{ .Token }}</strong></p>`. Typing the code works in any browser, including the app added to your phone's home screen. The link in the email also works, but only in the browser it opens in.
+3. **Sign-in email (optional).** By default the email contains a sign-in link, which signs in the browser it opens in. To also get a code you can type in (handy for the app added to your phone's home screen), set up custom SMTP under **Authentication → Emails → SMTP Settings** (Supabase only lets you edit templates then), and add `{{ .Token }}` to the **Magic link or OTP** template, e.g. `<p>Your code: <strong>{{ .Token }}</strong></p>`.
 4. **Allow your URL.** Under **Authentication → URL Configuration**, set **Site URL** to your Vercel URL and add `http://localhost:3000` to the redirect URLs for local development.
 5. **Redeploy** on Vercel so the new variables are built in.
 
@@ -82,4 +82,4 @@ How sync behaves:
 - Every change uploads right away. When you come back to the tab, it pulls the latest version, so edits from your phone show up on your computer.
 - If both devices change the portfolio while one is offline, the last one to upload wins.
 - Signing out removes the portfolio from that browser. It stays in your account.
-- Supabase's built-in email service sends only a few emails per hour. That's fine for personal use; connect your own SMTP provider under **Authentication → Emails** if you need more.
+- Supabase's built-in email service sends only a few emails per hour, and only to members of your Supabase organisation. That's fine for personal use; connect your own SMTP provider under **Authentication → Emails** to sign in other people.

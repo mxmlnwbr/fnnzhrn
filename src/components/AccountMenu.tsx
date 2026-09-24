@@ -102,7 +102,7 @@ function SignInForm({ onDone }: { onDone: () => void }) {
         />
         {error && <p className="text-red-600 dark:text-red-400">{error}</p>}
         <button className={`${primaryButtonClass} w-full`} disabled={busy}>
-          {busy ? "Sending…" : "Email me a sign-in code"}
+          {busy ? "Sending…" : "Email me a sign-in link"}
         </button>
       </form>
     );
@@ -120,8 +120,8 @@ function SignInForm({ onDone }: { onDone: () => void }) {
       }}
     >
       <p>
-        We sent a code to <span className="font-medium break-all">{email}</span>. Enter it here, or open the link in the
-        email on this device.
+        Check <span className="font-medium break-all">{email}</span> and open the sign-in link on this device. If the
+        email shows a code instead, enter it here.
       </p>
       <input
         className={`${inputClass} font-mono tracking-widest`}
