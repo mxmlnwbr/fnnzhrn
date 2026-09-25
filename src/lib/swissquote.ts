@@ -1,9 +1,10 @@
 import { buildPositions } from "./portfolio";
-import type { Transaction } from "./types";
+import type { CashAccount, Transaction } from "./types";
 
 /**
  * Converts a Swissquote transaction export (CSV, German or English) into transactions.
- * Cash movements (deposits, FX, fees, interest) are skipped: the tracker only follows securities.
+ * Cash movements (deposits, FX, fees, interest) aren't turned into transactions; the account's
+ * cash shows up as the latest balance per currency instead.
  */
 
 /** Share-count changes without a trade: they are netted per event and booked at no cost. */
@@ -35,10 +36,15 @@ interface Row {
   price: number;
   costs: number;
   currency: string;
+  /** Account balance after this row (raw, may be empty), in `accountCurrency`. */
+  balance: string;
+  accountCurrency: string;
 }
 
 export interface SwissquoteImport {
   transactions: Transaction[];
+  /** Latest cash balance per account currency. */
+  cash: CashAccount[];
   /** Rows that aren't security transactions (cash, FX, fees), by type. */
   skipped: Record<string, number>;
 }
@@ -99,11 +105,37 @@ function parseRows(text: string): Row[] {
       price: num(c[7]),
       costs: num(c[8]),
       currency: c[11] || c[14] || "",
+      balance: c[13] ?? "",
+      accountCurrency: c[14] ?? "",
     };
   });
 }
 
 const ID_PREFIX = "sq-";
+const CASH_ID_PREFIX = "sq-cash-";
+
+/** Whether a cash account came from a Swissquote import. */
+export function isImportedCash(a: CashAccount): boolean {
+  return a.id.startsWith(CASH_ID_PREFIX);
+}
+
+/** The balance after the most recent row per currency. Rows are in file order (newest first). */
+function cashBalances(rows: Row[]): CashAccount[] {
+  const latest = new Map<string, Row>();
+  for (const r of rows) {
+    if (!/^[A-Z]{3}$/.test(r.accountCurrency) || !/^-?[\d']+(\.\d+)?$/.test(r.balance)) continue;
+    const cur = latest.get(r.accountCurrency);
+    if (!cur || r.time > cur.time) latest.set(r.accountCurrency, r);
+  }
+  return [...latest.values()]
+    .map((r) => ({
+      id: `${CASH_ID_PREFIX}${r.accountCurrency}`,
+      name: `Swissquote ${r.accountCurrency}`,
+      currency: r.accountCurrency,
+      balance: num(r.balance),
+    }))
+    .sort((a, b) => a.currency.localeCompare(b.currency));
+}
 
 /** Whether a transaction came from a Swissquote import rather than manual entry. */
 export function isImported(t: Transaction): boolean {
@@ -134,7 +166,9 @@ function symbolResolver(rows: Row[]): (row: Row) => string {
 }
 
 export function parseSwissquoteCsv(text: string): SwissquoteImport {
-  const rows = parseRows(text).sort((a, b) => a.time.localeCompare(b.time));
+  const all = parseRows(text);
+  const cash = cashBalances(all);
+  const rows = [...all].sort((a, b) => a.time.localeCompare(b.time));
   const yahoo = symbolResolver(rows);
   const transactions: Transaction[] = [];
   const skipped: Record<string, number> = {};
@@ -179,7 +213,7 @@ export function parseSwissquoteCsv(text: string): SwissquoteImport {
       skip(r.type || "(empty)");
     }
   }
-  return { transactions, skipped };
+  return { transactions, cash, skipped };
 }
 
 function applyEvent(

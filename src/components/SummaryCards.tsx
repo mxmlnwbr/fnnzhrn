@@ -16,7 +16,11 @@ export function SummaryCards({ summary, currency }: { summary: PortfolioSummary;
   const m = (v: number) => formatMoney(v, currency);
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <Stat label="Market value" value={m(summary.marketValue)} sub={`Cost basis ${m(summary.costBasis)}`} />
+      <Stat
+        label="Net worth"
+        value={m(summary.netWorth)}
+        sub={`Shares ${m(summary.marketValue)} · Cash ${m(summary.cash)}`}
+      />
       <Stat
         label="Today"
         value={m(summary.dayChange)}

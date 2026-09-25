@@ -1,6 +1,6 @@
 import type { PortfolioData } from "./types";
 
-export const EMPTY_PORTFOLIO: PortfolioData = { version: 1, settings: { baseCurrency: "CHF" }, transactions: [] };
+export const EMPTY_PORTFOLIO: PortfolioData = { version: 1, settings: { baseCurrency: "CHF" }, transactions: [], cash: [] };
 
 /** Fills in defaults and rejects data without a transactions array. */
 export function normalizePortfolio(data: Partial<PortfolioData> | null | undefined): PortfolioData {
@@ -9,15 +9,23 @@ export function normalizePortfolio(data: Partial<PortfolioData> | null | undefin
     version: 1,
     settings: { ...EMPTY_PORTFOLIO.settings, ...data.settings },
     transactions: data.transactions,
+    cash: Array.isArray(data.cash) ? data.cash : [],
   };
+}
+
+function mergeById<T extends { id: string }>(local: T[], remote: T[]): T[] {
+  const ids = new Set(remote.map((x) => x.id));
+  return [...remote, ...local.filter((x) => !ids.has(x.id))];
 }
 
 /**
  * Combines data entered in this browser while signed out with the account's saved data.
- * Transactions are matched by id; the account's settings win.
+ * Transactions and cash accounts are matched by id; the account's settings win.
  */
 export function mergePortfolios(local: PortfolioData, remote: PortfolioData): PortfolioData {
-  const ids = new Set(remote.transactions.map((t) => t.id));
-  const added = local.transactions.filter((t) => !ids.has(t.id));
-  return { ...remote, transactions: [...remote.transactions, ...added] };
+  return {
+    ...remote,
+    transactions: mergeById(local.transactions, remote.transactions),
+    cash: mergeById(local.cash, remote.cash),
+  };
 }

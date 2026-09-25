@@ -24,6 +24,22 @@ describe("parseSwissquoteCsv", () => {
     expect(skipped).toEqual({ Einzahlung: 1 });
   });
 
+  it("takes the latest balance per account currency as cash", () => {
+    const { cash } = parseSwissquoteCsv(
+      csv(
+        `23-09-2026 09:35:36;00000000;Dividende;LOGN;"LOGITECH N";CH0025751329;1.0;89.76;31.42;0.00;58.34;CHF;58.34;1'178.95;CHF`,
+        '07-05-2026 12:09:21;00000000;Corporate Action;LHN;"HOLCIM N";CH0012214059;-46.0;0;0.00;0.00;-;;-;;',
+        '25-08-2026 15:30:20;305257554;Kauf;PG;"PROCTER & GAMBLE ORD";US7427181091;2.0;145.73;5.03;0.00;-296.49;USD;-296.49;3.60;USD',
+        "25-08-2026 00:01:44;00000000;Einzahlung;;;;1.0;683.35;0.00;0.00;683.35;CHF;683.35;862.30;CHF",
+        "01-01-2020 00:00:00;00000000;Einzahlung;;;;1.0;10.00;0.00;0.00;10.00;USD;10.00;10.00;USD",
+      ),
+    );
+    expect(cash).toEqual([
+      { id: "sq-cash-CHF", name: "Swissquote CHF", currency: "CHF", balance: 1178.95 },
+      { id: "sq-cash-USD", name: "Swissquote USD", currency: "USD", balance: 3.6 },
+    ]);
+  });
+
   it("marks imported transactions apart from ones entered by hand", () => {
     const text = csv('25-08-2026 15:30:20;305257554;Kauf;PG;"PG";US7427181091;2.0;145.73;5.03;0.00;-296.49;USD;-296.49;3.60;USD');
     expect(isImported(parseSwissquoteCsv(text).transactions[0])).toBe(true);
