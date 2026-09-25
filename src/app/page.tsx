@@ -11,6 +11,7 @@ import { buttonClass } from "@/components/ui";
 import { BASE_CURRENCIES } from "@/lib/currency";
 import { buildHistory, summarize } from "@/lib/portfolio";
 import { parseImport, savePortfolio, usePortfolio } from "@/lib/storage";
+import { decodeText, isSwissquoteCsv, parseSwissquoteCsv } from "@/lib/swissquote";
 import type { Transaction } from "@/lib/types";
 import { useMarketData } from "@/lib/useMarketData";
 
@@ -39,9 +40,12 @@ export default function Home() {
     URL.revokeObjectURL(a.href);
   }
 
-  async function importJson(file: File) {
+  async function importFile(file: File) {
     try {
-      const data = parseImport(await file.text());
+      const text = decodeText(await file.arrayBuffer());
+      const data = isSwissquoteCsv(text)
+        ? { ...portfolio, transactions: parseSwissquoteCsv(text).transactions }
+        : parseImport(text);
       if (transactions.length && !confirm(`Replace your ${transactions.length} transactions with ${data.transactions.length} from the file?`)) return;
       savePortfolio(data);
     } catch (e) {
@@ -88,11 +92,11 @@ export default function Home() {
           <input
             ref={fileInput}
             type="file"
-            accept="application/json"
+            accept="application/json,.json,text/csv,.csv"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) importJson(f);
+              if (f) importFile(f);
               e.target.value = "";
             }}
           />
