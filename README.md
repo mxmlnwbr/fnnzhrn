@@ -2,7 +2,7 @@
 
 Landing page for **https://fnnzhrn.ch**, the home of a group of friends interested in finance.
 
-It's a single static `index.html` with no build step. To add a project, copy one `<li>` block in the Projects list.
+It's a single static `index.html` with no build step. To add a project, copy one `<li>` block in the "Projekte" list. Page copy is in (Swiss) German.
 
 ## Projects
 
