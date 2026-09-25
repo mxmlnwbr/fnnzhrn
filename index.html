@@ -38,16 +38,75 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      background:
-        radial-gradient(ellipse 80% 50% at 50% 0%, var(--accent-soft), transparent 70%),
-        linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 40px 40px,
-        linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 40px 40px,
-        var(--bg);
+      background: var(--bg);
+      overflow-x: hidden;
       color: var(--fg);
       font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       line-height: 1.55;
       -webkit-font-smoothing: antialiased;
     }
+    /* ---------- Background ---------- */
+    .bg {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .bg .grid {
+      position: absolute;
+      inset: -40px;
+      background:
+        linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 40px 40px,
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 40px 40px;
+      -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 30%, transparent 80%);
+              mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 30%, transparent 80%);
+      animation: grid-pan 18s linear infinite;
+    }
+    @keyframes grid-pan { to { transform: translate(40px, 40px); } }
+    .bg .blob {
+      position: absolute;
+      width: 55vmax;
+      height: 55vmax;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--accent-soft) 0%, transparent 65%);
+      filter: blur(20px);
+      opacity: 0;
+      animation: blob-in 2s ease 0.1s forwards, drift 22s ease-in-out infinite alternate;
+    }
+    .bg .blob.b1 { top: -25vmax; left: -10vmax; }
+    .bg .blob.b2 { top: -15vmax; right: -20vmax; animation-duration: 2s, 28s; animation-delay: 0.4s, -8s; }
+    .bg .blob.b3 { bottom: -30vmax; left: 20vw; animation-duration: 2s, 34s; animation-delay: 0.7s, -15s; }
+    @keyframes blob-in { to { opacity: 1; } }
+    @keyframes drift {
+      0%   { transform: translate(0, 0) scale(1); }
+      50%  { transform: translate(6vmax, 4vmax) scale(1.1); }
+      100% { transform: translate(-4vmax, 8vmax) scale(0.95); }
+    }
+    .bg canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      animation: blob-in 2.4s ease 0.6s forwards;
+    }
+
+    /* ---------- Load-in ---------- */
+    .reveal {
+      opacity: 0;
+      transform: translateY(14px);
+      filter: blur(6px);
+      animation: reveal 0.8s cubic-bezier(0.22, 1, 0.36, 1) var(--d, 0s) forwards;
+    }
+    @keyframes reveal { to { opacity: 1; transform: none; filter: none; } }
+    h1 .ch {
+      display: inline-block;
+      opacity: 0;
+      transform: translateY(0.4em) rotate(4deg);
+      animation: reveal 0.7s cubic-bezier(0.22, 1, 0.36, 1) calc(0.25s + var(--i) * 0.05s) forwards;
+    }
+
     main {
       flex: 1;
       width: 100%;
@@ -73,7 +132,12 @@
       height: 8px;
       border-radius: 50%;
       background: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-soft);
+      animation: ping 2.4s ease-out 1.5s infinite;
+    }
+    @keyframes ping {
+      0%   { box-shadow: 0 0 0 0 var(--accent); }
+      70%  { box-shadow: 0 0 0 7px transparent; }
+      100% { box-shadow: 0 0 0 0 transparent; }
     }
     h1 {
       margin: 0;
@@ -83,25 +147,58 @@
       line-height: 1;
     }
     h1 .dot { color: var(--accent); }
+    h1 .dot.ch { animation: reveal 0.7s cubic-bezier(0.22, 1, 0.36, 1) calc(0.25s + var(--i) * 0.05s) forwards, blink 1.2s steps(2, jump-none) 2.5s 3; }
+    @keyframes blink { 50% { opacity: 0.15; } }
+    .chart-wrap {
+      position: relative;
+      margin: 40px 0 56px;
+      color: var(--accent);
+    }
     .chart {
       display: block;
       width: 100%;
       height: 72px;
-      margin: 40px 0 56px;
-      color: var(--accent);
+      overflow: visible;
     }
-    .chart .line {
+    .chart .line { filter: drop-shadow(0 0 6px var(--accent-soft)); }
+    .chart .shimmer {
+      stroke-dasharray: 60 1140;
+      stroke-dashoffset: 60;
+      opacity: 0;
+      animation: shimmer 4s cubic-bezier(0.45, 0, 0.55, 1) 2.2s infinite;
+    }
+    @keyframes shimmer {
+      0%   { stroke-dashoffset: 60; opacity: 0; }
+      10%  { opacity: 1; }
+      60%  { stroke-dashoffset: -1140; opacity: 1; }
+      61%, 100% { opacity: 0; }
+    }
+    .chart-dot {
+      position: absolute;
+      right: -5px;
+      top: -1px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      opacity: 0;
+      transform: scale(0);
+      animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 1.9s forwards, ping 2s ease-out 2.4s infinite;
+    }
+    @keyframes pop { to { opacity: 1; transform: scale(1); } }
+    .chart .draw {
       stroke-dasharray: 1200;
       stroke-dashoffset: 1200;
-      animation: draw 1.8s cubic-bezier(0.65, 0, 0.35, 1) 0.2s forwards;
+      animation: draw 1.6s cubic-bezier(0.65, 0, 0.35, 1) 0.5s forwards;
     }
-    .chart .area { opacity: 0; animation: fade 0.8s ease 1.4s forwards; }
+    .chart .area {
+      opacity: 0;
+      transform-origin: bottom;
+      transform: scaleY(0.6);
+      animation: area-in 0.9s ease 1.5s forwards;
+    }
     @keyframes draw { to { stroke-dashoffset: 0; } }
-    @keyframes fade { to { opacity: 1; } }
-    @media (prefers-reduced-motion: reduce) {
-      .chart .line { animation: none; stroke-dashoffset: 0; }
-      .chart .area { animation: none; opacity: 1; }
-    }
+    @keyframes area-in { to { opacity: 1; transform: none; } }
     h2 {
       margin: 0 0 14px;
       font-size: 0.75rem;
@@ -112,6 +209,10 @@
     }
     ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
     a.project {
+      --x: 50%;
+      --y: 50%;
+      position: relative;
+      overflow: hidden;
       display: flex;
       align-items: center;
       gap: 16px;
@@ -121,14 +222,41 @@
       background: var(--card);
       color: inherit;
       text-decoration: none;
-      transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+      transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
     }
+    a.project::before {
+      /* spotlight that follows the cursor */
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(220px circle at var(--x) var(--y), var(--accent-soft), transparent 70%);
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
+    }
+    a.project::after {
+      /* light sweep */
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: -60%;
+      width: 40%;
+      background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+      transform: skewX(-20deg);
+      pointer-events: none;
+    }
+    a.project:hover::after, a.project:focus-visible::after { animation: sweep 0.9s ease; }
+    @keyframes sweep { to { left: 130%; } }
     a.project:hover, a.project:focus-visible {
       border-color: var(--accent);
-      transform: translateY(-2px);
-      box-shadow: 0 8px 24px -12px var(--accent);
+      transform: translateY(-3px);
+      box-shadow: 0 12px 32px -14px var(--accent);
       outline: none;
     }
+    a.project:hover::before, a.project:focus-visible::before { opacity: 1; }
+    a.project:active { transform: translateY(-1px) scale(0.99); }
+    a.project > * { position: relative; }
     .icon {
       flex: none;
       display: grid;
@@ -138,7 +266,9 @@
       border-radius: 10px;
       background: var(--accent-soft);
       color: var(--accent);
+      transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
+    a.project:hover .icon, a.project:focus-visible .icon { transform: rotate(-12deg) scale(1.08); }
     .text { flex: 1; min-width: 0; }
     .text strong { display: block; font-size: 1.05rem; }
     .text span { color: var(--muted); font-size: 0.925rem; }
@@ -149,22 +279,42 @@
       transition: transform 0.15s, color 0.15s;
     }
     a.project:hover .arrow, a.project:focus-visible .arrow {
-      transform: translateX(3px);
       color: var(--accent);
+      animation: nudge 0.9s ease-in-out infinite;
     }
+    @keyframes nudge { 50% { transform: translateX(5px); } }
     footer {
       padding: 32px 16px;
       text-align: center;
       font-size: 0.8rem;
       color: var(--muted);
     }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-delay: 0s !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+      .chart .shimmer, .bg canvas { display: none; }
+    }
   </style>
 </head>
 <body>
-  <main>
-    <span class="badge">We talk about money</span>
-    <h1>fnnzhrn<span class="dot">.</span></h1>
+  <div class="bg" aria-hidden="true">
+    <div class="blob b1"></div>
+    <div class="blob b2"></div>
+    <div class="blob b3"></div>
+    <div class="grid"></div>
+    <canvas id="ticker"></canvas>
+  </div>
 
+  <main>
+    <span class="badge reveal" style="--d: 0.05s">We talk about money</span>
+    <h1 aria-label="fnnzhrn."><span aria-hidden="true"><span class="ch" style="--i:0">f</span><span class="ch" style="--i:1">n</span><span class="ch" style="--i:2">n</span><span class="ch" style="--i:3">z</span><span class="ch" style="--i:4">h</span><span class="ch" style="--i:5">r</span><span class="ch" style="--i:6">n</span><span class="ch dot" style="--i:7">.</span></span></h1>
+
+    <div class="chart-wrap">
     <svg class="chart" viewBox="0 0 600 72" preserveAspectRatio="none" aria-hidden="true">
       <defs>
         <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
@@ -173,12 +323,15 @@
         </linearGradient>
       </defs>
       <path class="area" fill="url(#fill)" d="M0 60 L40 54 L80 58 L120 46 L160 50 L200 38 L240 44 L280 30 L320 36 L360 26 L400 32 L440 18 L480 24 L520 12 L560 16 L600 4 L600 72 L0 72 Z"/>
-      <path class="line" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" d="M0 60 L40 54 L80 58 L120 46 L160 50 L200 38 L240 44 L280 30 L320 36 L360 26 L400 32 L440 18 L480 24 L520 12 L560 16 L600 4"/>
+      <path class="line draw" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" d="M0 60 L40 54 L80 58 L120 46 L160 50 L200 38 L240 44 L280 30 L320 36 L360 26 L400 32 L440 18 L480 24 L520 12 L560 16 L600 4"/>
+      <path class="shimmer" fill="none" stroke="#fff" stroke-opacity="0.7" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" d="M0 60 L40 54 L80 58 L120 46 L160 50 L200 38 L240 44 L280 30 L320 36 L360 26 L400 32 L440 18 L480 24 L520 12 L560 16 L600 4"/>
     </svg>
+    <span class="chart-dot" aria-hidden="true"></span>
+    </div>
 
-    <h2>Projekte</h2>
+    <h2 class="reveal" style="--d: 1.1s">Projekte</h2>
     <ul>
-      <li>
+      <li class="reveal" style="--d: 1.25s">
         <a class="project" href="https://depot.fnnzhrn.ch">
           <span class="icon" aria-hidden="true">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg>
@@ -192,6 +345,78 @@
       </li>
     </ul>
   </main>
-  <footer>© fnnzhrn · Keine Anlageberatung</footer>
+  <footer class="reveal" style="--d: 1.5s">© fnnzhrn · Keine Anlageberatung</footer>
+
+  <script>
+    // Cursor spotlight on project cards
+    document.querySelectorAll('.project').forEach(function (el) {
+      el.addEventListener('pointermove', function (e) {
+        var r = el.getBoundingClientRect();
+        el.style.setProperty('--x', (e.clientX - r.left) + 'px');
+        el.style.setProperty('--y', (e.clientY - r.top) + 'px');
+      });
+    });
+
+    // Background: slow-scrolling random-walk "ticker" lines
+    (function () {
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      var canvas = document.getElementById('ticker');
+      var ctx = canvas.getContext('2d');
+      var STEP = 14, w, h, dpr, color, series = [];
+
+      function readColor() {
+        color = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0f8a4f';
+      }
+      function walk(n, base, vol) {
+        var pts = [], v = base;
+        for (var i = 0; i < n; i++) { v += (Math.random() - 0.47) * vol; pts.push(v); }
+        return pts;
+      }
+      function resize() {
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        w = canvas.clientWidth; h = canvas.clientHeight;
+        canvas.width = w * dpr; canvas.height = h * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        var n = Math.ceil(w / STEP) + 2;
+        series = [
+          { y: h * 0.78, vol: 10, speed: 0.25, alpha: 0.18, width: 1.5 },
+          { y: h * 0.9,  vol: 14, speed: 0.4,  alpha: 0.12, width: 1.2 },
+          { y: h * 0.66, vol: 7,  speed: 0.15, alpha: 0.08, width: 1 }
+        ].map(function (s) { s.pts = walk(n, 0, s.vol); s.off = 0; return s; });
+      }
+      function frame() {
+        ctx.clearRect(0, 0, w, h);
+        ctx.strokeStyle = color;
+        series.forEach(function (s) {
+          s.off += s.speed;
+          if (s.off >= STEP) {
+            s.off -= STEP;
+            s.pts.shift();
+            var last = s.pts[s.pts.length - 1];
+            // gentle pull back toward the baseline so lines stay on screen
+            s.pts.push(last + (Math.random() - 0.47) * s.vol - last * 0.02);
+          }
+          ctx.globalAlpha = s.alpha;
+          ctx.lineWidth = s.width;
+          ctx.beginPath();
+          for (var i = 0; i < s.pts.length; i++) {
+            var x = i * STEP - s.off, y = s.y + s.pts[i];
+            i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+          }
+          ctx.stroke();
+        });
+        raf = requestAnimationFrame(frame);
+      }
+      var raf;
+      readColor(); resize();
+      addEventListener('resize', resize);
+      matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColor);
+      document.addEventListener('visibilitychange', function () {
+        cancelAnimationFrame(raf);
+        if (!document.hidden) raf = requestAnimationFrame(frame);
+      });
+      raf = requestAnimationFrame(frame);
+    })();
+  </script>
 </body>
 </html>
