@@ -34,9 +34,14 @@ export function TransactionList({
 }) {
   const discreet = useDiscreet();
   const [filter, setFilter] = useState<TransactionType | "all">("all");
+  const [symbol, setSymbol] = useState("");
+  const symbols = [...new Set(transactions.map((t) => t.symbol))].sort();
+  // A symbol whose transactions were all deleted falls back to showing everything.
+  const activeSymbol = symbols.includes(symbol) ? symbol : "";
+  const bySymbol = activeSymbol ? transactions.filter((t) => t.symbol === activeSymbol) : transactions;
   const count = (type: TransactionType | "all") =>
-    type === "all" ? transactions.length : transactions.filter((t) => t.type === type).length;
-  const rows = sortTransactions(transactions)
+    type === "all" ? bySymbol.length : bySymbol.filter((t) => t.type === type).length;
+  const rows = sortTransactions(bySymbol)
     .reverse()
     .filter((t) => filter === "all" || t.type === filter);
   const imported = transactions.filter(isImported).length;
@@ -57,7 +62,22 @@ export function TransactionList({
       }
     >
       {transactions.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-1">
+        <div className="mb-2 flex flex-wrap items-center gap-1">
+          {symbols.length > 1 && (
+            <select
+              className="mr-1 rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-xs dark:border-zinc-700 dark:bg-zinc-950"
+              value={activeSymbol}
+              onChange={(e) => setSymbol(e.target.value)}
+              aria-label="Filter by position"
+            >
+              <option value="">All positions</option>
+              {symbols.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          )}
           {FILTERS.filter((f) => f.type === "all" || f.type === filter || count(f.type) > 0).map((f) => (
             <button
               key={f.type}
@@ -73,7 +93,7 @@ export function TransactionList({
         </div>
       )}
       {rows.length === 0 ? (
-        <p className="text-sm text-zinc-500">{transactions.length ? "No transactions of this type." : "No transactions yet."}</p>
+        <p className="text-sm text-zinc-500">{transactions.length ? "No matching transactions." : "No transactions yet."}</p>
       ) : (
         <ul className="max-h-96 divide-y divide-zinc-100 overflow-auto text-sm dark:divide-zinc-800">
           {rows.map((t) => {
