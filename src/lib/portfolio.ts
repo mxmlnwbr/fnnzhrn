@@ -207,3 +207,78 @@ export function returnSeries(points: HistoryPoint[]): number[] {
     return growth - 1;
   });
 }
+
+export interface IncomeRow {
+  key: string;
+  /** Dividends: net received. Fees: trading fees paid. */
+  amount: number;
+  /** Dividends only: gross amount before withholding tax. */
+  gross: number;
+  /** Dividends: withholding tax. Fees: number of trades. */
+  tax: number;
+  count: number;
+}
+
+export interface IncomeOverview {
+  dividends: { net: number; gross: number; tax: number; last12Months: number; byYear: IncomeRow[]; bySymbol: IncomeRow[] };
+  /** Trading fees on buys and sells; withholding tax on dividends is counted under dividends. */
+  fees: { total: number; trades: number; volume: number; byYear: IncomeRow[]; bySymbol: IncomeRow[] };
+}
+
+function addTo(map: Map<string, IncomeRow>, key: string, amount: number, gross: number, tax: number) {
+  const row = map.get(key) ?? { key, amount: 0, gross: 0, tax: 0, count: 0 };
+  row.amount += amount;
+  row.gross += gross;
+  row.tax += tax;
+  row.count++;
+  map.set(key, row);
+}
+
+/**
+ * Dividends and trading fees per year and per position, in the base currency.
+ * Converts at today's rate, like `summarize`, so totals match the summary cards.
+ * @param today ISO date the trailing twelve months are counted back from.
+ */
+export function incomeOverview(
+  transactions: Transaction[],
+  quotes: Record<string, Quote>,
+  fx: Record<string, number>,
+  today = new Date().toISOString().slice(0, 10),
+): IncomeOverview {
+  const yearAgo = `${Number(today.slice(0, 4)) - 1}${today.slice(4)}`;
+  const divYear = new Map<string, IncomeRow>();
+  const divSymbol = new Map<string, IncomeRow>();
+  const feeYear = new Map<string, IncomeRow>();
+  const feeSymbol = new Map<string, IncomeRow>();
+  const dividends = { net: 0, gross: 0, tax: 0, last12Months: 0 };
+  const fees = { total: 0, trades: 0, volume: 0 };
+
+  for (const t of transactions) {
+    const rate = fx[quotes[t.symbol]?.currency ?? ""] ?? 1;
+    const year = t.date.slice(0, 4);
+    if (t.type === "dividend") {
+      const gross = t.price * rate;
+      const tax = t.fees * rate;
+      dividends.gross += gross;
+      dividends.tax += tax;
+      dividends.net += gross - tax;
+      if (t.date > yearAgo && t.date <= today) dividends.last12Months += gross - tax;
+      addTo(divYear, year, gross - tax, gross, tax);
+      addTo(divSymbol, t.symbol, gross - tax, gross, tax);
+    } else {
+      const fee = t.fees * rate;
+      fees.total += fee;
+      fees.trades++;
+      fees.volume += t.quantity * t.price * rate;
+      addTo(feeYear, year, fee, 0, 0);
+      addTo(feeSymbol, t.symbol, fee, 0, 0);
+    }
+  }
+
+  const byYear = (m: Map<string, IncomeRow>) => [...m.values()].sort((a, b) => b.key.localeCompare(a.key));
+  const byAmount = (m: Map<string, IncomeRow>) => [...m.values()].sort((a, b) => b.amount - a.amount);
+  return {
+    dividends: { ...dividends, byYear: byYear(divYear), bySymbol: byAmount(divSymbol) },
+    fees: { ...fees, byYear: byYear(feeYear), bySymbol: byAmount(feeSymbol) },
+  };
+}

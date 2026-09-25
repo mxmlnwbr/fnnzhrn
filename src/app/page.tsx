@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { AccountMenu } from "@/components/AccountMenu";
 import { CashAccounts } from "@/components/CashAccounts";
 import { HoldingsTable } from "@/components/HoldingsTable";
+import { DividendCard, FeeCard } from "@/components/IncomeCards";
 import { RefreshIcon, SplashLoader, TopProgress } from "@/components/Loading";
 import { PerformanceChart } from "@/components/PerformanceChart";
 import { SummaryCards } from "@/components/SummaryCards";
@@ -12,7 +13,7 @@ import { TransactionList } from "@/components/TransactionList";
 import { buttonClass } from "@/components/ui";
 import { BASE_CURRENCIES } from "@/lib/currency";
 import { setDiscreet, useDiscreet } from "@/lib/discreet";
-import { buildHistory, summarize } from "@/lib/portfolio";
+import { buildHistory, incomeOverview, summarize } from "@/lib/portfolio";
 import { parseImport, savePortfolio, usePortfolio } from "@/lib/storage";
 import { decodeText, isImported, isImportedCash, isSwissquoteCsv, parseSwissquoteCsv } from "@/lib/swissquote";
 import type { CashAccount, Transaction } from "@/lib/types";
@@ -31,6 +32,10 @@ export default function Home() {
   const summary = useMemo(
     () => summarize(transactions, market.quotes, market.fx, cash),
     [transactions, market.quotes, market.fx, cash],
+  );
+  const income = useMemo(
+    () => incomeOverview(transactions, market.quotes, market.fx),
+    [transactions, market.quotes, market.fx],
   );
   const history = useMemo(() => {
     const currencies = Object.fromEntries(Object.values(market.quotes).map((q) => [q.symbol, q.currency]));
@@ -213,6 +218,10 @@ export default function Home() {
         <div className="min-w-0 space-y-4 lg:col-span-2">
           <PerformanceChart history={history} currency={base} loading={market.loading} />
           <HoldingsTable holdings={summary.holdings} currency={base} />
+          <div className="grid gap-4 md:grid-cols-2">
+            <DividendCard overview={income} quotes={market.quotes} currency={base} />
+            <FeeCard overview={income} quotes={market.quotes} currency={base} />
+          </div>
         </div>
         <div className="min-w-0 space-y-4">
           <CashAccounts accounts={cash} fx={market.fx} currency={base} onChange={setCash} />
