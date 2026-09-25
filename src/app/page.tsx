@@ -23,6 +23,7 @@ export default function Home() {
   const { transactions, cash, settings } = portfolio;
   const base = settings.baseCurrency;
   const [refreshKey, setRefreshKey] = useState(0);
+  const [menuOpen, setMenuOpen] = useState(false);
   const market = useMarketData(transactions, cash, base, refreshKey);
   const fileInput = useRef<HTMLInputElement>(null);
   const discreet = useDiscreet();
@@ -75,11 +76,73 @@ export default function Home() {
     );
   }
 
+  const discreetButton = (
+    <button
+      className={`${buttonClass} px-2`}
+      onClick={() => setDiscreet(!discreet)}
+      aria-pressed={discreet}
+      aria-label={discreet ? "Show amounts" : "Hide amounts"}
+      title={discreet ? "Show amounts" : "Hide amounts, show percentages only"}
+    >
+      <EyeIcon off={discreet} />
+    </button>
+  );
+  const currencySelect = (
+    <select
+      className={buttonClass}
+      value={base}
+      onChange={(e) => {
+        savePortfolio({ ...portfolio, settings: { ...settings, baseCurrency: e.target.value } });
+        setMenuOpen(false);
+      }}
+      aria-label="Base currency"
+    >
+      {BASE_CURRENCIES.map((c) => (
+        <option key={c}>{c}</option>
+      ))}
+    </select>
+  );
+  const refreshButton = (
+    <button
+      className={`${buttonClass} inline-flex items-center gap-1.5`}
+      onClick={() => {
+        setRefreshKey((k) => k + 1);
+        setMenuOpen(false);
+      }}
+      disabled={market.loading}
+    >
+      <RefreshIcon spinning={market.loading} />
+      Refresh
+    </button>
+  );
+  const exportButton = (
+    <button
+      className={`${buttonClass} inline-flex`}
+      onClick={() => {
+        exportJson();
+        setMenuOpen(false);
+      }}
+    >
+      Export
+    </button>
+  );
+  const importButton = (
+    <button
+      className={`${buttonClass} inline-flex`}
+      onClick={() => {
+        fileInput.current?.click();
+        setMenuOpen(false);
+      }}
+    >
+      Import
+    </button>
+  );
+
   return (
     <main className="animate-fade-in mx-auto w-full max-w-7xl flex-1 space-y-4 px-4 py-6">
       <TopProgress active={market.loading} />
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-semibold">Depot</h1>
           <p className="text-xs text-zinc-500">
             {market.loading
@@ -91,53 +154,57 @@ export default function Home() {
                   : ""}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="hidden flex-wrap items-center gap-2 sm:flex">
           <AccountMenu />
+          {discreetButton}
+          {currencySelect}
+          {refreshButton}
+          {exportButton}
+          {importButton}
+        </div>
+        <div className="flex shrink-0 items-center gap-2 sm:hidden">
+          {discreetButton}
           <button
             className={`${buttonClass} px-2`}
-            onClick={() => setDiscreet(!discreet)}
-            aria-pressed={discreet}
-            aria-label={discreet ? "Show amounts" : "Hide amounts"}
-            title={discreet ? "Show amounts" : "Hide amounts, show percentages only"}
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-expanded={menuOpen}
+            aria-controls="mobile-menu"
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
           >
-            <EyeIcon off={discreet} />
+            <MenuIcon open={menuOpen} />
           </button>
-          <select
-            className={buttonClass}
-            value={base}
-            onChange={(e) => savePortfolio({ ...portfolio, settings: { ...settings, baseCurrency: e.target.value } })}
-            aria-label="Base currency"
-          >
-            {BASE_CURRENCIES.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </select>
-          <button
-            className={`${buttonClass} inline-flex items-center gap-1.5`}
-            onClick={() => setRefreshKey((k) => k + 1)}
-            disabled={market.loading}
-          >
-            <RefreshIcon spinning={market.loading} />
-            Refresh
-          </button>
-          <button className={buttonClass} onClick={exportJson}>
-            Export
-          </button>
-          <button className={buttonClass} onClick={() => fileInput.current?.click()}>
-            Import
-          </button>
-          <input
-            ref={fileInput}
-            type="file"
-            accept="application/json,.json,text/csv,.csv"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) importFile(f);
-              e.target.value = "";
-            }}
-          />
         </div>
+        {menuOpen && (
+          <nav
+            id="mobile-menu"
+            className="animate-fade-in basis-full space-y-3 rounded-xl border border-zinc-200 bg-white p-3 sm:hidden dark:border-zinc-800 dark:bg-zinc-900"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm text-zinc-500">Base currency</span>
+              {currencySelect}
+            </div>
+            <div className="grid grid-cols-3 gap-2 [&>button]:justify-center">
+              {refreshButton}
+              {exportButton}
+              {importButton}
+            </div>
+            {/* Its popover opens to the right, so keep it on the left edge. */}
+            <div className="empty:hidden">
+              <AccountMenu />
+            </div>
+          </nav>
+        )}
+        <input
+          ref={fileInput}
+          type="file"
+          accept="application/json,.json,text/csv,.csv"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) importFile(f);
+            e.target.value = "";
+          }}
+        />
       </header>
 
       <SummaryCards summary={summary} currency={base} />
@@ -168,6 +235,14 @@ function EyeIcon({ off }: { off: boolean }) {
       <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
       <circle cx="12" cy="12" r="3" />
       {off && <path d="M3 3l18 18" />}
+    </svg>
+  );
+}
+
+function MenuIcon({ open }: { open: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" aria-hidden>
+      {open ? <path d="M6 6l12 12M18 6L6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
     </svg>
   );
 }
