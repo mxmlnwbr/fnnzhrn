@@ -1,8 +1,11 @@
+"use client";
+
+import { useState } from "react";
 import { formatMoney } from "@/lib/currency";
 import { useDiscreet } from "@/lib/discreet";
 import { sortTransactions } from "@/lib/portfolio";
 import { isImported } from "@/lib/swissquote";
-import type { Quote, Transaction } from "@/lib/types";
+import type { Quote, Transaction, TransactionType } from "@/lib/types";
 import { buttonClass, Card } from "./ui";
 
 const TYPE_STYLE = {
@@ -10,6 +13,13 @@ const TYPE_STYLE = {
   sell: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
   dividend: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300",
 };
+
+const FILTERS: { type: TransactionType | "all"; label: string }[] = [
+  { type: "all", label: "All" },
+  { type: "buy", label: "Buys" },
+  { type: "sell", label: "Sells" },
+  { type: "dividend", label: "Dividends" },
+];
 
 export function TransactionList({
   transactions,
@@ -23,7 +33,12 @@ export function TransactionList({
   onDeleteImported: () => void;
 }) {
   const discreet = useDiscreet();
-  const rows = sortTransactions(transactions).reverse();
+  const [filter, setFilter] = useState<TransactionType | "all">("all");
+  const count = (type: TransactionType | "all") =>
+    type === "all" ? transactions.length : transactions.filter((t) => t.type === type).length;
+  const rows = sortTransactions(transactions)
+    .reverse()
+    .filter((t) => filter === "all" || t.type === filter);
   const imported = transactions.filter(isImported).length;
   return (
     <Card
@@ -41,8 +56,24 @@ export function TransactionList({
         )
       }
     >
+      {transactions.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1">
+          {FILTERS.filter((f) => f.type === "all" || f.type === filter || count(f.type) > 0).map((f) => (
+            <button
+              key={f.type}
+              onClick={() => setFilter(f.type)}
+              aria-pressed={f.type === filter}
+              className={`rounded px-2 py-0.5 text-xs ${
+                f.type === filter ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              }`}
+            >
+              {f.label} <span className="opacity-60">{count(f.type)}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {rows.length === 0 ? (
-        <p className="text-sm text-zinc-500">No transactions yet.</p>
+        <p className="text-sm text-zinc-500">{transactions.length ? "No transactions of this type." : "No transactions yet."}</p>
       ) : (
         <ul className="max-h-96 divide-y divide-zinc-100 overflow-auto text-sm dark:divide-zinc-800">
           {rows.map((t) => {
