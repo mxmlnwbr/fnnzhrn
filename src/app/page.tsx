@@ -67,7 +67,7 @@ export default function Home() {
     <main className="mx-auto w-full max-w-7xl flex-1 space-y-4 px-4 py-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Portfolio</h1>
+          <h1 className="text-2xl font-semibold">Depot</h1>
           <p className="text-xs text-zinc-500">
             {market.loading
               ? "Updating prices…"
