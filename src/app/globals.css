@@ -18,3 +18,35 @@
     --foreground: #ededed;
   }
 }
+
+/* Loading animations; see src/components/Loading.tsx. */
+@keyframes draw-line {
+  0% { stroke-dashoffset: 100; }
+  55%, 80% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+@keyframes fade-area {
+  0%, 30% { opacity: 0; }
+  55%, 80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes slide-bar {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+.animate-draw-line { stroke-dasharray: 100; animation: draw-line 1.8s ease-in-out infinite; }
+.animate-fade-area { animation: fade-area 1.8s ease-in-out infinite; }
+.animate-slide-bar { animation: slide-bar 1.2s ease-in-out infinite; }
+.animate-fade-in { animation: fade-in 0.4s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-draw-line, .animate-fade-area, .animate-slide-bar, .animate-fade-in { animation: none; }
+}
