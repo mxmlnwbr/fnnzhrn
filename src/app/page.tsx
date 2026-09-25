@@ -83,12 +83,13 @@ export default function Home() {
         <div className="flex flex-wrap items-center gap-2">
           <AccountMenu />
           <button
-            className={`${buttonClass} ${discreet ? "bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300" : ""}`}
+            className={`${buttonClass} px-2`}
             onClick={() => setDiscreet(!discreet)}
             aria-pressed={discreet}
-            title="Show percentages only, hide all amounts"
+            aria-label={discreet ? "Show amounts" : "Hide amounts"}
+            title={discreet ? "Show amounts" : "Hide amounts, show percentages only"}
           >
-            {discreet ? "Discreet on" : "Discreet"}
+            <EyeIcon off={discreet} />
           </button>
           <select
             className={buttonClass}
@@ -142,5 +143,15 @@ export default function Home() {
         </div>
       </div>
     </main>
+  );
+}
+
+function EyeIcon({ off }: { off: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+      <circle cx="12" cy="12" r="3" />
+      {off && <path d="M3 3l18 18" />}
+    </svg>
   );
 }
