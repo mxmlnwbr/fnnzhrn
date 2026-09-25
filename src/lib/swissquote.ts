@@ -103,6 +103,13 @@ function parseRows(text: string): Row[] {
   });
 }
 
+const ID_PREFIX = "sq-";
+
+/** Whether a transaction came from a Swissquote import rather than manual entry. */
+export function isImported(t: Transaction): boolean {
+  return t.id.startsWith(ID_PREFIX);
+}
+
 /** FNV-1a, so importing the same export twice yields the same ids. */
 function hash(s: string): string {
   let h = 0x811c9dc5;
@@ -136,7 +143,7 @@ export function parseSwissquoteCsv(text: string): SwissquoteImport {
   const id = (key: string) => {
     const n = seen.get(key) ?? 0;
     seen.set(key, n + 1);
-    return `sq-${hash(key)}${n ? `-${n}` : ""}`;
+    return `${ID_PREFIX}${hash(key)}${n ? `-${n}` : ""}`;
   };
   const add = (t: Omit<Transaction, "id">, key: string) => transactions.push({ id: id(key), ...t });
   const skip = (type: string) => (skipped[type] = (skipped[type] ?? 0) + 1);

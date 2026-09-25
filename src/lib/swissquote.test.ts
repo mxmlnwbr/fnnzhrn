@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildPositions } from "./portfolio";
-import { decodeText, isSwissquoteCsv, parseSwissquoteCsv } from "./swissquote";
+import { decodeText, isImported, isSwissquoteCsv, parseSwissquoteCsv } from "./swissquote";
 
 const HEADER =
   "Datum;Auftrag #;Transaktionen;Symbol;Name;ISIN;Anzahl;Stückpreis;Kosten;Aufgelaufene Zinsen;Nettobetrag;Währung Nettobetrag;Nettobetrag in der Währung des Kontos;Saldo;Währung";
@@ -22,6 +22,12 @@ describe("parseSwissquoteCsv", () => {
       { id: undefined, symbol: "LOGN.SW", type: "dividend", date: "2026-09-23", quantity: 0, price: 89.76, fees: 31.42, note: undefined },
     ]);
     expect(skipped).toEqual({ Einzahlung: 1 });
+  });
+
+  it("marks imported transactions apart from ones entered by hand", () => {
+    const text = csv('25-08-2026 15:30:20;305257554;Kauf;PG;"PG";US7427181091;2.0;145.73;5.03;0.00;-296.49;USD;-296.49;3.60;USD');
+    expect(isImported(parseSwissquoteCsv(text).transactions[0])).toBe(true);
+    expect(isImported({ id: crypto.randomUUID(), symbol: "PG", type: "buy", date: "2026-01-01", quantity: 1, price: 1, fees: 0 })).toBe(false);
   });
 
   it("gives the same ids when the same export is imported again", () => {
