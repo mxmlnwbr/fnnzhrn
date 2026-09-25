@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { AccountMenu } from "@/components/AccountMenu";
 import { CashAccounts } from "@/components/CashAccounts";
 import { HoldingsTable } from "@/components/HoldingsTable";
+import { RefreshIcon, SplashLoader, TopProgress } from "@/components/Loading";
 import { PerformanceChart } from "@/components/PerformanceChart";
 import { SummaryCards } from "@/components/SummaryCards";
 import { TransactionForm } from "@/components/TransactionForm";
@@ -65,8 +66,18 @@ export default function Home() {
     }
   }
 
+  // Until the first prices arrive every figure would read 0, so show the splash instead.
+  if (market.loading && !market.updatedAt) {
+    return (
+      <main className="flex flex-1">
+        <SplashLoader />
+      </main>
+    );
+  }
+
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 space-y-4 px-4 py-6">
+    <main className="animate-fade-in mx-auto w-full max-w-7xl flex-1 space-y-4 px-4 py-6">
+      <TopProgress active={market.loading} />
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Depot</h1>
@@ -101,7 +112,12 @@ export default function Home() {
               <option key={c}>{c}</option>
             ))}
           </select>
-          <button className={buttonClass} onClick={() => setRefreshKey((k) => k + 1)} disabled={market.loading}>
+          <button
+            className={`${buttonClass} inline-flex items-center gap-1.5`}
+            onClick={() => setRefreshKey((k) => k + 1)}
+            disabled={market.loading}
+          >
+            <RefreshIcon spinning={market.loading} />
             Refresh
           </button>
           <button className={buttonClass} onClick={exportJson}>
