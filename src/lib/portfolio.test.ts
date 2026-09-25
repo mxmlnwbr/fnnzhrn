@@ -40,6 +40,21 @@ describe("buildPositions", () => {
 });
 
 describe("summarize", () => {
+  it("adds cash balances to net worth in the base currency", () => {
+    const s = summarize(
+      [tx({ type: "buy", date: "2024-01-01", quantity: 10, price: 100 })],
+      { ABC: quote(110) },
+      { USD: 0.9, CHF: 1 },
+      [
+        { id: "a", name: "Bank", currency: "CHF", balance: 500 },
+        { id: "b", name: "Broker", currency: "USD", balance: 100 },
+      ],
+    );
+    expect(s.cash).toBeCloseTo(590);
+    expect(s.netWorth).toBeCloseTo(990 + 590);
+    expect(s.holdings[0].weight).toBe(1);
+  });
+
   it("converts to the base currency and computes weights", () => {
     const s = summarize(
       [tx({ type: "buy", date: "2024-01-01", quantity: 10, price: 100 })],

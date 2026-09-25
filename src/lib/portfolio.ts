@@ -1,4 +1,4 @@
-import type { Holding, PortfolioSummary, PricePoint, Quote, Transaction } from "./types";
+import type { CashAccount, Holding, PortfolioSummary, PricePoint, Quote, Transaction } from "./types";
 
 export function sortTransactions(transactions: Transaction[]): Transaction[] {
   return [...transactions].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
@@ -47,6 +47,7 @@ export function summarize(
   transactions: Transaction[],
   quotes: Record<string, Quote>,
   fx: Record<string, number>,
+  cashAccounts: CashAccount[] = [],
 ): PortfolioSummary {
   const positions = buildPositions(transactions);
   const holdings: Holding[] = [];
@@ -99,6 +100,7 @@ export function summarize(
   for (const h of holdings) h.weight = marketValue ? h.marketValue / marketValue : 0;
   holdings.sort((a, b) => b.marketValue - a.marketValue);
 
+  const cash = cashAccounts.reduce((s, a) => s + a.balance * (fx[a.currency] ?? 1), 0);
   const unrealizedPL = marketValue - costBasis;
   const totalReturn = unrealizedPL + realizedPL + dividends;
   return {
@@ -113,6 +115,8 @@ export function summarize(
     totalReturnPercent: invested ? totalReturn / invested : 0,
     dayChange,
     dayChangePercent: marketValue - dayChange ? dayChange / (marketValue - dayChange) : 0,
+    cash,
+    netWorth: marketValue + cash,
   };
 }
 

@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { AccountMenu } from "@/components/AccountMenu";
+import { CashAccounts } from "@/components/CashAccounts";
 import { HoldingsTable } from "@/components/HoldingsTable";
 import { PerformanceChart } from "@/components/PerformanceChart";
 import { SummaryCards } from "@/components/SummaryCards";
@@ -11,25 +12,29 @@ import { buttonClass } from "@/components/ui";
 import { BASE_CURRENCIES } from "@/lib/currency";
 import { buildHistory, summarize } from "@/lib/portfolio";
 import { parseImport, savePortfolio, usePortfolio } from "@/lib/storage";
-import { decodeText, isImported, isSwissquoteCsv, parseSwissquoteCsv } from "@/lib/swissquote";
-import type { Transaction } from "@/lib/types";
+import { decodeText, isImported, isImportedCash, isSwissquoteCsv, parseSwissquoteCsv } from "@/lib/swissquote";
+import type { CashAccount, Transaction } from "@/lib/types";
 import { useMarketData } from "@/lib/useMarketData";
 
 export default function Home() {
   const portfolio = usePortfolio();
-  const { transactions, settings } = portfolio;
+  const { transactions, cash, settings } = portfolio;
   const base = settings.baseCurrency;
   const [refreshKey, setRefreshKey] = useState(0);
-  const market = useMarketData(transactions, base, refreshKey);
+  const market = useMarketData(transactions, cash, base, refreshKey);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const summary = useMemo(() => summarize(transactions, market.quotes, market.fx), [transactions, market.quotes, market.fx]);
+  const summary = useMemo(
+    () => summarize(transactions, market.quotes, market.fx, cash),
+    [transactions, market.quotes, market.fx, cash],
+  );
   const history = useMemo(() => {
     const currencies = Object.fromEntries(Object.values(market.quotes).map((q) => [q.symbol, q.currency]));
     return buildHistory(transactions, market.prices, currencies, market.fxHistory, base);
   }, [transactions, market.prices, market.quotes, market.fxHistory, base]);
 
   const setTransactions = (next: Transaction[]) => savePortfolio({ ...portfolio, transactions: next });
+  const setCash = (next: CashAccount[]) => savePortfolio({ ...portfolio, cash: next });
 
   function exportJson() {
     const blob = new Blob([JSON.stringify(portfolio, null, 2)], { type: "application/json" });
@@ -43,9 +48,14 @@ export default function Home() {
   async function importFile(file: File) {
     try {
       const text = decodeText(await file.arrayBuffer());
-      const data = isSwissquoteCsv(text)
-        ? { ...portfolio, transactions: parseSwissquoteCsv(text).transactions }
-        : parseImport(text);
+      let data;
+      if (isSwissquoteCsv(text)) {
+        const parsed = parseSwissquoteCsv(text);
+        // The import's balances replace earlier imported ones; accounts added by hand stay.
+        data = { ...portfolio, transactions: parsed.transactions, cash: [...cash.filter((a) => !isImportedCash(a)), ...parsed.cash] };
+      } else {
+        data = parseImport(text);
+      }
       if (transactions.length && !confirm(`Replace your ${transactions.length} transactions with ${data.transactions.length} from the file?`)) return;
       savePortfolio(data);
     } catch (e) {
@@ -111,6 +121,7 @@ export default function Home() {
           <HoldingsTable holdings={summary.holdings} currency={base} />
         </div>
         <div className="min-w-0 space-y-4">
+          <CashAccounts accounts={cash} fx={market.fx} currency={base} onChange={setCash} />
           <TransactionForm onAdd={(t) => setTransactions([...transactions, t])} />
           <TransactionList
             transactions={transactions}

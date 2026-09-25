@@ -1,12 +1,13 @@
 # Portfolio Tracker
 
-A personal dashboard for tracking the performance of your share portfolio. Prices and FX rates come from Yahoo Finance.
+A personal dashboard for tracking the performance of your share portfolio and your cash. Prices and FX rates come from Yahoo Finance.
 
 ## Features
 
 - Record **buy**, **sell** and **dividend** transactions, with fees and withholding tax. Symbol search runs against Yahoo Finance, so SIX tickers like `NESN.SW` and `NOVN.SW` work, as do US, LSE and XETRA ones.
 - **Holdings** show average cost, the current price, today's change, market value, unrealized P/L and portfolio weight.
-- **Summary cards** show market value, today's change, unrealized P/L, and total return (unrealized + realized + dividends).
+- **Cash accounts** track your liquidity: add each bank or broker account with its currency and current balance, and edit the balance when it changes. Balances are converted to the base currency and added to your net worth. Importing a Swissquote CSV fills in the account's latest cash balance per currency.
+- **Summary cards** show net worth (shares plus cash), today's change, unrealized P/L, and total return (unrealized + realized + dividends).
 - The **performance chart** plots daily market value against net invested capital, with 1M / 3M / YTD / 1Y / All ranges. The period return excludes deposits and uses the simple Dietz method.
 - **Multi-currency**: pick CHF, EUR, USD or GBP as the base currency. Positions are converted at current FX rates, and history at historical FX rates. LSE prices quoted in pence (GBp) are normalised to GBP.
 - **Sync across devices** (optional): sign in with your email (a sign-in link, no password) and your portfolio is saved to your account in Supabase and loads on every device you sign in on. The browser keeps a local copy, so the app opens instantly and edits made offline upload later.
@@ -57,6 +58,7 @@ Yahoo Finance is called only from the server-side API routes, because the librar
 ### Notes and limitations
 
 - Cost basis uses the **average-cost** method. Realized P/L, dividends and cost basis are converted to the base currency at **current** FX rates. Only the performance chart uses historical FX.
+- Cash is tracked as current balances, not as a history of deposits and withdrawals, so the performance chart and returns cover shares only.
 - Enter amounts in the share's trading currency, e.g. USD for `AAPL` and GBP (not pence) for `VOD.L`.
 - Yahoo Finance is an unofficial data source. Data may be delayed, and delisted symbols lose their history.
 
@@ -77,7 +79,7 @@ For local development, copy `.env.example` to `.env.local` and fill in the same 
 
 How sync behaves:
 
-- The first time you sign in on a browser, anything you entered there while signed out is merged into your account (matched by transaction id).
+- The first time you sign in on a browser, anything you entered there while signed out is merged into your account (matched by transaction and cash account id).
 - Every change uploads right away. When you come back to the tab, it pulls the latest version, so edits from your phone show up on your computer.
 - If both devices change the portfolio while one is offline, the last one to upload wins.
 - Signing out removes the portfolio from that browser. It stays in your account.

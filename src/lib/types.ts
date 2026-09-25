@@ -59,6 +59,18 @@ export interface PortfolioSummary {
   totalReturnPercent: number;
   dayChange: number;
   dayChangePercent: number;
+  /** Cash balances in the base currency. */
+  cash: number;
+  /** Market value plus cash. */
+  netWorth: number;
+}
+
+/** A money account (e.g. the cash side of a broker account), tracked by its current balance. */
+export interface CashAccount {
+  id: string;
+  name: string;
+  currency: string;
+  balance: number;
 }
 
 export interface Settings {
@@ -69,4 +81,5 @@ export interface PortfolioData {
   version: 1;
   settings: Settings;
   transactions: Transaction[];
+  cash: CashAccount[];
 }

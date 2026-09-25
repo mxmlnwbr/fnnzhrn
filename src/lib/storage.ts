@@ -119,7 +119,8 @@ async function reconcile() {
     if (owner !== uid) {
       // Signed in on this browser: keep anything entered while signed out.
       const merged = owner === null && remote ? mergePortfolios(local, remote) : owner === null ? local : remote ?? EMPTY;
-      const needsUpload = !remote || merged.transactions.length !== remote.transactions.length;
+      const needsUpload =
+        !remote || merged.transactions.length !== remote.transactions.length || merged.cash.length !== remote.cash.length;
       revision++;
       writeLocal(merged, needsUpload);
       if (needsUpload) return await push();
