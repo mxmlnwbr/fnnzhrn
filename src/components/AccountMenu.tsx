@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { retrySync, sendLoginCode, signOut, useSyncState, verifyLoginCode } from "@/lib/storage";
+import { retrySync, sendLoginLink, signOut, useSyncState } from "@/lib/storage";
 import { buttonClass, inputClass, primaryButtonClass } from "./ui";
 
 export function AccountMenu() {
@@ -51,7 +51,7 @@ export function AccountMenu() {
               </div>
             </div>
           ) : (
-            <SignInForm onDone={() => setOpen(false)} />
+            <SignInForm />
           )}
         </div>
       )}
@@ -59,18 +59,18 @@ export function AccountMenu() {
   );
 }
 
-function SignInForm({ onDone }: { onDone: () => void }) {
+function SignInForm() {
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function run(action: () => Promise<void>) {
+  async function send() {
     setBusy(true);
     setError(null);
     try {
-      await action();
+      await sendLoginLink(email.trim());
+      setSent(true);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -78,33 +78,17 @@ function SignInForm({ onDone }: { onDone: () => void }) {
     }
   }
 
-  if (!sent) {
+  if (sent) {
     return (
-      <form
-        className="space-y-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void run(async () => {
-            await sendLoginCode(email.trim());
-            setSent(true);
-          });
-        }}
-      >
-        <p>Sign in with your email to keep your portfolio in sync across devices. No password needed.</p>
-        <input
-          className={inputClass}
-          type="email"
-          required
-          autoComplete="email"
-          placeholder="you@example.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        {error && <p className="text-red-600 dark:text-red-400">{error}</p>}
-        <button className={`${primaryButtonClass} w-full`} disabled={busy}>
-          {busy ? "Sending…" : "Email me a sign-in link"}
+      <div className="space-y-3">
+        <p>
+          We sent a sign-in link to <span className="font-medium break-all">{email}</span>. Open it on this device and
+          you&apos;re signed in; this page picks it up by itself.
+        </p>
+        <button className={buttonClass} onClick={() => setSent(false)}>
+          Use a different email
         </button>
-      </form>
+      </div>
     );
   }
 
@@ -113,35 +97,23 @@ function SignInForm({ onDone }: { onDone: () => void }) {
       className="space-y-3"
       onSubmit={(e) => {
         e.preventDefault();
-        void run(async () => {
-          await verifyLoginCode(email.trim(), code.trim());
-          onDone();
-        });
+        void send();
       }}
     >
-      <p>
-        Check <span className="font-medium break-all">{email}</span> and open the sign-in link on this device. If the
-        email shows a code instead, enter it here.
-      </p>
+      <p>Sign in with your email to keep your portfolio in sync across devices. No password needed.</p>
       <input
-        className={`${inputClass} font-mono tracking-widest`}
-        inputMode="numeric"
-        autoComplete="one-time-code"
+        className={inputClass}
+        type="email"
         required
-        maxLength={10}
-        placeholder="123456"
-        value={code}
-        onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+        autoComplete="email"
+        placeholder="you@example.com"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
       />
       {error && <p className="text-red-600 dark:text-red-400">{error}</p>}
-      <div className="flex gap-2">
-        <button type="button" className={buttonClass} onClick={() => setSent(false)} disabled={busy}>
-          Back
-        </button>
-        <button className={`${primaryButtonClass} flex-1`} disabled={busy}>
-          {busy ? "Checking…" : "Sign in"}
-        </button>
-      </div>
+      <button className={`${primaryButtonClass} w-full`} disabled={busy}>
+        {busy ? "Sending…" : "Email me a sign-in link"}
+      </button>
     </form>
   );
 }

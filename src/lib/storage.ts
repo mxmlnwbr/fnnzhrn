@@ -200,16 +200,11 @@ export function useSyncState(): SyncState {
   return useSyncExternalStore(subscribe, () => sync, () => DISABLED);
 }
 
-export async function sendLoginCode(email: string) {
+export async function sendLoginLink(email: string) {
   const { error } = await getSupabase()!.auth.signInWithOtp({
     email,
     options: { emailRedirectTo: window.location.origin },
   });
-  if (error) throw error;
-}
-
-export async function verifyLoginCode(email: string, token: string) {
-  const { error } = await getSupabase()!.auth.verifyOtp({ email, token, type: "email" });
   if (error) throw error;
 }
 

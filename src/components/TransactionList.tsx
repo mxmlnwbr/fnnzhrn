@@ -1,7 +1,8 @@
 import { formatMoney } from "@/lib/currency";
 import { sortTransactions } from "@/lib/portfolio";
+import { isImported } from "@/lib/swissquote";
 import type { Quote, Transaction } from "@/lib/types";
-import { Card } from "./ui";
+import { buttonClass, Card } from "./ui";
 
 const TYPE_STYLE = {
   buy: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
@@ -13,14 +14,31 @@ export function TransactionList({
   transactions,
   quotes,
   onDelete,
+  onDeleteImported,
 }: {
   transactions: Transaction[];
   quotes: Record<string, Quote>;
   onDelete: (id: string) => void;
+  onDeleteImported: () => void;
 }) {
   const rows = sortTransactions(transactions).reverse();
+  const imported = transactions.filter(isImported).length;
   return (
-    <Card title={`Transactions (${transactions.length})`}>
+    <Card
+      title={`Transactions (${transactions.length})`}
+      action={
+        imported > 0 && (
+          <button
+            className={`${buttonClass} text-xs`}
+            onClick={() =>
+              confirm(`Delete all ${imported} imported transactions? Ones you added by hand are kept.`) && onDeleteImported()
+            }
+          >
+            Delete imported
+          </button>
+        )
+      }
+    >
       {rows.length === 0 ? (
         <p className="text-sm text-zinc-500">No transactions yet.</p>
       ) : (

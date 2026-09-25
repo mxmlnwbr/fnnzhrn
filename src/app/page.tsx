@@ -11,7 +11,7 @@ import { buttonClass } from "@/components/ui";
 import { BASE_CURRENCIES } from "@/lib/currency";
 import { buildHistory, summarize } from "@/lib/portfolio";
 import { parseImport, savePortfolio, usePortfolio } from "@/lib/storage";
-import { decodeText, isSwissquoteCsv, parseSwissquoteCsv } from "@/lib/swissquote";
+import { decodeText, isImported, isSwissquoteCsv, parseSwissquoteCsv } from "@/lib/swissquote";
 import type { Transaction } from "@/lib/types";
 import { useMarketData } from "@/lib/useMarketData";
 
@@ -116,6 +116,7 @@ export default function Home() {
             transactions={transactions}
             quotes={market.quotes}
             onDelete={(id) => setTransactions(transactions.filter((t) => t.id !== id))}
+            onDeleteImported={() => setTransactions(transactions.filter((t) => !isImported(t)))}
           />
         </div>
       </div>

@@ -9,7 +9,7 @@ A personal dashboard for tracking the performance of your share portfolio. Price
 - **Summary cards** show market value, today's change, unrealized P/L, and total return (unrealized + realized + dividends).
 - The **performance chart** plots daily market value against net invested capital, with 1M / 3M / YTD / 1Y / All ranges. The period return excludes deposits and uses the simple Dietz method.
 - **Multi-currency**: pick CHF, EUR, USD or GBP as the base currency. Positions are converted at current FX rates, and history at historical FX rates. LSE prices quoted in pence (GBp) are normalised to GBP.
-- **Sync across devices** (optional): sign in with your email (a one-time code, no password) and your portfolio is saved to your account in Supabase and loads on every device you sign in on. The browser keeps a local copy, so the app opens instantly and edits made offline upload later.
+- **Sync across devices** (optional): sign in with your email (a sign-in link, no password) and your portfolio is saved to your account in Supabase and loads on every device you sign in on. The browser keeps a local copy, so the app opens instantly and edits made offline upload later.
 - **Local-first storage**: without sign-in, your transactions stay in your browser's `localStorage`. Use **Export** / **Import** to back them up as JSON.
 
 ## Getting started
@@ -70,9 +70,8 @@ Sign-in and sync use [Supabase](https://supabase.com) (the free tier is plenty).
 
 1. **Create the project.** In Vercel, open the project → **Storage** → **Create Database** → **Supabase**, and connect it to this project. This adds `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to the project's environment variables. (Or create a project at supabase.com and add `NEXT_PUBLIC_SUPABASE_URL` plus `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from **Project Settings → API Keys** yourself; see `.env.example`.)
 2. **Create the table.** In the Supabase dashboard, open **SQL Editor**, paste [`supabase/schema.sql`](supabase/schema.sql) and run it. Row-level security limits every user to their own row.
-3. **Sign-in email (optional).** By default the email contains a sign-in link, which signs in the browser it opens in. To also get a code you can type in (handy for the app added to your phone's home screen), set up custom SMTP under **Authentication → Emails → SMTP Settings** (Supabase only lets you edit templates then), and add `{{ .Token }}` to the **Magic link or OTP** template, e.g. `<p>Your code: <strong>{{ .Token }}</strong></p>`.
-4. **Allow your URL.** Under **Authentication → URL Configuration**, set **Site URL** to your Vercel URL and add `http://localhost:3000` to the redirect URLs for local development.
-5. **Redeploy** on Vercel so the new variables are built in.
+3. **Allow your URL.** Under **Authentication → URL Configuration**, set **Site URL** to your Vercel URL and add `http://localhost:3000` to the redirect URLs for local development.
+4. **Redeploy** on Vercel so the new variables are built in.
 
 For local development, copy `.env.example` to `.env.local` and fill in the same two values.
 
