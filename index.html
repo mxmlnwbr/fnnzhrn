@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>fnnzhrn</title>
+  <meta name="description" content="fnnzhrn – a group of friends interested in finance.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --fg: #171717;
+      --muted: #6b6b6b;
+      --line: #e5e5e5;
+      --card: #fafafa;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0a0a0a;
+        --fg: #ededed;
+        --muted: #9a9a9a;
+        --line: #262626;
+        --card: #141414;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      line-height: 1.5;
+    }
+    main {
+      flex: 1;
+      width: 100%;
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 18vh 16px 48px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 2.5rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+    p.lead {
+      margin: 0 0 48px;
+      color: var(--muted);
+    }
+    h2 {
+      margin: 0 0 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+    ul { list-style: none; margin: 0; padding: 0; }
+    a.project {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 18px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--card);
+      color: inherit;
+      text-decoration: none;
+      transition: border-color 0.15s;
+    }
+    a.project:hover, a.project:focus-visible { border-color: var(--fg); }
+    .project strong { display: block; }
+    .project span { color: var(--muted); font-size: 0.9rem; }
+    .arrow { font-size: 1.25rem; color: var(--muted); }
+    footer {
+      padding: 24px 16px;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>fnnzhrn</h1>
+    <p class="lead">A group of friends who like talking about markets, money and investing.</p>
+
+    <h2>Projects</h2>
+    <ul>
+      <li>
+        <a class="project" href="https://depot.fnnzhrn.ch">
+          <div>
+            <strong>Depot</strong>
+            <span>Our shared portfolio tracker</span>
+          </div>
+          <span class="arrow" aria-hidden="true">→</span>
+        </a>
+      </li>
+    </ul>
+  </main>
+  <footer>© fnnzhrn</footer>
+</body>
+</html>
