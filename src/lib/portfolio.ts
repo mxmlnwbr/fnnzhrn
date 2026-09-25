@@ -191,3 +191,19 @@ export function buildHistory(
   }
   return out;
 }
+
+/**
+ * Cumulative time-weighted return at each point, relative to the first one (0 = unchanged).
+ * Each day's change is measured net of that day's deposits and withdrawals, so new money
+ * doesn't show up as performance.
+ */
+export function returnSeries(points: HistoryPoint[]): number[] {
+  let growth = 1;
+  return points.map((p, i) => {
+    if (i > 0) {
+      const prev = points[i - 1];
+      if (prev.value > 0) growth *= (p.value - (p.invested - prev.invested)) / prev.value;
+    }
+    return growth - 1;
+  });
+}

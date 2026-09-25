@@ -10,6 +10,7 @@ import { TransactionForm } from "@/components/TransactionForm";
 import { TransactionList } from "@/components/TransactionList";
 import { buttonClass } from "@/components/ui";
 import { BASE_CURRENCIES } from "@/lib/currency";
+import { setDiscreet, useDiscreet } from "@/lib/discreet";
 import { buildHistory, summarize } from "@/lib/portfolio";
 import { parseImport, savePortfolio, usePortfolio } from "@/lib/storage";
 import { decodeText, isImported, isImportedCash, isSwissquoteCsv, parseSwissquoteCsv } from "@/lib/swissquote";
@@ -23,6 +24,7 @@ export default function Home() {
   const [refreshKey, setRefreshKey] = useState(0);
   const market = useMarketData(transactions, cash, base, refreshKey);
   const fileInput = useRef<HTMLInputElement>(null);
+  const discreet = useDiscreet();
 
   const summary = useMemo(
     () => summarize(transactions, market.quotes, market.fx, cash),
@@ -80,6 +82,14 @@ export default function Home() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <AccountMenu />
+          <button
+            className={`${buttonClass} ${discreet ? "bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300" : ""}`}
+            onClick={() => setDiscreet(!discreet)}
+            aria-pressed={discreet}
+            title="Show percentages only, hide all amounts"
+          >
+            {discreet ? "Discreet on" : "Discreet"}
+          </button>
           <select
             className={buttonClass}
             value={base}

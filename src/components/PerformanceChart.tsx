@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatMoney, formatPercent } from "@/lib/currency";
-import type { HistoryPoint } from "@/lib/portfolio";
+import { useDiscreet } from "@/lib/discreet";
+import { returnSeries, type HistoryPoint } from "@/lib/portfolio";
 import { Card, pnlClass } from "./ui";
 
 const RANGES = ["1M", "3M", "YTD", "1Y", "All"] as const;
@@ -20,10 +21,13 @@ function rangeStart(range: Range, last: string): string {
 
 export function PerformanceChart({ history, currency, loading }: { history: HistoryPoint[]; currency: string; loading: boolean }) {
   const [range, setRange] = useState<Range>("All");
+  const discreet = useDiscreet();
   const data = useMemo(() => {
     if (history.length === 0) return [];
     const start = rangeStart(range, history[history.length - 1].date);
-    return history.filter((p) => p.date >= start);
+    const points = history.filter((p) => p.date >= start);
+    const returns = returnSeries(points);
+    return points.map((p, i) => ({ ...p, return: returns[i] }));
   }, [history, range]);
 
   const first = data[0];
@@ -58,10 +62,16 @@ export function PerformanceChart({ history, currency, loading }: { history: Hist
         </div>
       ) : (
         <>
-          <div className={`mb-2 text-sm tabular-nums ${pnlClass(gain)}`}>
-            {formatMoney(gain, currency)} {base > 0 ? `(${formatPercent(gain / base)})` : ""}{" "}
-            <span className="text-zinc-500">in period, excl. deposits</span>
-          </div>
+          {discreet ? (
+            <div className={`mb-2 text-sm tabular-nums ${pnlClass(last.return)}`}>
+              {formatPercent(last.return)} <span className="text-zinc-500">time-weighted return in period</span>
+            </div>
+          ) : (
+            <div className={`mb-2 text-sm tabular-nums ${pnlClass(gain)}`}>
+              {formatMoney(gain, currency)} {base > 0 ? `(${formatPercent(gain / base)})` : ""}{" "}
+              <span className="text-zinc-500">in period, excl. deposits</span>
+            </div>
+          )}
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
@@ -79,20 +89,36 @@ export function PerformanceChart({ history, currency, loading }: { history: Hist
                   stroke="currentColor"
                   strokeOpacity={0.4}
                   domain={["auto", "auto"]}
-                  tickFormatter={(v: number) => new Intl.NumberFormat("de-CH", { notation: "compact" }).format(v)}
+                  tickFormatter={(v: number) =>
+                    discreet
+                      ? `${(v * 100).toFixed(0)}%`
+                      : new Intl.NumberFormat("de-CH", { notation: "compact" }).format(v)
+                  }
                 />
                 <Tooltip
-                  formatter={(v, name) => [formatMoney(Number(v), currency), name === "value" ? "Value" : "Invested"]}
+                  formatter={(v, name) =>
+                    name === "return"
+                      ? [formatPercent(Number(v)), "Return"]
+                      : [formatMoney(Number(v), currency), name === "value" ? "Value" : "Invested"]
+                  }
                   contentStyle={{ fontSize: 12, borderRadius: 8, background: "var(--background)", borderColor: "#71717a" }}
                 />
-                <Area type="monotone" dataKey="value" stroke="#0ea5e9" strokeWidth={2} fill="url(#valueFill)" />
-                <Line type="stepAfter" dataKey="invested" stroke="#a1a1aa" strokeDasharray="4 4" dot={false} strokeWidth={1.5} />
+                <Area type="monotone" dataKey={discreet ? "return" : "value"} stroke="#0ea5e9" strokeWidth={2} fill="url(#valueFill)" />
+                {!discreet && (
+                  <Line type="stepAfter" dataKey="invested" stroke="#a1a1aa" strokeDasharray="4 4" dot={false} strokeWidth={1.5} />
+                )}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
           <div className="mt-2 flex gap-4 text-xs text-zinc-500">
-            <span className="flex items-center gap-1"><span className="h-0.5 w-4 bg-sky-500" />Market value</span>
-            <span className="flex items-center gap-1"><span className="h-0.5 w-4 border-t border-dashed border-zinc-400" />Net invested</span>
+            {discreet ? (
+              <span className="flex items-center gap-1"><span className="h-0.5 w-4 bg-sky-500" />Cumulative return</span>
+            ) : (
+              <>
+                <span className="flex items-center gap-1"><span className="h-0.5 w-4 bg-sky-500" />Market value</span>
+                <span className="flex items-center gap-1"><span className="h-0.5 w-4 border-t border-dashed border-zinc-400" />Net invested</span>
+              </>
+            )}
           </div>
         </>
       )}
