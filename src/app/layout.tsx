@@ -13,8 +13,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Portfolio Tracker",
-  description: "Track the performance of your share portfolio",
+  metadataBase: new URL("https://depot.fnnzhrn.ch"),
+  title: "Depot · fnnzhrn",
+  description: "Track your shares and cash in one place",
+  applicationName: "Depot",
+  alternates: { canonical: "/" },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

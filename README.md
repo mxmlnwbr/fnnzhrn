@@ -1,4 +1,6 @@
-# Portfolio Tracker
+# Depot
+
+Live at **https://depot.fnnzhrn.ch**.
 
 A personal dashboard for tracking the performance of your share portfolio and your cash. Prices and FX rates come from Yahoo Finance.
 
@@ -66,13 +68,21 @@ Yahoo Finance is called only from the server-side API routes, because the librar
 
 The app is a standard Next.js project and deploys to Vercel as-is. Without the Supabase settings below it runs in local-only mode: the sign-in button is hidden, and your data never leaves your browser, apart from the ticker symbols sent to fetch prices.
 
+### Custom domain
+
+The app runs at `depot.fnnzhrn.ch`:
+
+1. In Vercel, open the project → **Settings → Domains** and add `depot.fnnzhrn.ch`.
+2. At the registrar for `fnnzhrn.ch`, add the DNS record Vercel shows (a `CNAME` for `depot` pointing to Vercel).
+3. In Supabase, update **Authentication → URL Configuration** as described in step 3 below, so sign-in links open the new domain.
+
 ## Sync across devices
 
 Sign-in and sync use [Supabase](https://supabase.com) (the free tier is plenty). One-time setup:
 
 1. **Create the project.** In Vercel, open the project → **Storage** → **Create Database** → **Supabase**, and connect it to this project. This adds `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to the project's environment variables. (Or create a project at supabase.com and add `NEXT_PUBLIC_SUPABASE_URL` plus `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from **Project Settings → API Keys** yourself; see `.env.example`.)
 2. **Create the table.** In the Supabase dashboard, open **SQL Editor**, paste [`supabase/schema.sql`](supabase/schema.sql) and run it. Row-level security limits every user to their own row.
-3. **Allow your URL.** Under **Authentication → URL Configuration**, set **Site URL** to your Vercel URL and add `http://localhost:3000` to the redirect URLs for local development.
+3. **Allow your URL.** Under **Authentication → URL Configuration**, set **Site URL** to `https://depot.fnnzhrn.ch` (or your Vercel URL) and add `http://localhost:3000` to the redirect URLs for local development.
 4. **Redeploy** on Vercel so the new variables are built in.
 
 For local development, copy `.env.example` to `.env.local` and fill in the same two values.
