@@ -1,4 +1,5 @@
 import { formatMoney } from "@/lib/currency";
+import { useDiscreet } from "@/lib/discreet";
 import { sortTransactions } from "@/lib/portfolio";
 import { isImported } from "@/lib/swissquote";
 import type { Quote, Transaction } from "@/lib/types";
@@ -21,6 +22,7 @@ export function TransactionList({
   onDelete: (id: string) => void;
   onDeleteImported: () => void;
 }) {
+  const discreet = useDiscreet();
   const rows = sortTransactions(transactions).reverse();
   const imported = transactions.filter(isImported).length;
   return (
@@ -55,12 +57,12 @@ export function TransactionList({
                   </div>
                   <div className="text-xs tabular-nums text-zinc-500">
                     {t.date}
-                    {t.type !== "dividend" && ` · ${t.quantity} × ${formatMoney(t.price, currency)}`}
-                    {t.fees > 0 && ` · ${t.type === "dividend" ? "tax" : "fees"} ${formatMoney(t.fees, currency)}`}
+                    {!discreet && t.type !== "dividend" && ` · ${t.quantity} × ${formatMoney(t.price, currency)}`}
+                    {!discreet && t.fees > 0 && ` · ${t.type === "dividend" ? "tax" : "fees"} ${formatMoney(t.fees, currency)}`}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="tabular-nums">{formatMoney(total, currency)}</span>
+                  {!discreet && <span className="tabular-nums">{formatMoney(total, currency)}</span>}
                   <button
                     onClick={() => confirm(`Delete this ${t.type} of ${t.symbol}?`) && onDelete(t.id)}
                     className="rounded px-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800"

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { BASE_CURRENCIES, formatMoney } from "@/lib/currency";
+import { useDiscreet } from "@/lib/discreet";
 import { isImportedCash } from "@/lib/swissquote";
 import type { CashAccount } from "@/lib/types";
 import { buttonClass, Card, inputClass, primaryButtonClass } from "./ui";
@@ -81,6 +82,8 @@ function AccountRow({
   onDelete: () => void;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
+  const discreet = useDiscreet();
+  const shareText = `${share < 0.001 ? "<0.1" : (share * 100).toFixed(1)}%`;
   const commit = () => {
     if (draft !== null && isAmount(draft)) onUpdate(Number(draft));
     setDraft(null);
@@ -94,10 +97,12 @@ function AccountRow({
         <div className="truncate text-sm font-medium">{account.name}</div>
         <div className="text-xs text-zinc-500">
           {isImportedCash(account) ? "Imported" : "Manual"}
-          {value > 0 && ` · ${share < 0.001 ? "<0.1" : (share * 100).toFixed(1)}%`}
+          {!discreet && value > 0 && ` · ${shareText}`}
         </div>
       </div>
-      {draft !== null ? (
+      {discreet ? (
+        <div className="text-sm font-medium tabular-nums">{value > 0 ? shareText : "–"}</div>
+      ) : draft !== null ? (
         <input
           type="number"
           step="any"
@@ -149,6 +154,7 @@ export function CashAccounts({
   onChange: (accounts: CashAccount[]) => void;
 }) {
   const [adding, setAdding] = useState(false);
+  const discreet = useDiscreet();
   const rows = accounts
     .map((account, i) => ({ account, color: COLORS[i % COLORS.length], value: account.balance * (fx[account.currency] ?? 1) }))
     .sort((a, b) => b.value - a.value);
@@ -174,9 +180,10 @@ export function CashAccounts({
         )
       ) : (
         <>
-          <div className="text-2xl font-semibold tabular-nums">{formatMoney(total, currency)}</div>
+          {!discreet && <div className="text-2xl font-semibold tabular-nums">{formatMoney(total, currency)}</div>}
           <div className="text-xs text-zinc-500">
-            {accounts.length} {accounts.length === 1 ? "account" : "accounts"} · click a balance to edit it
+            {accounts.length} {accounts.length === 1 ? "account" : "accounts"}
+            {discreet ? " · share of positive balances" : " · click a balance to edit it"}
           </div>
           {rows.length > 1 && positive > 0 && (
             <div className="mt-3 flex h-1.5 gap-0.5 overflow-hidden rounded-full">

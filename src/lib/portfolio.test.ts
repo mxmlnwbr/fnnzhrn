@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildHistory, buildPositions, summarize } from "./portfolio";
+import { buildHistory, buildPositions, returnSeries, summarize } from "./portfolio";
 import type { Quote, Transaction } from "./types";
 
 const tx = (t: Partial<Transaction> & Pick<Transaction, "type" | "date">): Transaction => ({
@@ -105,5 +105,32 @@ describe("buildHistory", () => {
     expect(h.map((p) => p.date)).toEqual(["2024-01-02", "2024-01-03", "2024-01-04"]);
     expect(h.map((p) => p.value)).toEqual([40, 44, 72]);
     expect(h.map((p) => p.invested)).toEqual([40, 40, 64]);
+  });
+});
+
+describe("returnSeries", () => {
+  it("measures growth net of deposits and withdrawals", () => {
+    const r = returnSeries([
+      { date: "2024-01-01", value: 100, invested: 100 },
+      { date: "2024-01-02", value: 110, invested: 100 },
+      // Deposit of 110 on a flat day: no change in return.
+      { date: "2024-01-03", value: 220, invested: 210 },
+      { date: "2024-01-04", value: 242, invested: 210 },
+      // Withdrawal of 42 on a flat day.
+      { date: "2024-01-05", value: 200, invested: 168 },
+    ]);
+    expect(r[0]).toBe(0);
+    expect(r[1]).toBeCloseTo(0.1);
+    expect(r[2]).toBeCloseTo(0.1);
+    expect(r[3]).toBeCloseTo(0.21);
+    expect(r[4]).toBeCloseTo(0.21);
+  });
+
+  it("skips days without a previous value", () => {
+    expect(returnSeries([
+      { date: "2024-01-01", value: 0, invested: 0 },
+      { date: "2024-01-02", value: 50, invested: 50 },
+      { date: "2024-01-03", value: 55, invested: 50 },
+    ])).toEqual([0, 0, expect.closeTo(0.1)]);
   });
 });
