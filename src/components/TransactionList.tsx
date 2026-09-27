@@ -25,11 +25,14 @@ export function TransactionList({
   transactions,
   quotes,
   onDelete,
+  importedCash,
   onDeleteImported,
 }: {
   transactions: Transaction[];
   quotes: Record<string, Quote>;
   onDelete: (id: string) => void;
+  /** Number of imported cash accounts, which "Delete imported" removes along with the transactions. */
+  importedCash: number;
   onDeleteImported: () => void;
 }) {
   const discreet = useDiscreet();
@@ -49,11 +52,13 @@ export function TransactionList({
     <Card
       title={`Transactions (${transactions.length})`}
       action={
-        imported > 0 && (
+        (imported > 0 || importedCash > 0) && (
           <button
             className={`${buttonClass} text-xs`}
             onClick={() =>
-              confirm(`Delete all ${imported} imported transactions? Ones you added by hand are kept.`) && onDeleteImported()
+              confirm(
+                `Delete everything imported: ${imported} transactions and ${importedCash} cash ${importedCash === 1 ? "account" : "accounts"}? Entries you added by hand are kept.`,
+              ) && onDeleteImported()
             }
           >
             Delete imported

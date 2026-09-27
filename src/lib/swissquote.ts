@@ -1,5 +1,5 @@
 import { buildPositions } from "./portfolio";
-import type { CashAccount, Transaction } from "./types";
+import type { CashAccount, PortfolioData, Transaction } from "./types";
 
 /**
  * Converts a Swissquote transaction export (CSV, German or English) into transactions.
@@ -175,6 +175,21 @@ function cashBalances(rows: Row[]): CashAccount[] {
 /** Whether a transaction came from a Swissquote import rather than manual entry. */
 export function isImported(t: Transaction): boolean {
   return t.id.startsWith(ID_PREFIX);
+}
+
+/** Everything an earlier import brought in goes; entries made by hand stay. */
+export function removeImported(data: PortfolioData): PortfolioData {
+  return {
+    ...data,
+    transactions: data.transactions.filter((t) => !isImported(t)),
+    cash: data.cash.filter((a) => !isImportedCash(a)),
+  };
+}
+
+/** A fresh import replaces all earlier imported transactions and cash accounts. */
+export function applyImport(data: PortfolioData, parsed: Pick<SwissquoteImport, "transactions" | "cash">): PortfolioData {
+  const kept = removeImported(data);
+  return { ...kept, transactions: [...kept.transactions, ...parsed.transactions], cash: [...kept.cash, ...parsed.cash] };
 }
 
 /** FNV-1a, so importing the same export twice yields the same ids. */
