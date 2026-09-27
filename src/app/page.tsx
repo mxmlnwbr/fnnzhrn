@@ -19,7 +19,9 @@ import { parseImport, savePortfolio, usePortfolio } from "@/lib/storage";
 import {
   decodeText,
   isImported,
+  applyImport,
   isImportedCash,
+  removeImported,
   isSwissquoteCsv,
   parseSwissquoteCsv,
   swissquoteListings,
@@ -87,8 +89,16 @@ export default function Home() {
         const listings = swissquoteListings(text);
         const tickers = await resolveTickers(listings);
         const parsed = parseSwissquoteCsv(text, tickers ?? {});
-        // The import's balances replace earlier imported ones; accounts added by hand stay.
-        data = { ...portfolio, transactions: parsed.transactions, cash: [...cash.filter((a) => !isImportedCash(a)), ...parsed.cash] };
+        const oldTx = transactions.filter(isImported).length;
+        const oldCash = cash.filter(isImportedCash).length;
+        if (
+          (oldTx || oldCash) &&
+          !confirm(
+            `Replace everything from your last import (${oldTx} transactions, ${oldCash} cash accounts) with ${parsed.transactions.length} transactions and ${parsed.cash.length} cash accounts from the file? Entries you added by hand are kept.`,
+          )
+        )
+          return;
+        data = applyImport(portfolio, parsed);
         result = {
           file: file.name,
           format: "Swissquote CSV",
@@ -105,6 +115,8 @@ export default function Home() {
         };
       } else {
         data = parseImport(text);
+        // A JSON file is a full backup, so it replaces everything.
+        if (transactions.length && !confirm(`Replace your ${transactions.length} transactions with ${data.transactions.length} from the file?`)) return;
         result = {
           file: file.name,
           format: "JSON",
@@ -117,7 +129,6 @@ export default function Home() {
           resolveFailed: false,
         };
       }
-      if (transactions.length && !confirm(`Replace your ${transactions.length} transactions with ${data.transactions.length} from the file?`)) return;
       savePortfolio(data);
       setImportResult(result);
     } catch (e) {
@@ -294,7 +305,11 @@ export default function Home() {
             transactions={transactions}
             quotes={market.quotes}
             onDelete={(id) => setTransactions(transactions.filter((t) => t.id !== id))}
-            onDeleteImported={() => setTransactions(transactions.filter((t) => !isImported(t)))}
+            importedCash={cash.filter(isImportedCash).length}
+            onDeleteImported={() => {
+              savePortfolio(removeImported(portfolio));
+              setImportResult(null);
+            }}
           />
         </div>
       </div>

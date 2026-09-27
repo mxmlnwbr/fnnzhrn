@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { buildPositions } from "./portfolio";
 import {
+  applyImport,
   decodeText,
   isImported,
   isSwissquoteCsv,
   parseSwissquoteCsv,
   pickTicker,
+  removeImported,
   swissquoteListings,
   tickerCandidates,
 } from "./swissquote";
@@ -196,5 +198,27 @@ describe("unknown row types", () => {
     );
     expect(skipped).toEqual({ Fusion: 1, Einzahlung: 1 });
     expect(unknown).toEqual({ Fusion: { count: 1, example: odd } });
+  });
+});
+
+describe("replacing imported data", () => {
+  const manualTx = { id: "m1", symbol: "AAPL", type: "buy" as const, date: "2024-01-01", quantity: 1, price: 100, fees: 0 };
+  const oldTx = { ...manualTx, id: "sq-old", symbol: "OLD.SW" };
+  const manualCash = { id: "c1", name: "UBS", currency: "CHF", balance: 1000 };
+  const oldCash = { id: "sq-cash-EUR", name: "Swissquote EUR", currency: "EUR", balance: 50 };
+  const data = { version: 1 as const, settings: { baseCurrency: "CHF" }, transactions: [manualTx, oldTx], cash: [manualCash, oldCash] };
+
+  it("removes everything imported, including imported cash, and keeps manual entries", () => {
+    const cleaned = removeImported(data);
+    expect(cleaned.transactions).toEqual([manualTx]);
+    expect(cleaned.cash).toEqual([manualCash]);
+  });
+
+  it("replaces all earlier imported data on a fresh import", () => {
+    const newTx = { ...manualTx, id: "sq-new", symbol: "NEW.SW" };
+    const newCash = { id: "sq-cash-CHF", name: "Swissquote CHF", currency: "CHF", balance: 10 };
+    const next = applyImport(data, { transactions: [newTx], cash: [newCash] });
+    expect(next.transactions).toEqual([manualTx, newTx]);
+    expect(next.cash).toEqual([manualCash, newCash]);
   });
 });
