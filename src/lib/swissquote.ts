@@ -23,7 +23,15 @@ const STORNO_CORPORATE_ACTION = "Storno (Corporate Action)";
 const BUY = new Set(["Kauf", "Buy"]);
 const SELL = new Set(["Verkauf", "Sell"]);
 /** Capital gains are Swiss distributions from capital contribution reserves: dividends without tax. */
-const DIVIDEND = new Set(["Dividende", "Dividend", "Capital Gain"]);
+const DIVIDEND = new Set(["Dividende", "Dividend", "Capital Gain", "Kapitalrückzahlung", "Capital Repayment"]);
+/** Shares or coins arriving without a trade: transfers from another bank, crypto deposits, rights. */
+const INCOMING = new Set(["Titeleingang", "Security Receipt", "Crypto Deposit", "Ausgabe von Anrechten", "Rights Issue"]);
+/** Shares or coins leaving without a trade; they leave at cost unless the row says otherwise. */
+const OUTGOING = new Set(["Titelausgang", "Security Delivery", "Crypto Withdrawal"]);
+/** Written off as worthless (e.g. lapsed subscription rights): a sale at zero. */
+const WRITE_OFF = new Set(["Wertlose Ausbuchung", "Worthless Write-off"]);
+/** Swissquote books crypto under pseudo-ISINs like EX0X00BTC000. */
+export const isCrypto = (isin: string) => isin.startsWith("EX0X");
 
 interface Row {
   line: string;
@@ -160,8 +168,9 @@ export interface Listing {
 const SUFFIXES: Record<string, string[]> = {
   CHF: [".SW"],
   GBP: [".L", ".SW"],
-  EUR: [".DE", ".PA", ".AS", ".MI", ".SW"],
+  EUR: [".DE", ".F", ".PA", ".AS", ".MI", ".SW"],
   USD: [".SW", ""],
+  CAD: [".TO", ".V"],
 };
 
 /**
@@ -170,10 +179,12 @@ const SUFFIXES: Record<string, string[]> = {
  * ETFs) depends on where it was bought, which the trade currency hints at.
  */
 export function tickerCandidates({ symbol, isin, currency }: Listing): string[] {
+  if (isCrypto(isin)) return [`${symbol}-USD`];
   if (/^(CH|LI)/.test(isin)) return [`${symbol}.SW`];
-  if (!isin || /^(US|CA)/.test(isin)) return [symbol];
+  // North American listings under the plain ticker; a Canadian share bought in EUR is a Frankfurt line.
+  if (!isin || isin.startsWith("US") || (isin.startsWith("CA") && currency === "USD")) return [symbol];
   const first = SUFFIXES[currency] ?? [".SW"];
-  const rest = [".SW", ".DE", ".L", ".PA", ".AS", ".MI", ""];
+  const rest = [".SW", ".DE", ".L", ".PA", ".AS", ".MI", ".F", ""];
   return [...new Set([...first, ...rest])].map((suffix) => `${symbol}${suffix}`);
 }
 
@@ -199,7 +210,7 @@ function listingsFrom(all: Row[]): Map<string, Listing> {
   for (const r of rows) {
     if (!r.symbol) continue;
     const key = r.isin || r.symbol.toUpperCase();
-    const traded = BUY.has(r.type) || SELL.has(r.type);
+    const traded = BUY.has(r.type) || SELL.has(r.type) || r.type === "Titeleingang" || r.type === "Security Receipt";
     const existing = out.get(key);
     // Prefer the currency of the latest trade; dividends may pay out in another currency.
     if (existing && !(traded && !existing.currency)) continue;
@@ -277,7 +288,17 @@ export function parseSwissquoteCsv(text: string, tickers: Record<string, string>
     } else if (symbol && SELL.has(r.type)) {
       add({ symbol, type: "sell", date, quantity: r.quantity, price: r.price, fees: r.costs }, r.line);
     } else if (symbol && DIVIDEND.has(r.type)) {
-      add({ symbol, type: "dividend", date, quantity: 0, price: r.quantity * r.price, fees: r.costs, note: r.type === "Capital Gain" ? r.type : undefined }, r.line);
+      const note = r.type === "Dividende" || r.type === "Dividend" ? undefined : r.type;
+      add({ symbol, type: "dividend", date, quantity: 0, price: r.quantity * r.price, fees: r.costs, note }, r.line);
+    } else if (symbol && INCOMING.has(r.type)) {
+      // Transfers state their value; crypto deposits (mostly staking rewards) and rights come free.
+      const price = isCrypto(r.isin) ? 0 : r.price;
+      add({ symbol, type: "buy", date, quantity: Math.abs(r.quantity), price, fees: 0, note: r.type }, r.line);
+    } else if (symbol && (OUTGOING.has(r.type) || WRITE_OFF.has(r.type))) {
+      const p = buildPositions(transactions).get(symbol);
+      const cost = p && p.quantity > 0 ? p.cost / p.quantity : 0;
+      const price = WRITE_OFF.has(r.type) ? 0 : cost;
+      add({ symbol, type: "sell", date, quantity: Math.abs(r.quantity), price, fees: 0, note: r.type }, r.line);
     } else if (events.has(key)) {
       if (done.has(key)) continue;
       done.add(key);

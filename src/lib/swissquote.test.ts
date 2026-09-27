@@ -137,7 +137,9 @@ describe("ticker mapping", () => {
   it("tries likely exchanges by trade currency", () => {
     expect(tickerCandidates({ symbol: "NESN", isin: "CH0038863350", currency: "CHF" })).toEqual(["NESN.SW"]);
     expect(tickerCandidates({ symbol: "AAPL", isin: "US0378331005", currency: "USD" })).toEqual(["AAPL"]);
-    expect(tickerCandidates({ symbol: "SAP", isin: "DE0007164600", currency: "EUR" }).slice(0, 2)).toEqual(["SAP.DE", "SAP.PA"]);
+    expect(tickerCandidates({ symbol: "SAP", isin: "DE0007164600", currency: "EUR" }).slice(0, 2)).toEqual(["SAP.DE", "SAP.F"]);
+    expect(tickerCandidates({ symbol: "BTC", isin: "EX0X00XBT000", currency: "USD" })).toEqual(["BTC-USD"]);
+    expect(tickerCandidates({ symbol: "4K9", isin: "CA13683D1087", currency: "EUR" })[0]).toBe("4K9.DE");
     expect(tickerCandidates({ symbol: "CSSPX", isin: "IE00B5BMR087", currency: "USD" }).slice(0, 2)).toEqual(["CSSPX.SW", "CSSPX"]);
   });
 
@@ -150,5 +152,38 @@ describe("ticker mapping", () => {
     expect(pickTicker(["VWRL", "VWRL.L", "VWRL.SW"], quotes, "CHF")).toBe("VWRL.SW");
     expect(pickTicker(["VWRL", "VWRL.L", "VWRL.SW"], quotes, "USD")).toBe("VWRL.L");
     expect(pickTicker(["VWRL"], quotes, "GBP")).toBeUndefined();
+  });
+});
+
+describe("transfers, crypto and write-offs", () => {
+  const text = csv(
+    "15-05-2026 17:12:07;00000000;Wertlose Ausbuchung;ABC RT;\"ABC RIGHTS\";CH0000000001;-10.0;0;0.00;0.00;-;CHF;-;;CHF",
+    "12-03-2026 16:58:43;00000000;Crypto Withdrawal;SOL;\"SOL\";EX0X00SOL000;2.0;0;0.00;0.00;-;USD;-;;USD",
+    "22-12-2025 16:43:38;00000000;Crypto Deposit;SOL;\"SOL\";EX0X00SOL000;5.0;0;0.00;0.00;-;USD;-;;USD",
+    "23-12-2025 11:05:44;00000000;Titeleingang;D7G;\"NEL ORD\";NO0010081235;100.0;0.20;0.00;0.00;-;EUR;-;;EUR",
+    "16-09-2025 07:09:33;00000000;Ausgabe von Anrechten;ABC RT;\"ABC RIGHTS\";CH0000000001;10.0;0;0.00;0.00;-;CHF;-;;CHF",
+    "24-07-2025 17:17:17;00000000;Kapitalrückzahlung;SLHN;\"SWISS LIFE\";CH0014852781;1.0;30.00;0.00;0.00;30.00;CHF;30.00;100.00;CHF",
+    "01-05-2022 00:00:36;111;Kauf;SOL;\"SOL\";EX0X00SOL000;1.0;100.00;1.00;0.00;-101.00;USD;-101.00;50.00;USD",
+  );
+  const { transactions, skipped } = parseSwissquoteCsv(text);
+  const positions = buildPositions(transactions);
+
+  it("books crypto under Yahoo's coin tickers, with deposits free and withdrawals at cost", () => {
+    // 1 bought at 100 + 5 deposited free = 6 at 100 total; 2 leave at the average cost.
+    expect(positions.get("SOL-USD")).toMatchObject({ quantity: 4, realized: 0 });
+    expect(positions.get("SOL-USD")!.cost).toBeCloseTo((101 * 4) / 6);
+  });
+
+  it("adds shares transferred in at their stated value", () => {
+    expect(positions.get("D7G.DE")).toMatchObject({ quantity: 100, cost: 20 });
+  });
+
+  it("nets subscription rights against their write-off", () => {
+    expect(positions.get("ABC RT.SW")).toMatchObject({ quantity: 0 });
+  });
+
+  it("counts capital repayments as payouts", () => {
+    expect(transactions.find((t) => t.symbol === "SLHN.SW")).toMatchObject({ type: "dividend", price: 30, note: "Kapitalrückzahlung" });
+    expect(skipped).toEqual({});
   });
 });
