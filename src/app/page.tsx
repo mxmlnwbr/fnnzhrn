@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { AccountMenu } from "@/components/AccountMenu";
 import { CashAccounts } from "@/components/CashAccounts";
 import { HoldingsTable } from "@/components/HoldingsTable";
+import { type ImportResult, ImportReport } from "@/components/ImportReport";
 import { DividendCard, FeeCard } from "@/components/IncomeCards";
 import { RefreshIcon, SplashLoader, TopProgress } from "@/components/Loading";
 import { PerformanceChart } from "@/components/PerformanceChart";
@@ -22,21 +23,22 @@ import {
   isSwissquoteCsv,
   parseSwissquoteCsv,
   swissquoteListings,
+  tickerCandidates,
 } from "@/lib/swissquote";
 import type { CashAccount, Transaction } from "@/lib/types";
 import { useMarketData } from "@/lib/useMarketData";
 
 /** Verified Yahoo tickers for imported securities; the import falls back to its own guess without them. */
-async function resolveTickers(listings: ReturnType<typeof swissquoteListings>): Promise<Record<string, string>> {
+async function resolveTickers(listings: ReturnType<typeof swissquoteListings>): Promise<Record<string, string> | null> {
   try {
     const res = await fetch("/api/resolve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(listings),
     });
-    return res.ok ? await res.json() : {};
+    return res.ok ? await res.json() : null;
   } catch {
-    return {};
+    return null;
   }
 }
 
@@ -46,6 +48,7 @@ export default function Home() {
   const base = settings.baseCurrency;
   const [refreshKey, setRefreshKey] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const market = useMarketData(transactions, cash, base, refreshKey);
   const fileInput = useRef<HTMLInputElement>(null);
   const discreet = useDiscreet();
@@ -79,15 +82,44 @@ export default function Home() {
     try {
       const text = decodeText(await file.arrayBuffer());
       let data;
+      let result: ImportResult;
       if (isSwissquoteCsv(text)) {
-        const parsed = parseSwissquoteCsv(text, await resolveTickers(swissquoteListings(text)));
+        const listings = swissquoteListings(text);
+        const tickers = await resolveTickers(listings);
+        const parsed = parseSwissquoteCsv(text, tickers ?? {});
         // The import's balances replace earlier imported ones; accounts added by hand stay.
         data = { ...portfolio, transactions: parsed.transactions, cash: [...cash.filter((a) => !isImportedCash(a)), ...parsed.cash] };
+        result = {
+          file: file.name,
+          format: "Swissquote CSV",
+          at: new Date(),
+          transactions: parsed.transactions.length,
+          cash: parsed.cash.length,
+          skipped: Object.values(parsed.skipped).reduce((a, b) => a + b, 0),
+          unknown: parsed.unknown,
+          securities: listings.map((l) => {
+            const key = l.isin || l.symbol;
+            return { ...l, ticker: tickers?.[key] ?? tickerCandidates(l)[0], verified: Boolean(tickers?.[key]) };
+          }),
+          resolveFailed: tickers === null,
+        };
       } else {
         data = parseImport(text);
+        result = {
+          file: file.name,
+          format: "JSON",
+          at: new Date(),
+          transactions: data.transactions.length,
+          cash: data.cash.length,
+          skipped: 0,
+          unknown: {},
+          securities: [],
+          resolveFailed: false,
+        };
       }
       if (transactions.length && !confirm(`Replace your ${transactions.length} transactions with ${data.transactions.length} from the file?`)) return;
       savePortfolio(data);
+      setImportResult(result);
     } catch (e) {
       alert(`Import failed: ${(e as Error).message}`);
     }
@@ -232,6 +264,17 @@ export default function Home() {
           }}
         />
       </header>
+
+      {importResult && (
+        <ImportReport
+          result={importResult}
+          transactions={transactions}
+          quotes={market.quotes}
+          loading={market.loading}
+          error={market.error}
+          onDismiss={() => setImportResult(null)}
+        />
+      )}
 
       <SummaryCards summary={summary} currency={base} />
 
