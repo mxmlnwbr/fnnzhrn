@@ -21,6 +21,8 @@ export interface Quote {
   price: number;
   previousClose: number;
   changePercent: number;
+  /** Yahoo's quote type, e.g. EQUITY, ETF, MUTUALFUND, CRYPTOCURRENCY. */
+  type?: string;
 }
 
 export interface PricePoint {
@@ -75,6 +77,10 @@ export interface CashAccount {
 
 export interface Settings {
   baseCurrency: string;
+  /** Asset class per symbol, where the user overrode the automatic one. */
+  categories?: Record<string, string>;
+  /** Target share of net worth per asset class, in percent. */
+  targets?: Record<string, number>;
 }
 
 export interface PortfolioData {

@@ -51,6 +51,7 @@ export async function getQuotes(symbols: string[]): Promise<Record<string, Quote
       price,
       previousClose,
       changePercent: previousClose ? price / previousClose - 1 : 0,
+      type: str(q.quoteType),
     };
   }
   return out;

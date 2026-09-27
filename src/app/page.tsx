@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { AccountMenu } from "@/components/AccountMenu";
 import { CashAccounts } from "@/components/CashAccounts";
+import { AllocationCard } from "@/components/AllocationCard";
 import { useChoice } from "@/components/ChoiceDialog";
 import { HoldingsTable } from "@/components/HoldingsTable";
 import { type ImportResult, ImportReport } from "@/components/ImportReport";
@@ -70,6 +71,11 @@ export default function Home() {
     () => incomeOverview(transactions, market.quotes, market.fx),
     [transactions, market.quotes, market.fx],
   );
+  const cashByCurrency = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const a of cash) out[a.currency] = (out[a.currency] ?? 0) + a.balance * (market.fx[a.currency] ?? 1);
+    return out;
+  }, [cash, market.fx]);
   const history = useMemo(() => {
     const currencies = Object.fromEntries(Object.values(market.quotes).map((q) => [q.symbol, q.currency]));
     return buildHistory(transactions, market.prices, currencies, market.fxHistory, base);
@@ -356,6 +362,16 @@ export default function Home() {
         <div className="min-w-0 space-y-4 lg:col-span-2">
           <PerformanceChart history={history} currency={base} loading={market.loading} />
           <HoldingsTable holdings={summary.holdings} currency={base} />
+          <AllocationCard
+            holdings={summary.holdings}
+            quotes={market.quotes}
+            cashByCurrency={cashByCurrency}
+            currency={base}
+            categories={settings.categories ?? {}}
+            targets={settings.targets ?? {}}
+            onCategoriesChange={(categories) => savePortfolio({ ...portfolio, settings: { ...settings, categories } })}
+            onTargetsChange={(targets) => savePortfolio({ ...portfolio, settings: { ...settings, targets } })}
+          />
           <div className="grid gap-4 md:grid-cols-2">
             <DividendCard overview={income} quotes={market.quotes} currency={base} />
             <FeeCard overview={income} quotes={market.quotes} currency={base} />
