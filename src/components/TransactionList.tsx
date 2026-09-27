@@ -4,7 +4,6 @@ import { useState } from "react";
 import { formatMoney } from "@/lib/currency";
 import { useDiscreet } from "@/lib/discreet";
 import { sortTransactions } from "@/lib/portfolio";
-import { isImported } from "@/lib/swissquote";
 import type { Quote, Transaction, TransactionType } from "@/lib/types";
 import { buttonClass, Card } from "./ui";
 
@@ -25,15 +24,16 @@ export function TransactionList({
   transactions,
   quotes,
   onDelete,
-  importedCash,
-  onDeleteImported,
+  canDelete,
+  onDeleteMany,
 }: {
   transactions: Transaction[];
   quotes: Record<string, Quote>;
   onDelete: (id: string) => void;
-  /** Number of imported cash accounts, which "Delete imported" removes along with the transactions. */
-  importedCash: number;
-  onDeleteImported: () => void;
+  /** Whether there's anything (transactions or cash accounts) for the bulk delete to remove. */
+  canDelete: boolean;
+  /** Opens the choice between deleting imported data only or everything. */
+  onDeleteMany: () => void;
 }) {
   const discreet = useDiscreet();
   const [filter, setFilter] = useState<TransactionType | "all">("all");
@@ -47,21 +47,13 @@ export function TransactionList({
   const rows = sortTransactions(bySymbol)
     .reverse()
     .filter((t) => filter === "all" || t.type === filter);
-  const imported = transactions.filter(isImported).length;
   return (
     <Card
       title={`Transactions (${transactions.length})`}
       action={
-        (imported > 0 || importedCash > 0) && (
-          <button
-            className={`${buttonClass} text-xs`}
-            onClick={() =>
-              confirm(
-                `Delete everything imported: ${imported} transactions and ${importedCash} cash ${importedCash === 1 ? "account" : "accounts"}? Entries you added by hand are kept.`,
-              ) && onDeleteImported()
-            }
-          >
-            Delete imported
+        canDelete && (
+          <button className={`${buttonClass} text-xs`} onClick={onDeleteMany}>
+            Delete…
           </button>
         )
       }
