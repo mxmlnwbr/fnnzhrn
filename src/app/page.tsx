@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { AccountMenu } from "@/components/AccountMenu";
 import { CashAccounts } from "@/components/CashAccounts";
+import { useChoice } from "@/components/ChoiceDialog";
 import { HoldingsTable } from "@/components/HoldingsTable";
 import { type ImportResult, ImportReport } from "@/components/ImportReport";
 import { DividendCard, FeeCard } from "@/components/IncomeCards";
@@ -51,6 +52,12 @@ export default function Home() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [choiceDialog, ask] = useChoice();
+  const importedCount = transactions.filter(isImported).length + cash.filter(isImportedCash).length;
+  const manualCount = transactions.length + cash.length - importedCount;
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const describeEntries = (tx: Transaction[], accounts: CashAccount[]) =>
+    `${plural(tx.length, "transaction")} and ${plural(accounts.length, "cash account")}`;
   const market = useMarketData(transactions, cash, base, refreshKey);
   const fileInput = useRef<HTMLInputElement>(null);
   const discreet = useDiscreet();
@@ -71,6 +78,30 @@ export default function Home() {
   const setTransactions = (next: Transaction[]) => savePortfolio({ ...portfolio, transactions: next });
   const setCash = (next: CashAccount[]) => savePortfolio({ ...portfolio, cash: next });
 
+  async function deleteMany() {
+    const manual = removeImported(portfolio);
+    const choice = await ask("Delete data", "Cash accounts are included. This can't be undone, so consider exporting first.", [
+      ...(importedCount && manualCount
+        ? [
+            {
+              value: "imported" as const,
+              label: "Delete imported only",
+              description: `Removes everything from your last import. Your ${describeEntries(manual.transactions, manual.cash)} added by hand stay.`,
+            },
+          ]
+        : []),
+      {
+        value: "all" as const,
+        label: "Delete everything",
+        description: `Removes all ${describeEntries(transactions, cash)}.`,
+        tone: "danger" as const,
+      },
+    ]);
+    if (!choice) return;
+    savePortfolio(choice === "all" ? { ...portfolio, transactions: [], cash: [] } : manual);
+    setImportResult(null);
+  }
+
   function exportJson() {
     const blob = new Blob([JSON.stringify(portfolio, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
@@ -89,16 +120,36 @@ export default function Home() {
         const listings = swissquoteListings(text);
         const tickers = await resolveTickers(listings);
         const parsed = parseSwissquoteCsv(text, tickers ?? {});
-        const oldTx = transactions.filter(isImported).length;
-        const oldCash = cash.filter(isImportedCash).length;
-        if (
-          (oldTx || oldCash) &&
-          !confirm(
-            `Replace everything from your last import (${oldTx} transactions, ${oldCash} cash accounts) with ${parsed.transactions.length} transactions and ${parsed.cash.length} cash accounts from the file? Entries you added by hand are kept.`,
-          )
-        )
-          return;
-        data = applyImport(portfolio, parsed);
+        let mode: "keep" | "all" | null = "keep";
+        if (transactions.length || cash.length) {
+          const manual = removeImported(portfolio);
+          mode = await ask(
+            "Import Swissquote file",
+            `The file has ${describeEntries(parsed.transactions, parsed.cash)}. What should happen to what's there now?`,
+            [
+              {
+                value: "keep" as const,
+                label: manualCount ? "Replace imported, keep manual entries" : "Replace imported data",
+                description: manualCount
+                  ? `Replaces your last import. Your ${describeEntries(manual.transactions, manual.cash)} added by hand stay.`
+                  : `Replaces your last import (${importedCount} ${importedCount === 1 ? "entry" : "entries"}).`,
+                tone: "primary",
+              },
+              ...(manualCount
+                ? [
+                    {
+                      value: "all" as const,
+                      label: "Replace everything",
+                      description: `Also removes the ${describeEntries(manual.transactions, manual.cash)} you added by hand.`,
+                      tone: "danger" as const,
+                    },
+                  ]
+                : []),
+            ],
+          );
+          if (!mode) return;
+        }
+        data = applyImport(mode === "all" ? { ...portfolio, transactions: [], cash: [] } : portfolio, parsed);
         result = {
           file: file.name,
           format: "Swissquote CSV",
@@ -116,7 +167,18 @@ export default function Home() {
       } else {
         data = parseImport(text);
         // A JSON file is a full backup, so it replaces everything.
-        if (transactions.length && !confirm(`Replace your ${transactions.length} transactions with ${data.transactions.length} from the file?`)) return;
+        if (
+          (transactions.length || cash.length) &&
+          !(await ask("Restore backup", `The file has ${describeEntries(data.transactions, data.cash)}.`, [
+            {
+              value: true,
+              label: "Replace everything",
+              description: `Removes your current ${describeEntries(transactions, cash)}, including ones added by hand.`,
+              tone: "danger" as const,
+            },
+          ]))
+        )
+          return;
         result = {
           file: file.name,
           format: "JSON",
@@ -209,6 +271,7 @@ export default function Home() {
 
   return (
     <main className="animate-fade-in mx-auto w-full max-w-7xl flex-1 space-y-4 px-4 py-6">
+      {choiceDialog}
       <TopProgress active={market.loading} />
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -305,11 +368,8 @@ export default function Home() {
             transactions={transactions}
             quotes={market.quotes}
             onDelete={(id) => setTransactions(transactions.filter((t) => t.id !== id))}
-            importedCash={cash.filter(isImportedCash).length}
-            onDeleteImported={() => {
-              savePortfolio(removeImported(portfolio));
-              setImportResult(null);
-            }}
+            canDelete={transactions.length + cash.length > 0}
+            onDeleteMany={() => void deleteMany()}
           />
         </div>
       </div>
