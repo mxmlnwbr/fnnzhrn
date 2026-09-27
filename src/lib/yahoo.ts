@@ -1,7 +1,7 @@
 import "server-only";
 import YahooFinance from "yahoo-finance2";
 import { normaliseCurrency } from "./currency";
-import { type Listing, pickTicker, tickerCandidates } from "./swissquote";
+import { isCrypto, type Listing, pickTicker, tickerCandidates } from "./swissquote";
 import type { PricePoint, Quote } from "./types";
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
@@ -103,7 +103,8 @@ async function quoteMany(symbols: string[]): Promise<Record<string, Quote>> {
 
 /**
  * Yahoo ticker per listing (keyed by ISIN, or symbol without one). Tries the likely exchange
- * suffixes first, then whatever Yahoo's search finds for the ISIN. Listings nothing matches are
+ * suffixes first, then whatever Yahoo's search finds for the ISIN (for crypto: the coin, which
+ * Yahoo sometimes lists with a number, e.g. UNI7083-USD). Listings nothing matches are
  * left out, so the caller falls back to its best guess.
  */
 export async function resolveTickers(listings: Listing[]): Promise<Record<string, string>> {
@@ -118,11 +119,12 @@ export async function resolveTickers(listings: Listing[]): Promise<Record<string
   }
 
   const found = await Promise.all(
-    unresolved.map((l) =>
-      searchSymbols(l.isin)
-        .then((r) => r.map((q) => q.symbol))
-        .catch(() => [] as string[]),
-    ),
+    unresolved.map((l) => {
+      const coin = isCrypto(l.isin) && new RegExp(`^${l.symbol.replace(/[^A-Z0-9]/gi, "")}\\d*-USD$`, "i");
+      return searchSymbols(coin ? `${l.symbol}-USD` : l.isin)
+        .then((r) => r.map((q) => q.symbol).filter((s) => !coin || coin.test(s)))
+        .catch(() => [] as string[]);
+    }),
   );
   const searchQuotes = await quoteMany([...new Set(found.flat())]);
   unresolved.forEach((l, i) => {
