@@ -56,12 +56,12 @@ export function allocation(
   quotes: Record<string, Quote>,
   cash: Record<string, number>,
   overrides: Record<string, string>,
-  by: "class" | "currency",
+  by: "class" | "currency" | "position",
 ): Slice[] {
   const entries = holdings.map((h) => {
     const cls = overrides[h.symbol] ?? defaultClass(quotes[h.symbol]);
     return {
-      key: by === "class" ? cls : h.currency || "?",
+      key: by === "class" ? cls : by === "currency" ? h.currency || "?" : h.symbol,
       symbol: h.symbol,
       name: h.name,
       value: h.marketValue,
@@ -71,7 +71,7 @@ export function allocation(
     };
   });
   for (const [currency, value] of Object.entries(cash)) {
-    if (value) entries.push({ key: by === "class" ? "Cash" : currency, symbol: "", name: "", value, price: 0, class: "Cash" });
+    if (value) entries.push({ key: by === "currency" ? currency : "Cash", symbol: "", name: "", value, price: 0, class: "Cash" });
   }
   return slices(entries);
 }
@@ -146,4 +146,22 @@ export function rebalance(
   // Sells first (they fund the buys), then buys; biggest first within each.
   trades.sort((a, b) => Number(a.amount > 0) - Number(b.amount > 0) || Math.abs(b.amount) - Math.abs(a.amount));
   return { rows, trades, unplaced, total };
+}
+
+/**
+ * At most `max` slices: beyond that the smallest fold into one "Other" slice (always two or more,
+ * so "Other" never hides a single position), and a chart stays legible.
+ */
+export function topSlices(slices: Slice[], max: number): Slice[] {
+  if (slices.length <= max) return slices;
+  const kept = slices.slice(0, max - 1);
+  const rest = slices.slice(max - 1);
+  const other = kept.find((s) => s.key === "Other");
+  const folded: Slice = {
+    key: "Other",
+    value: rest.reduce((s, x) => s + x.value, other?.value ?? 0),
+    share: rest.reduce((s, x) => s + x.share, other?.share ?? 0),
+    positions: [...(other?.positions ?? []), ...rest.flatMap((x) => x.positions)],
+  };
+  return [...kept.filter((s) => s !== other), folded];
 }

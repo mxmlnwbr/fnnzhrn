@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allocation, defaultClass, rebalance } from "./allocation";
+import { allocation, defaultClass, rebalance, topSlices } from "./allocation";
 import type { Holding, Quote } from "./types";
 
 const holding = (symbol: string, currency: string, quantity: number, marketValue: number): Holding => ({
@@ -106,5 +106,22 @@ describe("rebalance", () => {
   it("reports targets for classes with nothing to buy into", () => {
     const r = rebalance(classes, { Stocks: 70, Bonds: 20, Crypto: 10 }, { kind: "full" });
     expect(r.unplaced).toEqual([{ key: "Crypto", amount: 1000 }]);
+  });
+});
+
+describe("by position", () => {
+  const holdings = ["A", "B", "C", "D"].map((s, i) => holding(s, "USD", 1, 400 - i * 100));
+  const slices = allocation(holdings, {}, { CHF: 50 }, {}, "position");
+
+  it("gives each position its own slice and cash one", () => {
+    expect(slices.map((s) => [s.key, s.value])).toEqual([["A", 400], ["B", 300], ["C", 200], ["D", 100], ["Cash", 50]]);
+  });
+
+  it("folds small slices into Other", () => {
+    const top = topSlices(slices, 3);
+    expect(top.map((s) => [s.key, s.value])).toEqual([["A", 400], ["B", 300], ["Other", 350]]);
+    expect(top[2].positions.map((p) => p.symbol)).toEqual(["C", "D"]);
+    expect(topSlices(slices, 5)).toBe(slices);
+    expect(top.reduce((s, x) => s + x.share, 0)).toBeCloseTo(1);
   });
 });
