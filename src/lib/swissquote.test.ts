@@ -115,8 +115,8 @@ describe("ticker mapping", () => {
 
   it("lists each security with the currency it was traded in", () => {
     expect(swissquoteListings(etf)).toEqual([
-      { symbol: "VWRL", isin: "IE00B3RBWM25", currency: "CHF" },
-      { symbol: "SCHH", isin: "US8085248479", currency: "USD" },
+      { symbol: "VWRL", name: "VANGUARD FTSE ALL-WORLD", isin: "IE00B3RBWM25", currency: "CHF" },
+      { symbol: "SCHH", name: "SCHWAB US REIT ETF", isin: "US8085248479", currency: "USD" },
     ]);
   });
 
@@ -185,5 +185,16 @@ describe("transfers, crypto and write-offs", () => {
   it("counts capital repayments as payouts", () => {
     expect(transactions.find((t) => t.symbol === "SLHN.SW")).toMatchObject({ type: "dividend", price: 30, note: "Kapitalrückzahlung" });
     expect(skipped).toEqual({});
+  });
+});
+
+describe("unknown row types", () => {
+  it("reports skipped rows the importer doesn't know, but not cash movements", () => {
+    const odd = '01-01-2026 10:00:00;00000000;Fusion;ABC;"ABC";CH0000000002;5.0;10.00;0.00;0.00;-;CHF;-;;CHF';
+    const { unknown, skipped } = parseSwissquoteCsv(
+      csv(odd, "25-08-2025 00:01:44;00000000;Einzahlung;;;;1.0;683.35;0.00;0.00;683.35;CHF;683.35;862.30;CHF"),
+    );
+    expect(skipped).toEqual({ Fusion: 1, Einzahlung: 1 });
+    expect(unknown).toEqual({ Fusion: { count: 1, example: odd } });
   });
 });

@@ -30,6 +30,29 @@ const INCOMING = new Set(["Titeleingang", "Security Receipt", "Crypto Deposit", 
 const OUTGOING = new Set(["Titelausgang", "Security Delivery", "Crypto Withdrawal"]);
 /** Written off as worthless (e.g. lapsed subscription rights): a sale at zero. */
 const WRITE_OFF = new Set(["Wertlose Ausbuchung", "Worthless Write-off"]);
+/**
+ * Rows that are handled by leaving them out: cash movements (the balance covers them) and
+ * bookings that cancel each other. Anything else that is skipped gets reported as unknown.
+ */
+const IGNORED = new Set([
+  "Einzahlung",
+  "Auszahlung",
+  "Zahlung",
+  "Forex-Gutschrift",
+  "Forex-Belastung",
+  "Fx-Gutschrift Comp.",
+  "Fx-Belastung Comp.",
+  "Depotgebühren",
+  "Zinsen auf Einlagen",
+  "Zinsen auf Belastungen",
+  "Spesen Steuerauszug",
+  "Berichtigung Börsengeb.",
+  "Umwandlung von Treuhandanteil",
+  "Storno (Dividende)",
+  "Dividende (Storniert)",
+  "Storno (Capital Gain)",
+  "Capital Gain (Storniert)",
+]);
 /** Swissquote books crypto under pseudo-ISINs like EX0X00BTC000. */
 export const isCrypto = (isin: string) => isin.startsWith("EX0X");
 
@@ -39,6 +62,7 @@ interface Row {
   time: string;
   type: string;
   symbol: string;
+  name: string;
   isin: string;
   quantity: number;
   price: number;
@@ -55,6 +79,8 @@ export interface SwissquoteImport {
   cash: CashAccount[];
   /** Rows that aren't security transactions (cash, FX, fees), by type. */
   skipped: Record<string, number>;
+  /** Skipped rows of a type the importer doesn't know, with the first such row as an example. */
+  unknown: Record<string, { count: number; example: string }>;
 }
 
 /** Bank exports are often Windows-1252 rather than UTF-8. */
@@ -108,6 +134,7 @@ function parseRows(text: string): Row[] {
       time: `${yyyy}-${mm}-${dd} ${clock}`,
       type: c[2],
       symbol: c[3],
+      name: c[4],
       isin: c[5],
       quantity: num(c[6]),
       price: num(c[7]),
@@ -160,6 +187,7 @@ function hash(s: string): string {
 /** A security as Swissquote lists it: its latest symbol, and the currency it was traded in. */
 export interface Listing {
   symbol: string;
+  name?: string;
   isin: string;
   currency: string;
 }
@@ -216,6 +244,7 @@ function listingsFrom(all: Row[]): Map<string, Listing> {
     if (existing && !(traded && !existing.currency)) continue;
     out.set(key, {
       symbol: (latest.get(r.isin) ?? r.symbol).toUpperCase(),
+      name: r.name,
       isin: r.isin,
       currency: traded ? r.currency : "",
     });
@@ -264,7 +293,14 @@ export function parseSwissquoteCsv(text: string, tickers: Record<string, string>
     return `${ID_PREFIX}${hash(key)}${n ? `-${n}` : ""}`;
   };
   const add = (t: Omit<Transaction, "id">, key: string) => transactions.push({ id: id(key), ...t });
-  const skip = (type: string) => (skipped[type] = (skipped[type] ?? 0) + 1);
+  const unknown: SwissquoteImport["unknown"] = {};
+  const skip = (r: Row) => {
+    const type = r.type || "(empty)";
+    skipped[type] = (skipped[type] ?? 0) + 1;
+    if (IGNORED.has(type)) return;
+    unknown[type] ??= { count: 0, example: r.line };
+    unknown[type].count++;
+  };
 
   // Corporate actions come as several rows (old shares out, new shares in) with one timestamp.
   const events = new Map<string, Row[]>();
@@ -304,10 +340,10 @@ export function parseSwissquoteCsv(text: string, tickers: Record<string, string>
       done.add(key);
       applyEvent(events.get(key)!, date, yahoo, transactions, add);
     } else {
-      skip(r.type || "(empty)");
+      skip(r);
     }
   }
-  return { transactions, cash, skipped };
+  return { transactions, cash, skipped, unknown };
 }
 
 function applyEvent(
