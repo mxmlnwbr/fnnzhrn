@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { buildPositions } from "./portfolio";
-import { decodeText, isImported, isSwissquoteCsv, parseSwissquoteCsv } from "./swissquote";
+import {
+  decodeText,
+  isImported,
+  isSwissquoteCsv,
+  parseSwissquoteCsv,
+  pickTicker,
+  swissquoteListings,
+  tickerCandidates,
+} from "./swissquote";
 
 const HEADER =
   "Datum;Auftrag #;Transaktionen;Symbol;Name;ISIN;Anzahl;Stückpreis;Kosten;Aufgelaufene Zinsen;Nettobetrag;Währung Nettobetrag;Nettobetrag in der Währung des Kontos;Saldo;Währung";
@@ -95,5 +103,52 @@ describe("decodeText", () => {
     const text = decodeText(bytes.buffer);
     expect(text).toBe("Datum;Auftrag #;Stückpreis");
     expect(isSwissquoteCsv(text)).toBe(true);
+  });
+});
+
+describe("ticker mapping", () => {
+  const etf = csv(
+    '10-06-2026 00:00:00;00000000;Dividende;VWRL;"VANGUARD FTSE ALL-WORLD";IE00B3RBWM25;10.0;0.5;0.00;0.00;5.00;USD;4.00;100.00;CHF',
+    '02-03-2025 09:10:00;200000001;Kauf;VWRL;"VANGUARD FTSE ALL-WORLD";IE00B3RBWM25;10.0;120.00;9.00;0.00;-1209.00;CHF;-1209.00;500.00;CHF',
+    '01-03-2025 09:10:00;200000002;Kauf;SCHH;"SCHWAB US REIT ETF";US8085248479;5.0;20.00;1.00;0.00;-101.00;USD;-101.00;100.00;USD',
+  );
+
+  it("lists each security with the currency it was traded in", () => {
+    expect(swissquoteListings(etf)).toEqual([
+      { symbol: "VWRL", isin: "IE00B3RBWM25", currency: "CHF" },
+      { symbol: "SCHH", isin: "US8085248479", currency: "USD" },
+    ]);
+  });
+
+  it("puts foreign ETFs bought in CHF on SIX, and keeps dividends on the same ticker", () => {
+    const { transactions } = parseSwissquoteCsv(etf);
+    expect(transactions.map((t) => [t.symbol, t.type])).toEqual([
+      ["SCHH", "buy"],
+      ["VWRL.SW", "buy"],
+      ["VWRL.SW", "dividend"],
+    ]);
+  });
+
+  it("uses verified tickers when given", () => {
+    const { transactions } = parseSwissquoteCsv(etf, { IE00B3RBWM25: "VWRL.L" });
+    expect(transactions.filter((t) => t.symbol === "VWRL.L")).toHaveLength(2);
+  });
+
+  it("tries likely exchanges by trade currency", () => {
+    expect(tickerCandidates({ symbol: "NESN", isin: "CH0038863350", currency: "CHF" })).toEqual(["NESN.SW"]);
+    expect(tickerCandidates({ symbol: "AAPL", isin: "US0378331005", currency: "USD" })).toEqual(["AAPL"]);
+    expect(tickerCandidates({ symbol: "SAP", isin: "DE0007164600", currency: "EUR" }).slice(0, 2)).toEqual(["SAP.DE", "SAP.PA"]);
+    expect(tickerCandidates({ symbol: "CSSPX", isin: "IE00B5BMR087", currency: "USD" }).slice(0, 2)).toEqual(["CSSPX.SW", "CSSPX"]);
+  });
+
+  it("picks a priced candidate, preferring the trade currency", () => {
+    const quotes = {
+      "VWRL.SW": { price: 155, currency: "CHF" },
+      "VWRL.L": { price: 141, currency: "GBP" },
+      VWRL: { price: 0, currency: "GBP" },
+    };
+    expect(pickTicker(["VWRL", "VWRL.L", "VWRL.SW"], quotes, "CHF")).toBe("VWRL.SW");
+    expect(pickTicker(["VWRL", "VWRL.L", "VWRL.SW"], quotes, "USD")).toBe("VWRL.L");
+    expect(pickTicker(["VWRL"], quotes, "GBP")).toBeUndefined();
   });
 });

@@ -1,6 +1,7 @@
 import "server-only";
 import YahooFinance from "yahoo-finance2";
 import { normaliseCurrency } from "./currency";
+import { type Listing, pickTicker, tickerCandidates } from "./swissquote";
 import type { PricePoint, Quote } from "./types";
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
@@ -90,4 +91,43 @@ export async function searchSymbols(query: string) {
         type: r.quoteType ?? "",
       };
     });
+}
+
+/** Quotes in chunks, so one oversized request can't fail the lot. */
+async function quoteMany(symbols: string[]): Promise<Record<string, Quote>> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < symbols.length; i += 50) chunks.push(symbols.slice(i, i + 50));
+  const results = await Promise.all(chunks.map((c) => getQuotes(c).catch(() => ({}) as Record<string, Quote>)));
+  return Object.assign({}, ...results);
+}
+
+/**
+ * Yahoo ticker per listing (keyed by ISIN, or symbol without one). Tries the likely exchange
+ * suffixes first, then whatever Yahoo's search finds for the ISIN. Listings nothing matches are
+ * left out, so the caller falls back to its best guess.
+ */
+export async function resolveTickers(listings: Listing[]): Promise<Record<string, string>> {
+  const candidates = new Map(listings.map((l) => [l.isin || l.symbol, tickerCandidates(l)]));
+  const quotes = await quoteMany([...new Set([...candidates.values()].flat())]);
+  const out: Record<string, string> = {};
+  const unresolved: Listing[] = [];
+  for (const l of listings) {
+    const ticker = pickTicker(candidates.get(l.isin || l.symbol)!, quotes, l.currency);
+    if (ticker) out[l.isin || l.symbol] = ticker;
+    else if (l.isin) unresolved.push(l);
+  }
+
+  const found = await Promise.all(
+    unresolved.map((l) =>
+      searchSymbols(l.isin)
+        .then((r) => r.map((q) => q.symbol))
+        .catch(() => [] as string[]),
+    ),
+  );
+  const searchQuotes = await quoteMany([...new Set(found.flat())]);
+  unresolved.forEach((l, i) => {
+    const ticker = pickTicker(found[i], searchQuotes, l.currency);
+    if (ticker) out[l.isin] = ticker;
+  });
+  return out;
 }
