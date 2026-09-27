@@ -15,9 +15,30 @@ import { BASE_CURRENCIES } from "@/lib/currency";
 import { setDiscreet, useDiscreet } from "@/lib/discreet";
 import { buildHistory, incomeOverview, summarize } from "@/lib/portfolio";
 import { parseImport, savePortfolio, usePortfolio } from "@/lib/storage";
-import { decodeText, isImported, isImportedCash, isSwissquoteCsv, parseSwissquoteCsv } from "@/lib/swissquote";
+import {
+  decodeText,
+  isImported,
+  isImportedCash,
+  isSwissquoteCsv,
+  parseSwissquoteCsv,
+  swissquoteListings,
+} from "@/lib/swissquote";
 import type { CashAccount, Transaction } from "@/lib/types";
 import { useMarketData } from "@/lib/useMarketData";
+
+/** Verified Yahoo tickers for imported securities; the import falls back to its own guess without them. */
+async function resolveTickers(listings: ReturnType<typeof swissquoteListings>): Promise<Record<string, string>> {
+  try {
+    const res = await fetch("/api/resolve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(listings),
+    });
+    return res.ok ? await res.json() : {};
+  } catch {
+    return {};
+  }
+}
 
 export default function Home() {
   const portfolio = usePortfolio();
@@ -59,7 +80,7 @@ export default function Home() {
       const text = decodeText(await file.arrayBuffer());
       let data;
       if (isSwissquoteCsv(text)) {
-        const parsed = parseSwissquoteCsv(text);
+        const parsed = parseSwissquoteCsv(text, await resolveTickers(swissquoteListings(text)));
         // The import's balances replace earlier imported ones; accounts added by hand stay.
         data = { ...portfolio, transactions: parsed.transactions, cash: [...cash.filter((a) => !isImportedCash(a)), ...parsed.cash] };
       } else {

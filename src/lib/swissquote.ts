@@ -149,27 +149,100 @@ function hash(s: string): string {
   return (h >>> 0).toString(36);
 }
 
+/** A security as Swissquote lists it: its latest symbol, and the currency it was traded in. */
+export interface Listing {
+  symbol: string;
+  isin: string;
+  currency: string;
+}
+
+/** Exchange suffixes to try for a listing traded in a currency, most likely first. */
+const SUFFIXES: Record<string, string[]> = {
+  CHF: [".SW"],
+  GBP: [".L", ".SW"],
+  EUR: [".DE", ".PA", ".AS", ".MI", ".SW"],
+  USD: [".SW", ""],
+};
+
 /**
- * Yahoo ticker for a Swissquote symbol. Each ISIN takes its most recent symbol, so renames
- * (LHN → HOLN) land on one position; Swiss listings trade on SIX (.SW).
+ * Yahoo tickers that may quote a listing, most likely first. Swiss and Liechtenstein securities
+ * trade on SIX, US and Canadian ones under their plain ticker. Anything else (e.g. Irish-domiciled
+ * ETFs) depends on where it was bought, which the trade currency hints at.
  */
-function symbolResolver(rows: Row[]): (row: Row) => string {
+export function tickerCandidates({ symbol, isin, currency }: Listing): string[] {
+  if (/^(CH|LI)/.test(isin)) return [`${symbol}.SW`];
+  if (!isin || /^(US|CA)/.test(isin)) return [symbol];
+  const first = SUFFIXES[currency] ?? [".SW"];
+  const rest = [".SW", ".DE", ".L", ".PA", ".AS", ".MI", ""];
+  return [...new Set([...first, ...rest])].map((suffix) => `${symbol}${suffix}`);
+}
+
+/** Each ISIN takes its most recent symbol, so renames (LHN → HOLN) land on one position. */
+function latestSymbols(rows: Row[]): Map<string, string> {
   const latest = new Map<string, string>();
   // On a rename both symbols share a timestamp; the one receiving shares is the new one.
   for (const r of [...rows].sort((a, b) => b.time.localeCompare(a.time) || b.quantity - a.quantity)) {
     if (r.isin && r.symbol && !latest.has(r.isin)) latest.set(r.isin, r.symbol);
   }
+  return latest;
+}
+
+/** The securities in an export, keyed by ISIN (or symbol when there is none). */
+export function swissquoteListings(text: string): Listing[] {
+  return [...listingsFrom(parseRows(text)).values()];
+}
+
+function listingsFrom(all: Row[]): Map<string, Listing> {
+  const rows = [...all].sort((a, b) => b.time.localeCompare(a.time));
+  const latest = latestSymbols(rows);
+  const out = new Map<string, Listing>();
+  for (const r of rows) {
+    if (!r.symbol) continue;
+    const key = r.isin || r.symbol.toUpperCase();
+    const traded = BUY.has(r.type) || SELL.has(r.type);
+    const existing = out.get(key);
+    // Prefer the currency of the latest trade; dividends may pay out in another currency.
+    if (existing && !(traded && !existing.currency)) continue;
+    out.set(key, {
+      symbol: (latest.get(r.isin) ?? r.symbol).toUpperCase(),
+      isin: r.isin,
+      currency: traded ? r.currency : "",
+    });
+  }
+  return out;
+}
+
+/**
+ * The first candidate Yahoo has a price for, preferring one quoted in the trade currency so that
+ * trade prices and market prices share a currency.
+ */
+export function pickTicker(
+  candidates: string[],
+  quotes: Record<string, { price: number; currency: string }>,
+  currency: string,
+): string | undefined {
+  const priced = candidates.filter((c) => quotes[c]?.price > 0);
+  return priced.find((c) => quotes[c].currency === currency) ?? priced[0];
+}
+
+function symbolResolver(rows: Row[], tickers: Record<string, string>): (row: Row) => string {
+  const listings = listingsFrom(rows);
   return (r) => {
-    const symbol = (latest.get(r.isin) ?? r.symbol).toUpperCase();
-    return /^(CH|LI)/.test(r.isin) ? `${symbol}.SW` : symbol;
+    const key = r.isin || r.symbol.toUpperCase();
+    const listing = listings.get(key) ?? { symbol: r.symbol.toUpperCase(), isin: r.isin, currency: r.currency };
+    return tickers[key] ?? tickerCandidates(listing)[0];
   };
 }
 
-export function parseSwissquoteCsv(text: string): SwissquoteImport {
+/**
+ * @param tickers Yahoo ticker per ISIN (or symbol), as verified by `/api/resolve`. Securities
+ *   missing from it fall back to their most likely ticker.
+ */
+export function parseSwissquoteCsv(text: string, tickers: Record<string, string> = {}): SwissquoteImport {
   const all = parseRows(text);
   const cash = cashBalances(all);
   const rows = [...all].sort((a, b) => a.time.localeCompare(b.time));
-  const yahoo = symbolResolver(rows);
+  const yahoo = symbolResolver(rows, tickers);
   const transactions: Transaction[] = [];
   const skipped: Record<string, number> = {};
   const seen = new Map<string, number>();
