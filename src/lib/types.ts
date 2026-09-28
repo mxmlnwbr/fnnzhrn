@@ -85,7 +85,7 @@ export interface Settings {
   baseCurrency: string;
   /** Asset class per symbol, where the user overrode the automatic one. */
   categories?: Record<string, string>;
-  /** Target share of net worth per asset class, in percent. */
+  /** Target share of the stocks per symbol, in percent. */
   targets?: Record<string, number>;
 }
 

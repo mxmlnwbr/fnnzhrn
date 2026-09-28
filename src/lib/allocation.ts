@@ -179,6 +179,13 @@ export function rebalance(
   return { rows, trades, unplaced, total };
 }
 
+/** One slice per position of a group (an asset class), with shares of that group instead of the portfolio. */
+export function positionSlices(group: Slice | undefined): Slice[] {
+  const positions = group?.positions ?? [];
+  const total = positions.reduce((s, p) => s + p.value, 0);
+  return positions.map((p) => ({ key: p.symbol, value: p.value, share: total ? p.value / total : 0, positions: [p] }));
+}
+
 /**
  * At most `max` slices: beyond that the smallest fold into one "Other" slice (always two or more,
  * so "Other" never hides a single position), and a chart stays legible.
