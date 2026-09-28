@@ -173,6 +173,8 @@ export function AllocationCard({
   );
   const targetSum = Object.values(stockTargets).reduce((a, b) => a + b, 0);
   const hasTargets = targetSum > 0;
+  // Exact, so equal weights add up to 100%; the inputs show them rounded.
+  const equalWeight = stocks.length ? 100 / stocks.length : 0;
 
   function setTarget(symbol: string, value: string) {
     const next = { ...stockTargets };
@@ -388,7 +390,7 @@ export function AllocationCard({
                         max={100}
                         step="any"
                         className="w-16 rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-right dark:border-zinc-700 dark:bg-zinc-950"
-                        value={stockTargets[sym] ?? ""}
+                        value={stockTargets[sym] !== undefined ? Math.round(stockTargets[sym] * 100) / 100 : ""}
                         placeholder="–"
                         onChange={(e) => setTarget(sym, e.target.value)}
                         aria-label={`Target for ${sym} in percent`}
@@ -416,6 +418,13 @@ export function AllocationCard({
                 }
               >
                 Use current split
+              </button>
+              <button
+                className={`${buttonClass} py-0.5 text-xs`}
+                onClick={() => onTargetsChange(Object.fromEntries(stocks.map((s) => [s.key, equalWeight])))}
+                title={`Give each of your ${plural(stocks.length, "stock")} the same weight`}
+              >
+                Equal weight · {+equalWeight.toFixed(2)}% each
               </button>
               {hasTargets && (
                 <button className={`${buttonClass} py-0.5 text-xs`} onClick={() => onTargetsChange({})}>
