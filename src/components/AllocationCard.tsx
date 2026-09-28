@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { Pie, PieChart, ResponsiveContainer } from "recharts";
-import { allocation, ASSET_CLASSES, defaultClass, rebalance, type Slice, topSlices } from "@/lib/allocation";
+import { allocation, ASSET_CLASSES, defaultClass, foldSmall, industries, rebalance, type Slice, topSlices } from "@/lib/allocation";
 import { formatMoney } from "@/lib/currency";
 import { useDiscreet } from "@/lib/discreet";
 import type { Holding, Quote } from "@/lib/types";
+import { useProfiles } from "@/lib/useProfiles";
 import { buttonClass, Card, inputClass } from "./ui";
 
 /** Each asset class keeps its colour in every view, so the colour follows the class, not its rank. */
@@ -18,10 +19,28 @@ const CLASS_COLORS: Record<string, string> = {
   Cash: "var(--series-6)",
   Other: "var(--series-other)",
 };
-/** Most slices a chart shows; smaller ones fold into "Other". */
+/**
+ * The eight most common sectors each keep a colour; rarer ones, funds, crypto and cash stay grey
+ * (the palette has no ninth hue that stays distinguishable), told apart by their labels.
+ */
+const SECTOR_COLORS: Record<string, string> = {
+  Technology: "var(--series-1)",
+  Industrials: "var(--series-2)",
+  Healthcare: "var(--series-3)",
+  "Consumer Defensive": "var(--series-4)",
+  "Consumer Cyclical": "var(--series-5)",
+  Energy: "var(--series-6)",
+  "Financial Services": "var(--series-7)",
+  "Communication Services": "var(--series-8)",
+};
+const GREY = "var(--series-other)";
+/** Most currency slices a chart shows; smaller ones fold into "Other". */
 const MAX_SLICES = 7;
+/** Positions below this share fold into "Other" in the position view. */
+const MIN_POSITION_SHARE = 0.005;
 
 const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const whole = (v: number) => new Intl.NumberFormat("de-CH", { maximumFractionDigits: 0 }).format(v);
 
 function Tabs<T extends string>({ value, options, onChange }: { value: T; options: [T, string][]; onChange: (v: T) => void }) {
@@ -52,13 +71,13 @@ function Donut({
   center,
 }: {
   slices: Slice[];
-  color: (key: string, i: number) => string;
+  color: (slice: Slice, i: number) => string;
   active: number | null;
   onActive: (i: number | null) => void;
   center: { label: string; value: string };
 }) {
   const data = slices
-    .map((s, i) => ({ key: s.key, value: s.value, fill: color(s.key, i) }))
+    .map((s, i) => ({ key: s.key, value: s.value, fill: color(s, i) }))
     .filter((d) => d.value > 0);
   const current = active !== null ? slices[active] : null;
   return (
@@ -110,7 +129,7 @@ export function AllocationCard({
 }) {
   const discreet = useDiscreet();
   const [tab, setTab] = useState<"allocation" | "rebalance">("allocation");
-  const [by, setBy] = useState<"class" | "currency" | "position">("class");
+  const [by, setBy] = useState<"class" | "sector" | "currency" | "position">("class");
   const [active, setActive] = useState<number | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [mode, setMode] = useState<"full" | "buy">("buy");
@@ -121,13 +140,23 @@ export function AllocationCard({
     () => allocation(holdings, quotes, cashByCurrency, categories, "class"),
     [holdings, quotes, cashByCurrency, categories],
   );
-  const slices = useMemo(
-    () => topSlices(by === "class" ? classes : allocation(holdings, quotes, cashByCurrency, categories, by), MAX_SLICES),
-    [by, classes, holdings, quotes, cashByCurrency, categories],
-  );
-  // Classes keep fixed colours; currencies and positions take the palette in order, "Other" stays grey.
-  const color = (key: string, i: number) =>
-    by === "class" ? CLASS_COLORS[key] ?? CLASS_COLORS.Other : key === "Other" ? CLASS_COLORS.Other : `var(--series-${i + 1})`;
+  const symbols = useMemo(() => holdings.map((h) => h.symbol), [holdings]);
+  const profiles = useProfiles(symbols, by === "sector" || by === "position");
+  const slices = useMemo(() => {
+    if (by === "class") return classes;
+    const split = allocation(holdings, quotes, cashByCurrency, categories, by, profiles);
+    if (by === "currency") return topSlices(split, MAX_SLICES);
+    if (by === "position") return foldSmall(split, MIN_POSITION_SHARE);
+    return split;
+  }, [by, classes, holdings, quotes, cashByCurrency, categories, profiles]);
+  // Classes and sectors keep fixed colours; a position takes its sector's; currencies the palette in order.
+  const color = (s: Slice, i: number) => {
+    if (by === "class") return CLASS_COLORS[s.key] ?? GREY;
+    if (by === "sector") return SECTOR_COLORS[s.key] ?? GREY;
+    if (by === "position") return s.key === "Other" ? GREY : SECTOR_COLORS[s.positions[0]?.sector ?? ""] ?? GREY;
+    return s.key === "Other" || i >= MAX_SLICES ? GREY : `var(--series-${i + 1})`;
+  };
+  const legend = by === "position" ? [...new Set(slices.flatMap((s) => (s.key === "Other" ? [] : [s.positions[0]?.sector ?? "Cash"])))] : [];
   const total = classes.reduce((s, c) => s + c.value, 0);
 
   const money = Number(newMoney) || 0;
@@ -188,25 +217,40 @@ export function AllocationCard({
               }}
               options={[
                 ["class", "Asset class"],
+                ["sector", "Sector"],
                 ["currency", "Currency"],
                 ["position", "Position"],
               ]}
             />
           </div>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-            <Donut
-              slices={slices}
-              color={color}
-              active={active}
-              onActive={setActive}
-              center={discreet ? { label: "Total", value: "100%" } : { label: `Total ${currency}`, value: whole(total) }}
-            />
+            <div className="shrink-0">
+              <Donut
+                slices={slices}
+                color={color}
+                active={active}
+                onActive={setActive}
+                center={discreet ? { label: "Total", value: "100%" } : { label: `Total ${currency}`, value: whole(total) }}
+              />
+              {legend.length > 0 && (
+                <ul className="mx-auto mt-3 flex max-w-60 flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-zinc-500">
+                  {legend.map((sector) => (
+                    <li key={sector} className="flex items-center gap-1">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: SECTOR_COLORS[sector] ?? GREY }} />
+                      {sector}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             <ul className="min-w-0 flex-1 divide-y divide-zinc-100 text-sm dark:divide-zinc-800">
               {slices.map((s, i) => {
                 // In the position view only the folded "Other" slice has positions worth listing.
                 const expandable = by === "position" ? s.key === "Other" : s.positions.length > 0;
                 const isOpen = open === s.key;
                 const name = by === "position" ? s.positions[0]?.name : undefined;
+                // Funds, crypto and unknowns have no industry; those list their positions instead.
+                const byIndustry = by === "sector" && s.positions.some((p) => p.industry);
                 return (
                   <li
                     key={s.key}
@@ -220,20 +264,34 @@ export function AllocationCard({
                       disabled={!expandable}
                       aria-expanded={expandable ? isOpen : undefined}
                     >
-                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color(s.key, i) }} />
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color(s, i) }} />
                       <span className="min-w-0 flex-1 truncate font-medium">
                         {s.key}
                         {name && s.key !== "Other" && <span className="ml-1.5 text-xs font-normal text-zinc-500">{name}</span>}
                         {expandable && (
                           <span className="ml-1.5 text-xs font-normal text-zinc-500">
-                            {s.positions.length} {s.positions.length === 1 ? "position" : "positions"} {isOpen ? "▴" : "▾"}
+                            {byIndustry ? plural(industries(s, total).length, "industry", "industries") : plural(s.positions.length, "position")}{" "}
+                            {isOpen ? "▴" : "▾"}
                           </span>
                         )}
                       </span>
-                      {!discreet && <span className="text-xs text-zinc-500 tabular-nums">{m(s.value)}</span>}
+                      {!discreet && <span className="hidden text-xs text-zinc-500 tabular-nums sm:inline">{m(s.value)}</span>}
                       <span className="w-14 text-right tabular-nums">{pct(s.share)}</span>
                     </button>
-                    {isOpen && (
+                    {isOpen && byIndustry && (
+                      <ul className="mt-2 space-y-1.5 pl-5.5">
+                        {industries(s, total).map((ind) => (
+                          <li key={ind.industry} className="text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="min-w-0 flex-1 truncate font-medium">{ind.industry}</span>
+                              <span className="tabular-nums text-zinc-500">{pct(ind.share)}</span>
+                            </div>
+                            <div className="truncate text-zinc-500">{ind.positions.map((p) => p.symbol).join(" · ")}</div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {isOpen && !byIndustry && (
                       <ul className="mt-2 space-y-1.5 pl-5.5">
                         {s.positions.map((p) => (
                           <li key={p.symbol} className="flex items-center gap-2 text-xs">

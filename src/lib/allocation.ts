@@ -1,4 +1,4 @@
-import type { Holding, Quote } from "./types";
+import type { Holding, Profile, Quote } from "./types";
 
 export const ASSET_CLASSES = ["Stocks", "Bonds", "Real estate", "Commodities", "Crypto", "Cash", "Other"] as const;
 export type AssetClass = (typeof ASSET_CLASSES)[number];
@@ -21,22 +21,44 @@ export function defaultClass(quote: Pick<Quote, "type" | "name"> | undefined): A
   return "Other";
 }
 
+/** Where a position sits by what the company does: its sector, or ETF / fund, Crypto, Other. */
+export function sectorOf(cls: string, quote: Pick<Quote, "type"> | undefined, profile: Profile | undefined): string {
+  if (cls === "Crypto") return "Crypto";
+  if (profile?.sector) return profile.sector;
+  if (quote?.type === "ETF" || quote?.type === "MUTUALFUND") return "ETF / fund";
+  return "Other";
+}
+
+export interface Position {
+  symbol: string;
+  name: string;
+  value: number;
+  /** Price per share in the base currency. */
+  price: number;
+  class: string;
+  sector: string;
+  industry?: string;
+}
+
 export interface Slice {
   key: string;
   /** In the base currency. */
   value: number;
   /** Share of the total, 0..1. */
   share: number;
-  positions: { symbol: string; name: string; value: number; price: number; class: string }[];
+  positions: Position[];
 }
 
-function slices(entries: { key: string; symbol: string; name: string; value: number; price: number; class: string }[]): Slice[] {
+function slices(entries: (Position & { key: string })[]): Slice[] {
   const total = entries.reduce((s, e) => s + e.value, 0);
   const map = new Map<string, Slice>();
   for (const e of entries) {
     const slice = map.get(e.key) ?? { key: e.key, value: 0, share: 0, positions: [] };
     slice.value += e.value;
-    if (e.symbol) slice.positions.push({ symbol: e.symbol, name: e.name, value: e.value, price: e.price, class: e.class });
+    if (e.symbol) {
+      const { symbol, name, value, price, class: cls, sector, industry } = e;
+      slice.positions.push({ symbol, name, value, price, class: cls, sector, industry });
+    }
     map.set(e.key, slice);
   }
   for (const s of map.values()) {
@@ -47,31 +69,40 @@ function slices(entries: { key: string; symbol: string; name: string; value: num
 }
 
 /**
- * Net worth split by asset class or by currency. Cash counts as its own class.
+ * Net worth split by asset class, sector, currency or single position. Cash counts as its own group.
  * @param overrides asset class per symbol, set by the user.
  * @param cash cash balances in the base currency, per account currency.
+ * @param profiles sector and industry per symbol, for the sector view.
  */
 export function allocation(
   holdings: Holding[],
   quotes: Record<string, Quote>,
   cash: Record<string, number>,
   overrides: Record<string, string>,
-  by: "class" | "currency" | "position",
+  by: "class" | "sector" | "currency" | "position",
+  profiles: Record<string, Profile> = {},
 ): Slice[] {
   const entries = holdings.map((h) => {
     const cls = overrides[h.symbol] ?? defaultClass(quotes[h.symbol]);
+    const sector = sectorOf(cls, quotes[h.symbol], profiles[h.symbol]);
+    const key = { class: cls, sector, currency: h.currency || "?", position: h.symbol }[by];
     return {
-      key: by === "class" ? cls : by === "currency" ? h.currency || "?" : h.symbol,
+      key,
       symbol: h.symbol,
       name: h.name,
       value: h.marketValue,
       // Price per share in the base currency, for turning amounts into share counts.
       price: h.quantity ? h.marketValue / h.quantity : 0,
       class: cls,
+      sector,
+      industry: profiles[h.symbol]?.industry,
     };
   });
   for (const [currency, value] of Object.entries(cash)) {
-    if (value) entries.push({ key: by === "currency" ? currency : "Cash", symbol: "", name: "", value, price: 0, class: "Cash" });
+    if (value) {
+      const key = by === "currency" ? currency : "Cash";
+      entries.push({ key, symbol: "", name: "", value, price: 0, class: "Cash", sector: "Cash", industry: undefined });
+    }
   }
   return slices(entries);
 }
@@ -164,4 +195,32 @@ export function topSlices(slices: Slice[], max: number): Slice[] {
     positions: [...(other?.positions ?? []), ...rest.flatMap((x) => x.positions)],
   };
   return [...kept.filter((s) => s !== other), folded];
+}
+
+/** Folds slices below `minShare` into one "Other" slice, when there are at least two of them. */
+export function foldSmall(slices: Slice[], minShare: number): Slice[] {
+  const small = slices.filter((s) => s.share < minShare);
+  if (small.length < 2) return slices;
+  const folded: Slice = {
+    key: "Other",
+    value: small.reduce((s, x) => s + x.value, 0),
+    share: small.reduce((s, x) => s + x.share, 0),
+    positions: small.flatMap((x) => x.positions),
+  };
+  return [...slices.filter((s) => s.share >= minShare), folded];
+}
+
+/** A sector's positions grouped by industry, largest first; shares are of the whole portfolio. */
+export function industries(slice: Slice, total: number): { industry: string; value: number; share: number; positions: Position[] }[] {
+  const map = new Map<string, Position[]>();
+  for (const p of slice.positions) {
+    const key = p.industry ?? "Unknown";
+    map.set(key, [...(map.get(key) ?? []), p]);
+  }
+  return [...map]
+    .map(([industry, positions]) => {
+      const value = positions.reduce((s, p) => s + p.value, 0);
+      return { industry, value, share: total ? value / total : 0, positions };
+    })
+    .sort((a, b) => b.value - a.value);
 }

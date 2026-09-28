@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allocation, defaultClass, rebalance, topSlices } from "./allocation";
+import { allocation, defaultClass, foldSmall, industries, rebalance, sectorOf, topSlices } from "./allocation";
 import type { Holding, Quote } from "./types";
 
 const holding = (symbol: string, currency: string, quantity: number, marketValue: number): Holding => ({
@@ -123,5 +123,43 @@ describe("by position", () => {
     expect(top[2].positions.map((p) => p.symbol)).toEqual(["C", "D"]);
     expect(topSlices(slices, 5)).toBe(slices);
     expect(top.reduce((s, x) => s + x.share, 0)).toBeCloseTo(1);
+  });
+});
+
+describe("sectors and industries", () => {
+  const holdings = [holding("ROP.SW", "CHF", 1, 500), holding("NOVN.SW", "CHF", 1, 300), holding("UBSG.SW", "CHF", 1, 150), holding("VWRL.SW", "CHF", 1, 40), holding("BTC-USD", "USD", 1, 10)];
+  const quotes = {
+    "ROP.SW": quote("ROP.SW", "EQUITY", "Roche"),
+    "NOVN.SW": quote("NOVN.SW", "EQUITY", "Novartis"),
+    "UBSG.SW": quote("UBSG.SW", "EQUITY", "UBS"),
+    "VWRL.SW": quote("VWRL.SW", "ETF", "Vanguard FTSE All-World"),
+    "BTC-USD": quote("BTC-USD", "CRYPTOCURRENCY", "Bitcoin"),
+  };
+  const profiles = {
+    "ROP.SW": { sector: "Healthcare", industry: "Drug Manufacturers - General" },
+    "NOVN.SW": { sector: "Healthcare", industry: "Drug Manufacturers - General" },
+    "UBSG.SW": { sector: "Financial Services", industry: "Banks - Diversified" },
+  };
+
+  it("groups stocks by sector, funds and crypto apart", () => {
+    const bySector = allocation(holdings, quotes, {}, {}, "sector", profiles);
+    expect(bySector.map((s) => [s.key, s.value])).toEqual([
+      ["Healthcare", 800],
+      ["Financial Services", 150],
+      ["ETF / fund", 40],
+      ["Crypto", 10],
+    ]);
+    expect(sectorOf("Stocks", quotes["UBSG.SW"], undefined)).toBe("Other");
+  });
+
+  it("breaks a sector down by industry", () => {
+    const health = allocation(holdings, quotes, {}, {}, "sector", profiles)[0];
+    expect(industries(health, 1000).map((i) => [i.industry, i.share, i.positions.length])).toEqual([["Drug Manufacturers - General", 0.8, 2]]);
+  });
+
+  it("folds only small slices, and only two or more", () => {
+    const byPosition = allocation(holdings, quotes, {}, {}, "position", profiles);
+    expect(foldSmall(byPosition, 0.05).map((s) => s.key)).toEqual(["ROP.SW", "NOVN.SW", "UBSG.SW", "Other"]);
+    expect(foldSmall(byPosition, 0.02)).toBe(byPosition);
   });
 });

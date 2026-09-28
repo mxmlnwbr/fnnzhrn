@@ -2,7 +2,7 @@ import "server-only";
 import YahooFinance from "yahoo-finance2";
 import { normaliseCurrency } from "./currency";
 import { isCrypto, type Listing, pickTicker, tickerCandidates } from "./swissquote";
-import type { PricePoint, Quote } from "./types";
+import type { PricePoint, Profile, Quote } from "./types";
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
@@ -133,4 +133,22 @@ export async function resolveTickers(listings: Listing[]): Promise<Record<string
     if (ticker) out[l.isin] = ticker;
   });
   return out;
+}
+
+/** Sector and industry per symbol; symbols Yahoo has no profile for (funds, crypto) map to {}. */
+export async function getProfiles(symbols: string[]): Promise<Record<string, Profile>> {
+  const entries = await Promise.all(
+    symbols.map(async (symbol) => {
+      try {
+        const r = (await yahooFinance.quoteSummary(symbol, { modules: ["assetProfile"] }, { validateResult: false })) as {
+          assetProfile?: Record<string, unknown>;
+        };
+        const p = r.assetProfile ?? {};
+        return [symbol, { sector: str(p.sector), industry: str(p.industry) }] as const;
+      } catch {
+        return [symbol, {}] as const;
+      }
+    }),
+  );
+  return Object.fromEntries(entries);
 }
