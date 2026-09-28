@@ -364,7 +364,7 @@ export function AllocationCard({
           <table className="w-full text-sm tabular-nums">
             <thead className="text-left text-xs text-zinc-500">
               <tr>
-                <th className="py-1.5 font-medium">Stock</th>
+                <th className="py-1.5 font-medium">{plural(stocks.length, "stock")}</th>
                 <th className="py-1.5 text-right font-medium">Now</th>
                 <th className="py-1.5 pl-3 text-right font-medium">Target</th>
                 <th className="py-1.5 pl-3 text-right font-medium">{mode === "full" ? "Buy / sell" : "Buy"}</th>
