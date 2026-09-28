@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allocation, defaultClass, foldSmall, industries, rebalance, sectorOf, topSlices } from "./allocation";
+import { allocation, defaultClass, foldSmall, industries, positionSlices, rebalance, sectorOf, topSlices } from "./allocation";
 import type { Holding, Quote } from "./types";
 
 const holding = (symbol: string, currency: string, quantity: number, marketValue: number): Holding => ({
@@ -161,5 +161,23 @@ describe("sectors and industries", () => {
     const byPosition = allocation(holdings, quotes, {}, {}, "position", profiles);
     expect(foldSmall(byPosition, 0.05).map((s) => s.key)).toEqual(["ROP.SW", "NOVN.SW", "UBSG.SW", "Other"]);
     expect(foldSmall(byPosition, 0.02)).toBe(byPosition);
+  });
+});
+
+describe("positionSlices", () => {
+  it("splits a class into its positions, with shares of that class, for rebalancing within it", () => {
+    const quotes = { A: quote("A", "EQUITY", "A"), B: quote("B", "EQUITY", "B") };
+    const classes = allocation([holding("A", "USD", 10, 300), holding("B", "USD", 10, 100)], quotes, { CHF: 600 }, {}, "class");
+    const stocks = positionSlices(classes.find((c) => c.key === "Stocks"));
+    expect(stocks.map((s) => [s.key, s.share])).toEqual([
+      ["A", 0.75],
+      ["B", 0.25],
+    ]);
+    const plan = rebalance(stocks, { A: 50, B: 50 }, { kind: "full" });
+    expect(plan.trades.map((t) => [t.symbol, t.amount, t.shares])).toEqual([
+      ["A", -100, -3],
+      ["B", 100, 10],
+    ]);
+    expect(positionSlices(undefined)).toEqual([]);
   });
 });

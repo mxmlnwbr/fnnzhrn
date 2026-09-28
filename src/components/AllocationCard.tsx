@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Pie, PieChart, ResponsiveContainer } from "recharts";
-import { allocation, ASSET_CLASSES, defaultClass, foldSmall, industries, rebalance, type Slice, topSlices } from "@/lib/allocation";
+import { allocation, ASSET_CLASSES, defaultClass, foldSmall, industries, positionSlices, rebalance, type Slice, topSlices } from "@/lib/allocation";
 import { formatMoney } from "@/lib/currency";
 import { useDiscreet } from "@/lib/discreet";
 import type { Holding, Quote } from "@/lib/types";
@@ -159,20 +159,26 @@ export function AllocationCard({
   const legend = by === "position" ? [...new Set(slices.flatMap((s) => (s.key === "Other" ? [] : [s.positions[0]?.sector ?? "Cash"])))] : [];
   const total = classes.reduce((s, c) => s + c.value, 0);
 
+  // Rebalancing happens between the stock positions; the other classes stay as they are.
+  const stocks = useMemo(() => positionSlices(classes.find((c) => c.key === "Stocks")), [classes]);
+  // Targets of positions no longer held (or older per-class targets) don't count.
+  const stockTargets = useMemo(
+    () => Object.fromEntries(stocks.filter((s) => (targets[s.key] ?? 0) > 0).map((s) => [s.key, targets[s.key]])),
+    [stocks, targets],
+  );
   const money = Number(newMoney) || 0;
   const plan = useMemo(
-    () => rebalance(classes, targets, mode === "full" ? { kind: "full" } : { kind: "buy", newMoney: money }),
-    [classes, targets, mode, money],
+    () => rebalance(stocks, stockTargets, mode === "full" ? { kind: "full" } : { kind: "buy", newMoney: money }),
+    [stocks, stockTargets, mode, money],
   );
-  const targetSum = Object.values(targets).reduce((a, b) => a + b, 0);
+  const targetSum = Object.values(stockTargets).reduce((a, b) => a + b, 0);
   const hasTargets = targetSum > 0;
-  const shown = ASSET_CLASSES.filter((c) => classes.some((s) => s.key === c) || (targets[c] ?? 0) > 0);
 
-  function setTarget(cls: string, value: string) {
-    const next = { ...targets };
+  function setTarget(symbol: string, value: string) {
+    const next = { ...stockTargets };
     const n = Number(value);
-    if (value.trim() === "" || !Number.isFinite(n) || n <= 0) delete next[cls];
-    else next[cls] = Math.min(100, n);
+    if (value.trim() === "" || !Number.isFinite(n) || n <= 0) delete next[symbol];
+    else next[symbol] = Math.min(100, n);
     onTargetsChange(next);
   }
 
@@ -325,6 +331,8 @@ export function AllocationCard({
           </div>
           {by === "class" && <p className="mt-2 text-xs text-zinc-500">Open a class to move a position to another one.</p>}
         </>
+      ) : stocks.length === 0 ? (
+        <p className="text-sm text-zinc-500">Add stock positions to rebalance between them.</p>
       ) : (
         <>
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -356,24 +364,23 @@ export function AllocationCard({
           <table className="w-full text-sm tabular-nums">
             <thead className="text-left text-xs text-zinc-500">
               <tr>
-                <th className="py-1.5 font-medium">Asset class</th>
+                <th className="py-1.5 font-medium">Stock</th>
                 <th className="py-1.5 text-right font-medium">Now</th>
                 <th className="py-1.5 pl-3 text-right font-medium">Target</th>
                 <th className="py-1.5 pl-3 text-right font-medium">{mode === "full" ? "Buy / sell" : "Buy"}</th>
               </tr>
             </thead>
             <tbody>
-              {shown.map((cls) => {
-                const row = plan.rows.find((r) => r.key === cls);
-                const now = classes.find((c) => c.key === cls)?.share ?? 0;
+              {stocks.map((s) => {
+                const sym = s.key;
+                const row = plan.rows.find((r) => r.key === sym);
                 const delta = hasTargets ? row?.delta ?? 0 : 0;
                 return (
-                  <tr key={cls} className="border-t border-zinc-100 dark:border-zinc-800">
-                    <td className="py-1.5">
-                      <span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: CLASS_COLORS[cls] }} />
-                      {cls}
+                  <tr key={sym} className="border-t border-zinc-100 dark:border-zinc-800">
+                    <td className="max-w-0 truncate py-1.5">
+                      <span className="font-medium">{sym}</span> <span className="text-xs text-zinc-500">{s.positions[0]?.name}</span>
                     </td>
-                    <td className="py-1.5 text-right">{pct(now)}</td>
+                    <td className="py-1.5 text-right">{pct(s.share)}</td>
                     <td className="py-1.5 pl-3 text-right">
                       <input
                         type="number"
@@ -381,10 +388,10 @@ export function AllocationCard({
                         max={100}
                         step="any"
                         className="w-16 rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-right dark:border-zinc-700 dark:bg-zinc-950"
-                        value={targets[cls] ?? ""}
+                        value={stockTargets[sym] ?? ""}
                         placeholder="–"
-                        onChange={(e) => setTarget(cls, e.target.value)}
-                        aria-label={`Target for ${cls} in percent`}
+                        onChange={(e) => setTarget(sym, e.target.value)}
+                        aria-label={`Target for ${sym} in percent`}
                       />
                       <span className="ml-0.5 text-xs text-zinc-500">%</span>
                     </td>
@@ -405,7 +412,7 @@ export function AllocationCard({
               <button
                 className={`${buttonClass} py-0.5 text-xs`}
                 onClick={() =>
-                  onTargetsChange(Object.fromEntries(classes.filter((c) => c.share > 0).map((c) => [c.key, Math.round(c.share * 1000) / 10])))
+                  onTargetsChange(Object.fromEntries(stocks.filter((s) => s.share > 0).map((s) => [s.key, Math.round(s.share * 1000) / 10])))
                 }
               >
                 Use current split
@@ -423,7 +430,7 @@ export function AllocationCard({
               <h3 className="mb-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300">Suggested trades</h3>
               {mode === "buy" && money <= 0 ? (
                 <p className="text-xs text-zinc-500">Enter how much new money you want to invest.</p>
-              ) : plan.trades.filter((t) => Math.abs(t.amount) >= 1).length === 0 && plan.unplaced.length === 0 ? (
+              ) : plan.trades.filter((t) => Math.abs(t.amount) >= 1).length === 0 ? (
                 <p className="text-xs text-zinc-500">You&apos;re on target. Nothing to do.</p>
               ) : (
                 <ul className="divide-y divide-zinc-100 text-sm dark:divide-zinc-800">
@@ -455,15 +462,11 @@ export function AllocationCard({
                         </span>
                       </li>
                     ))}
-                  {plan.unplaced.map((u) => (
-                    <li key={u.key} className="py-1.5 text-xs text-zinc-500">
-                      {discreet ? `Add ${pct(u.amount / plan.total)}` : `Invest ${m(u.amount)}`} in {u.key}: you have no position there yet.
-                    </li>
-                  ))}
                 </ul>
               )}
               <p className="mt-2 text-xs text-zinc-500">
-                Money in a class is split over its positions by their current size. Share counts round down; fees and taxes aren&apos;t included.
+                Targets are shares of your stocks; cash and other classes stay as they are. Share counts round down; fees and taxes aren&apos;t
+                included.
               </p>
             </div>
           )}
