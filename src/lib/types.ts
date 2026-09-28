@@ -25,6 +25,12 @@ export interface Quote {
   type?: string;
 }
 
+/** What a company does, from Yahoo; funds, ETFs and crypto have neither. */
+export interface Profile {
+  sector?: string;
+  industry?: string;
+}
+
 export interface PricePoint {
   date: string;
   close: number;
