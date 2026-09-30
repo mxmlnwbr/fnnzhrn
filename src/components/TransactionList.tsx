@@ -42,10 +42,15 @@ export function TransactionList({
   const discreet = useDiscreet();
   const [filter, setFilter] = useState<TransactionType | "all">("all");
   const [symbol, setSymbol] = useState("");
-  const symbols = [...new Set(transactions.map((t) => t.symbol))].sort();
+  const [depot, setDepot] = useState("");
+  const depots = depotOf ? [...new Set(transactions.map((t) => depotOf(t) ?? ""))].filter(Boolean) : [];
+  // Like the symbol below, a depot that's gone falls back to showing everything.
+  const activeDepot = depots.includes(depot) ? depot : "";
+  const byDepot = activeDepot ? transactions.filter((t) => depotOf?.(t) === activeDepot) : transactions;
+  const symbols = [...new Set(byDepot.map((t) => t.symbol))].sort();
   // A symbol whose transactions were all deleted falls back to showing everything.
   const activeSymbol = symbols.includes(symbol) ? symbol : "";
-  const bySymbol = activeSymbol ? transactions.filter((t) => t.symbol === activeSymbol) : transactions;
+  const bySymbol = activeSymbol ? byDepot.filter((t) => t.symbol === activeSymbol) : byDepot;
   const count = (type: TransactionType | "all") =>
     type === "all" ? bySymbol.length : bySymbol.filter((t) => t.type === type).length;
   const rows = sortTransactions(bySymbol)
@@ -65,6 +70,21 @@ export function TransactionList({
     >
       {transactions.length > 0 && (
         <div className="mb-2 flex flex-wrap items-center gap-1">
+          {depots.length > 1 && (
+            <select
+              className="mr-1 max-w-40 rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-xs dark:border-zinc-700 dark:bg-zinc-950"
+              value={activeDepot}
+              onChange={(e) => setDepot(e.target.value)}
+              aria-label="Filter by depot"
+            >
+              <option value="">All depots</option>
+              {depots.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          )}
           {symbols.length > 1 && (
             <select
               className="mr-1 rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-xs dark:border-zinc-700 dark:bg-zinc-950"
@@ -107,7 +127,7 @@ export function TransactionList({
                   <div className="flex items-center gap-2">
                     <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${TYPE_STYLE[t.type]}`}>{t.type}</span>
                     <span className="font-medium">{t.symbol}</span>
-                    {depotOf?.(t) && (
+                    {!activeDepot && depotOf?.(t) && (
                       <span className="truncate rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                         {depotOf(t)}
                       </span>
