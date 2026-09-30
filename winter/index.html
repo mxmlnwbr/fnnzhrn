@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="de-CH">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Winter-Challenge · fnnzhrn</title>
+  <meta name="description" content="Winter-Challenge: Schritte, See, kein Junk Food, lesen, weniger Handy – und alle sehen, wie die anderen durchziehen.">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0a0c10" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>❄️</text></svg>">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --fg: #11141a;
+      --muted: #5d6572;
+      --line: #e2e6ec;
+      --card: #f6f8fb;
+      --accent: #1f6fd1;
+      --accent-soft: rgba(31, 111, 209, 0.1);
+      --good: #0f8a4f;
+      --good-soft: rgba(15, 138, 79, 0.12);
+      --warn: #b4540a;
+      --empty: #dde2e9;
+      --grid: rgba(17, 20, 26, 0.045);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0a0c10;
+        --fg: #eceff4;
+        --muted: #939aa6;
+        --line: #222731;
+        --card: #11151b;
+        --accent: #6cb4ff;
+        --accent-soft: rgba(108, 180, 255, 0.12);
+        --good: #3ddc84;
+        --good-soft: rgba(61, 220, 132, 0.14);
+        --warn: #f0a35e;
+        --empty: #262c36;
+        --grid: rgba(236, 239, 244, 0.04);
+      }
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      overflow-x: hidden;
+      color: var(--fg);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input { font: inherit; color: inherit; }
+    [hidden] { display: none !important; }
+
+    /* ---------- Background ---------- */
+    .bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+    .bg .grid {
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 40px 40px,
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 40px 40px;
+      -webkit-mask-image: radial-gradient(ellipse 70% 50% at 50% 20%, #000 30%, transparent 80%);
+              mask-image: radial-gradient(ellipse 70% 50% at 50% 20%, #000 30%, transparent 80%);
+    }
+    .bg .blob {
+      position: absolute;
+      width: 55vmax;
+      height: 55vmax;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--accent-soft) 0%, transparent 65%);
+      filter: blur(20px);
+    }
+    .bg .b1 { top: -25vmax; left: -10vmax; }
+    .bg .b2 { top: -15vmax; right: -25vmax; }
+    .bg canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(14px);
+      animation: reveal 0.7s cubic-bezier(0.22, 1, 0.36, 1) var(--d, 0s) forwards;
+    }
+    @keyframes reveal { to { opacity: 1; transform: none; } }
+
+    main {
+      flex: 1;
+      width: 100%;
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 40px 16px 64px;
+    }
+    .back { color: var(--muted); text-decoration: none; font-size: 0.9rem; }
+    .back:hover { color: var(--accent); }
+    header { margin: 40px 0 36px; }
+    h1 {
+      margin: 0;
+      font-size: clamp(2.5rem, 10vw, 3.75rem);
+      font-weight: 800;
+      letter-spacing: -0.045em;
+      line-height: 1;
+    }
+    h1 .dot { color: var(--accent); }
+    .lead { margin: 14px 0 0; color: var(--muted); max-width: 46ch; }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+    }
+    section { margin-top: 40px; }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--card);
+      padding: 18px 20px;
+    }
+
+    /* ---------- Controls ---------- */
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      padding: 7px 16px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--bg);
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .chip:hover { border-color: var(--accent); }
+    .chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .nav strong { font-size: 1rem; text-align: center; }
+    .nav small { display: block; color: var(--muted); font-weight: 400; font-size: 0.8rem; }
+    .icon-btn {
+      flex: none;
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--bg);
+      cursor: pointer;
+      font-size: 1.1rem;
+      line-height: 1;
+    }
+    .icon-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .icon-btn:disabled { opacity: 0.35; cursor: default; }
+    .link-btn { border: 0; background: none; padding: 0; color: var(--accent); cursor: pointer; font-size: 0.85rem; }
+
+    .fields { display: grid; gap: 4px; }
+    .field {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-top: 1px solid var(--line);
+    }
+    .field:first-child { border-top: 0; }
+    .field .emoji { flex: none; width: 28px; text-align: center; font-size: 1.25rem; }
+    .field label, .field .label { flex: 1; min-width: 0; }
+    .field .hint { display: block; color: var(--muted); font-size: 0.8rem; }
+    .field .hint.ok { color: var(--good); }
+    .num {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .num input {
+      width: 92px;
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--bg);
+      text-align: right;
+      -moz-appearance: textfield;
+    }
+    .num input::-webkit-inner-spin-button, .num input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    .num input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+    .num .unit { color: var(--muted); font-size: 0.85rem; width: 26px; }
+    .toggle {
+      position: relative;
+      flex: none;
+      width: 50px;
+      height: 30px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--empty);
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .toggle[aria-pressed="true"] { background: var(--good); }
+    .toggle[aria-pressed="true"]::after { transform: translateX(20px); }
+    .toggle:disabled { opacity: 0.4; cursor: default; }
+    .status { min-height: 1.4em; margin-top: 10px; font-size: 0.8rem; color: var(--muted); text-align: right; }
+    .status.err { color: var(--warn); }
+
+    /* ---------- Week overview ---------- */
+    .people { display: grid; gap: 12px; }
+    .person-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+    .person-head strong { font-size: 1.1rem; }
+    .person-head .score { color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
+    .person-head .score b { color: var(--good); }
+    .goal {
+      display: grid;
+      grid-template-columns: 24px 1fr auto;
+      align-items: center;
+      gap: 4px 10px;
+      padding: 7px 0;
+    }
+    .goal .emoji { text-align: center; }
+    .goal .name { font-size: 0.9rem; }
+    .goal .val { font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+    .goal.done .val { color: var(--good); font-weight: 600; }
+    .goal .viz { grid-column: 2 / 4; }
+    .bar { height: 8px; border-radius: 999px; background: var(--empty); overflow: hidden; }
+    .bar i { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
+    .goal.done .bar i { background: var(--good); }
+    .dots { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .dots span {
+      height: 8px;
+      border-radius: 999px;
+      background: var(--empty);
+    }
+    .dots span.hit { background: var(--good); }
+    .dots span.miss { background: var(--warn); opacity: 0.55; }
+    .dots span.off { background: transparent; border: 1px dashed var(--line); }
+    .dots span.today { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; font-size: 0.75rem; color: var(--muted); }
+    .legend span::before {
+      content: "";
+      display: inline-block;
+      width: 14px;
+      height: 8px;
+      margin-right: 6px;
+      border-radius: 999px;
+      vertical-align: 1px;
+      background: var(--c);
+    }
+
+    /* ---------- Leaderboard ---------- */
+    .board { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    .board th, .board td { padding: 10px 6px; text-align: right; border-top: 1px solid var(--line); }
+    .board th { font-size: 0.75rem; font-weight: 600; color: var(--muted); border-top: 0; }
+    .board th:nth-child(-n+2), .board td:nth-child(-n+2) { text-align: left; }
+    .board td:first-child { width: 36px; font-size: 1.1rem; }
+    .board .pts { font-weight: 700; }
+    .note { margin: 12px 0 0; font-size: 0.8rem; color: var(--muted); }
+
+    .pin-form { display: flex; gap: 8px; margin-top: 12px; }
+    .pin-form input {
+      flex: 1;
+      min-width: 0;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--bg);
+    }
+    .btn {
+      padding: 8px 16px;
+      border: 0;
+      border-radius: 10px;
+      background: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .alert { border-color: var(--warn); }
+
+    footer { padding: 32px 16px; text-align: center; font-size: 0.8rem; color: var(--muted); }
+
+    @media (max-width: 420px) {
+      .card { padding: 16px; }
+      .num input { width: 80px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0s !important; transition-duration: 0.01ms !important; }
+      .bg canvas { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg" aria-hidden="true">
+    <div class="blob b1"></div>
+    <div class="blob b2"></div>
+    <div class="grid"></div>
+    <canvas id="snow"></canvas>
+  </div>
+
+  <main>
+    <a class="back" href="/">← fnnzhrn</a>
+    <header class="reveal">
+      <h1>Winter<span class="dot">.</span></h1>
+      <p class="lead" id="lead">Gemeinsam durch den Winter. Jeder trägt ein, alle sehen, wer durchzieht.</p>
+    </header>
+
+    <section id="pin-box" class="card alert" hidden>
+      <strong>PIN eingeben</strong>
+      <p class="note" style="margin-top:4px">Die Seite ist mit einem gemeinsamen PIN geschützt.</p>
+      <form class="pin-form" id="pin-form">
+        <input id="pin-input" type="password" inputmode="numeric" autocomplete="current-password" placeholder="PIN" aria-label="PIN">
+        <button class="btn" type="submit">OK</button>
+      </form>
+    </section>
+
+    <section id="load-error" class="card alert" hidden></section>
+
+    <section class="reveal" style="--d: 0.1s">
+      <h2>Wer bist du?</h2>
+      <div class="chips" id="who"></div>
+    </section>
+
+    <section id="entry" class="reveal" style="--d: 0.2s" hidden>
+      <h2>Eintragen</h2>
+      <div class="card">
+        <div class="nav">
+          <button class="icon-btn" id="day-prev" aria-label="Vorheriger Tag">‹</button>
+          <strong id="day-label"></strong>
+          <button class="icon-btn" id="day-next" aria-label="Nächster Tag">›</button>
+        </div>
+        <div class="fields" id="fields"></div>
+        <div class="status" id="status" role="status"></div>
+      </div>
+    </section>
+
+    <section class="reveal" style="--d: 0.3s">
+      <h2>Woche</h2>
+      <div class="nav">
+        <button class="icon-btn" id="week-prev" aria-label="Vorherige Woche">‹</button>
+        <strong id="week-label"></strong>
+        <button class="icon-btn" id="week-next" aria-label="Nächste Woche">›</button>
+      </div>
+      <div class="people" id="week"></div>
+      <div class="legend">
+        <span style="--c: var(--good)">geschafft</span>
+        <span style="--c: var(--warn)">verpasst</span>
+        <span style="--c: var(--empty)">noch nichts eingetragen</span>
+      </div>
+    </section>
+
+    <section class="reveal" style="--d: 0.4s">
+      <h2>Rangliste</h2>
+      <div class="card">
+        <table class="board">
+          <thead><tr><th></th><th>Name</th><th>Punkte</th><th>Ø Woche</th><th>🔥 10k-Serie</th></tr></thead>
+          <tbody id="board"></tbody>
+        </table>
+      </div>
+      <p class="note">Pro Woche gibt es einen Punkt für jedes erreichte Ziel (max. 5). „Ø Woche“ zeigt, wie viel der Ziele im Schnitt erfüllt wurden – auch halb geschafft zählt.</p>
+    </section>
+  </main>
+  <footer>© fnnzhrn · Zieh durch 💪</footer>
+
+  <script>
+  (function () {
+    // ---------- Config: season and goals ----------
+    var SEASON = { start: '2026-10-05', end: '2027-03-28' };
+    var STEP_GOAL = 10000;
+    var SCREEN_LIMIT = 120; // minutes of Handy/Insta per day
+    var READ_GOAL = 120;    // minutes per week
+    var SWIM_GOAL = 2;      // lake swims per week
+
+    // Each goal turns a week of entries into { value, target, days? }.
+    // Day goals also return per-day state for the dots: 'hit' | 'miss' | 'empty' | 'off'.
+    var GOALS = [
+      { id: 'steps', emoji: '👟', name: '10k Schritte pro Tag', days: function (e) {
+          return e.steps == null ? 'empty' : e.steps >= STEP_GOAL ? 'hit' : 'miss';
+        } },
+      { id: 'swim', emoji: '🌊', name: '2× im See baden', sum: function (e) { return e.swim ? 1 : 0; },
+        target: SWIM_GOAL, fmt: function (v, t) { return v + ' / ' + t + '×'; } },
+      { id: 'junkfree', emoji: '🥦', name: 'Kein Junk Food (Mo–Fr)', weekdaysOnly: true, days: function (e) {
+          return e.junkfree ? 'hit' : Object.keys(e).length ? 'miss' : 'empty';
+        } },
+      { id: 'read', emoji: '📖', name: '2 h lesen pro Woche', sum: function (e) { return e.read || 0; },
+        target: READ_GOAL, fmt: function (v, t) { return fmtMin(v) + ' / ' + fmtMin(t); } },
+      { id: 'screen', emoji: '📵', name: 'Handy max. ' + fmtMin(SCREEN_LIMIT) + ' pro Tag', days: function (e) {
+          return e.screen == null ? 'empty' : e.screen <= SCREEN_LIMIT ? 'hit' : 'miss';
+        } }
+    ];
+
+    // ---------- Date helpers (local time, weeks start on Monday) ----------
+    function pad(n) { return String(n).padStart(2, '0'); }
+    function iso(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+    function parse(s) { var p = s.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); }
+    function addDays(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
+    function monday(d) { return addDays(d, -((d.getDay() + 6) % 7)); }
+    function isWeekday(d) { var w = d.getDay(); return w > 0 && w < 6; }
+    function kw(d) {
+      var t = addDays(d, 3 - ((d.getDay() + 6) % 7));
+      var jan4 = new Date(t.getFullYear(), 0, 4);
+      return 1 + Math.round(((t - jan4) / 864e5 - 3 + ((jan4.getDay() + 6) % 7)) / 7);
+    }
+    var fmtDay = new Intl.DateTimeFormat('de-CH', { weekday: 'long', day: 'numeric', month: 'long' });
+    var fmtShort = new Intl.DateTimeFormat('de-CH', { day: 'numeric', month: 'short' });
+    function fmtMin(m) {
+      var h = Math.floor(m / 60), r = m % 60;
+      return h ? (r ? h + ' h ' + r + ' min' : h + ' h') : r + ' min';
+    }
+    function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+
+    var today = new Date(); today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    var seasonStart = parse(SEASON.start), seasonEnd = parse(SEASON.end);
+    function clampDay(d) { return d < seasonStart ? seasonStart : d > seasonEnd ? seasonEnd : d; }
+    // Entry day stays within the season and never goes past today.
+    function lastEntryDay() { return clampDay(today < seasonStart ? seasonStart : today); }
+
+    // ---------- State ----------
+    var store = {
+      get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+      set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+    };
+    var people = [];
+    var entries = {};             // "Name:YYYY-MM-DD" → { steps, swim, junkfree, read, screen }
+    var me = store.get('winter:me');
+    var day = lastEntryDay();
+    var week = monday(clampDay(today));
+    var pending = {};             // keys with unsaved edits
+    var saveTimer = null;
+
+    function entry(person, d) { return entries[person + ':' + (typeof d === 'string' ? d : iso(d))] || {}; }
+
+    // ---------- API ----------
+    function api(method, body) {
+      var headers = { 'Content-Type': 'application/json' };
+      var pin = store.get('winter:pin');
+      if (pin) headers['X-Winter-Pin'] = pin;
+      return fetch('/api/winter', { method: method, headers: headers, body: body && JSON.stringify(body) })
+        .then(function (r) {
+          return r.json().catch(function () { return {}; }).then(function (data) {
+            if (r.status === 401) { showPin(); throw new Error(data.error || 'PIN nötig'); }
+            if (!r.ok) throw new Error(data.error || 'Fehler ' + r.status);
+            return data;
+          });
+        });
+    }
+
+    function load() {
+      return api('GET').then(function (data) {
+        document.getElementById('load-error').hidden = true;
+        people = data.people;
+        // Keep my own unsaved edits; take everything else from the server.
+        var next = data.entries || {};
+        Object.keys(pending).forEach(function (k) {
+          if (entries[k]) next[k] = entries[k]; else delete next[k];
+        });
+        entries = next;
+        if (me && people.indexOf(me) < 0) me = null;
+        renderAll();
+      }).catch(function (e) {
+        if (!document.getElementById('pin-box').hidden) return;
+        var box = document.getElementById('load-error');
+        box.textContent = 'Daten konnten nicht geladen werden: ' + e.message;
+        box.hidden = false;
+      });
+    }
+
+    function scheduleSave() {
+      setStatus('Speichere …');
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(flush, 600);
+    }
+    function flush() {
+      var keys = Object.keys(pending);
+      if (!keys.length) return;
+      pending = {};
+      Promise.all(keys.map(function (k) {
+        var i = k.indexOf(':');
+        return api('POST', { person: k.slice(0, i), date: k.slice(i + 1), entry: entries[k] || {} })
+          .catch(function (e) { pending[k] = true; throw e; });
+      })).then(function () {
+        setStatus('Gespeichert ✓');
+      }).catch(function (e) {
+        setStatus('Nicht gespeichert: ' + e.message, true);
+      });
+    }
+    function setStatus(text, err) {
+      var el = document.getElementById('status');
+      el.textContent = text;
+      el.className = 'status' + (err ? ' err' : '');
+    }
+
+    function update(field, value) {
+      var key = me + ':' + iso(day);
+      var e = Object.assign({}, entries[key]);
+      if (value === null || value === false || value === '') delete e[field]; else e[field] = value;
+      if (Object.keys(e).length) entries[key] = e; else delete entries[key];
+      pending[key] = true;
+      scheduleSave();
+      renderHints();
+      renderWeek();
+      renderBoard();
+    }
+
+    // ---------- Rendering ----------
+    function renderWho() {
+      document.getElementById('who').innerHTML = people.map(function (p) {
+        return '<button class="chip" data-p="' + esc(p) + '" aria-pressed="' + (p === me) + '">' + esc(p) + '</button>';
+      }).join('');
+      document.getElementById('entry').hidden = !me;
+    }
+
+    function renderEntry() {
+      if (!me) return;
+      var d = day, e = entry(me, d);
+      document.getElementById('day-label').innerHTML =
+        (iso(d) === iso(today) ? 'Heute' : fmtDay.format(d)) +
+        '<small>' + (iso(d) === iso(today) ? fmtDay.format(d) : 'KW ' + kw(d)) + '</small>';
+      document.getElementById('day-prev').disabled = d <= seasonStart;
+      document.getElementById('day-next').disabled = d >= lastEntryDay();
+      var weekday = isWeekday(d);
+
+      document.getElementById('fields').innerHTML =
+        numField('steps', '👟', 'Schritte', e.steps, 'Schr.', 500) +
+        toggleField('swim', '🌊', 'Im See gebadet', e.swim) +
+        toggleField('junkfree', '🥦', 'Kein Junk Food', e.junkfree, !weekday) +
+        numField('read', '📖', 'Gelesen', e.read, 'min', 5) +
+        numField('screen', '📵', 'Handy / Insta', e.screen, 'min', 5);
+      renderHints();
+    }
+    function numField(id, emoji, label, value, unit, step) {
+      return '<div class="field"><span class="emoji" aria-hidden="true">' + emoji + '</span>' +
+        '<label for="f-' + id + '">' + label + '<span class="hint" id="h-' + id + '"></span></label>' +
+        '<span class="num"><input id="f-' + id + '" data-f="' + id + '" type="number" inputmode="numeric" min="0" step="' + step + '" value="' + (value == null ? '' : value) + '" placeholder="–">' +
+        '<span class="unit">' + unit + '</span></span></div>';
+    }
+    function toggleField(id, emoji, label, on, disabled) {
+      return '<div class="field"><span class="emoji" aria-hidden="true">' + emoji + '</span>' +
+        '<span class="label" id="l-' + id + '">' + label + '<span class="hint" id="h-' + id + '"></span></span>' +
+        '<button class="toggle" data-t="' + id + '" aria-labelledby="l-' + id + '" aria-pressed="' + !!on + '"' + (disabled ? ' disabled' : '') + '></button></div>';
+    }
+    function renderHints() {
+      if (!me) return;
+      var e = entry(me, day), wk = monday(day);
+      var weekEntries = [0, 1, 2, 3, 4, 5, 6].map(function (i) { return entry(me, addDays(wk, i)); });
+      var swims = weekEntries.reduce(function (s, x) { return s + (x.swim ? 1 : 0); }, 0);
+      var read = weekEntries.reduce(function (s, x) { return s + (x.read || 0); }, 0);
+      hint('steps', e.steps == null ? 'Ziel: 10 000' : e.steps >= STEP_GOAL ? 'Ziel erreicht 🎉' : 'Noch ' + (STEP_GOAL - e.steps).toLocaleString('de-CH') + ' bis 10k', e.steps >= STEP_GOAL);
+      hint('swim', 'Diese Woche: ' + swims + ' / ' + SWIM_GOAL, swims >= SWIM_GOAL);
+      hint('junkfree', isWeekday(day) ? 'Nur Mo–Fr zählt' : 'Wochenende – zählt nicht', false);
+      hint('read', 'Diese Woche: ' + fmtMin(read) + ' / ' + fmtMin(READ_GOAL), read >= READ_GOAL);
+      hint('screen', e.screen == null ? 'Bildschirmzeit, Ziel max. ' + fmtMin(SCREEN_LIMIT) : e.screen <= SCREEN_LIMIT ? 'Im Rahmen 👌' : fmtMin(e.screen - SCREEN_LIMIT) + ' zu viel', e.screen != null && e.screen <= SCREEN_LIMIT);
+    }
+    function hint(id, text, ok) {
+      var el = document.getElementById('h-' + id);
+      if (el) { el.textContent = text; el.className = 'hint' + (ok ? ' ok' : ''); }
+    }
+
+    // Evaluate all goals for one person and week.
+    function evalWeek(person, wk) {
+      var days = [0, 1, 2, 3, 4, 5, 6].map(function (i) { return addDays(wk, i); });
+      return GOALS.map(function (g) {
+        if (g.days) {
+          var states = days.map(function (d) {
+            if (d < seasonStart || d > seasonEnd || (g.weekdaysOnly && !isWeekday(d))) return 'off';
+            return g.days(entry(person, d));
+          });
+          var target = states.filter(function (s) { return s !== 'off'; }).length;
+          var value = states.filter(function (s) { return s === 'hit'; }).length;
+          return { goal: g, value: value, target: target, states: states, label: value + ' / ' + target + ' Tage' };
+        }
+        var sum = days.reduce(function (s, d) { return s + g.sum(entry(person, d)); }, 0);
+        return { goal: g, value: sum, target: g.target, label: g.fmt(sum, g.target) };
+      }).map(function (r) {
+        r.done = r.target > 0 && r.value >= r.target;
+        r.frac = r.target ? Math.min(1, r.value / r.target) : 0;
+        return r;
+      });
+    }
+
+    function renderWeek() {
+      var end = addDays(week, 6);
+      document.getElementById('week-label').innerHTML = 'KW ' + kw(week) +
+        '<small>' + fmtShort.format(week) + ' – ' + fmtShort.format(end) + '</small>';
+      document.getElementById('week-prev').disabled = week <= monday(seasonStart);
+      document.getElementById('week-next').disabled = week >= monday(clampDay(today));
+      var todayIso = iso(today);
+
+      document.getElementById('week').innerHTML = people.map(function (p) {
+        var res = evalWeek(p, week);
+        var done = res.filter(function (r) { return r.done; }).length;
+        return '<div class="card"><div class="person-head"><strong>' + esc(p) + (p === me ? ' <small style="color:var(--muted);font-weight:400">(du)</small>' : '') + '</strong>' +
+          '<span class="score"><b>' + done + '</b> / ' + GOALS.length + ' Ziele</span></div>' +
+          res.map(function (r) {
+            var viz = r.states
+              ? '<div class="dots">' + r.states.map(function (s, i) {
+                  return '<span class="' + s + (iso(addDays(week, i)) === todayIso ? ' today' : '') + '"></span>';
+                }).join('') + '</div>'
+              : '<div class="bar"><i style="width:' + Math.round(r.frac * 100) + '%"></i></div>';
+            return '<div class="goal' + (r.done ? ' done' : '') + '"><span class="emoji" aria-hidden="true">' + r.goal.emoji + '</span>' +
+              '<span class="name">' + r.goal.name + '</span><span class="val">' + (r.done ? '✓ ' : '') + r.label + '</span>' +
+              '<div class="viz">' + viz + '</div></div>';
+          }).join('') + '</div>';
+      }).join('');
+    }
+
+    function renderBoard() {
+      var lastWeek = monday(clampDay(today));
+      var rows = people.map(function (p) {
+        var pts = 0, fracs = [], wk;
+        for (wk = monday(seasonStart); wk <= lastWeek; wk = addDays(wk, 7)) {
+          var res = evalWeek(p, wk);
+          pts += res.filter(function (r) { return r.done; }).length;
+          fracs.push(res.reduce(function (s, r) { return s + r.frac; }, 0) / res.length);
+        }
+        // Current run of 10k days, ending today (or yesterday if today isn't logged yet).
+        var streak = 0, d = clampDay(today);
+        if (entry(p, d).steps == null) d = addDays(d, -1);
+        while (d >= seasonStart && (entry(p, d).steps || 0) >= STEP_GOAL) { streak++; d = addDays(d, -1); }
+        var avg = fracs.length ? fracs.reduce(function (a, b) { return a + b; }, 0) / fracs.length : 0;
+        return { p: p, pts: pts, avg: avg, streak: streak };
+      }).sort(function (a, b) { return b.pts - a.pts || b.avg - a.avg; });
+
+      var medals = ['🥇', '🥈', '🥉'];
+      document.getElementById('board').innerHTML = rows.map(function (r, i) {
+        return '<tr><td>' + (medals[i] || i + 1) + '</td><td>' + esc(r.p) + '</td><td class="pts">' + r.pts + '</td>' +
+          '<td>' + Math.round(r.avg * 100) + ' %</td><td>' + r.streak + (r.streak === 1 ? ' Tag' : ' Tage') + '</td></tr>';
+      }).join('');
+    }
+
+    function renderAll() {
+      var lead = document.getElementById('lead');
+      lead.textContent = 'Gemeinsam durch den Winter, ' + fmtShort.format(seasonStart) + ' bis ' + fmtShort.format(seasonEnd) +
+        '. Jeder trägt ein, alle sehen, wer durchzieht.';
+      renderWho();
+      // Don't rebuild the form under someone who is typing in it.
+      if (!document.getElementById('fields').contains(document.activeElement)) renderEntry();
+      renderWeek(); renderBoard();
+    }
+
+    // ---------- Events ----------
+    document.getElementById('who').addEventListener('click', function (ev) {
+      var b = ev.target.closest('.chip');
+      if (!b) return;
+      me = b.getAttribute('data-p');
+      store.set('winter:me', me);
+      setStatus('');
+      renderAll();
+    });
+    document.getElementById('fields').addEventListener('input', function (ev) {
+      var f = ev.target.getAttribute('data-f');
+      if (!f) return;
+      var v = ev.target.value === '' ? null : Math.max(0, Math.round(Number(ev.target.value)));
+      if (v !== null && !isFinite(v)) return;
+      update(f, v);
+    });
+    document.getElementById('fields').addEventListener('click', function (ev) {
+      var t = ev.target.closest('.toggle');
+      if (!t) return;
+      var on = t.getAttribute('aria-pressed') !== 'true';
+      t.setAttribute('aria-pressed', on);
+      update(t.getAttribute('data-t'), on);
+    });
+    function moveDay(n) {
+      flush();
+      var d = addDays(day, n);
+      if (d < seasonStart || d > lastEntryDay()) return;
+      day = d;
+      week = monday(day);
+      setStatus('');
+      renderEntry(); renderWeek();
+    }
+    document.getElementById('day-prev').addEventListener('click', function () { moveDay(-1); });
+    document.getElementById('day-next').addEventListener('click', function () { moveDay(1); });
+    document.getElementById('week-prev').addEventListener('click', function () { week = addDays(week, -7); renderWeek(); });
+    document.getElementById('week-next').addEventListener('click', function () { week = addDays(week, 7); renderWeek(); });
+
+    function showPin() { document.getElementById('pin-box').hidden = false; }
+    document.getElementById('pin-form').addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      store.set('winter:pin', document.getElementById('pin-input').value.trim());
+      document.getElementById('pin-box').hidden = true;
+      load();
+    });
+
+    // Pick up the others' entries when coming back to the tab, and every minute.
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) flush(); else load();
+    });
+    setInterval(function () { if (!document.hidden && !Object.keys(pending).length) load(); }, 60000);
+    addEventListener('pagehide', flush);
+
+    load();
+  })();
+
+  // Background: gentle snowfall
+  (function () {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var canvas = document.getElementById('snow');
+    var ctx = canvas.getContext('2d');
+    var w, h, flakes = [], color, raf;
+    function readColor() {
+      color = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#1f6fd1';
+    }
+    function resize() {
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = canvas.clientWidth; h = canvas.clientHeight;
+      canvas.width = w * dpr; canvas.height = h * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      var n = Math.round(Math.min(90, w * h / 14000));
+      flakes = [];
+      for (var i = 0; i < n; i++) flakes.push({ x: Math.random() * w, y: Math.random() * h, r: 0.8 + Math.random() * 2, s: 0.2 + Math.random() * 0.5, p: Math.random() * 6.28 });
+    }
+    function frame() {
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = color;
+      flakes.forEach(function (f) {
+        f.y += f.s; f.p += 0.01; f.x += Math.sin(f.p) * 0.3;
+        if (f.y > h + 4) { f.y = -4; f.x = Math.random() * w; }
+        ctx.globalAlpha = 0.12 + f.r * 0.06;
+        ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, 6.283); ctx.fill();
+      });
+      raf = requestAnimationFrame(frame);
+    }
+    readColor(); resize();
+    addEventListener('resize', resize);
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColor);
+    document.addEventListener('visibilitychange', function () {
+      cancelAnimationFrame(raf);
+      if (!document.hidden) raf = requestAnimationFrame(frame);
+    });
+    raf = requestAnimationFrame(frame);
+  })();
+  </script>
+</body>
+</html>
