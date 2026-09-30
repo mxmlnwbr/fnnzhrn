@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { AccountMenu } from "@/components/AccountMenu";
 import { CashAccounts } from "@/components/CashAccounts";
+import { DepotMenu } from "@/components/DepotMenu";
 import { AllocationCard } from "@/components/AllocationCard";
 import { useChoice } from "@/components/ChoiceDialog";
 import { HoldingsTable } from "@/components/HoldingsTable";
@@ -17,7 +18,7 @@ import { buttonClass } from "@/components/ui";
 import { BASE_CURRENCIES } from "@/lib/currency";
 import { setDiscreet, useDiscreet } from "@/lib/discreet";
 import { buildHistory, incomeOverview, summarize } from "@/lib/portfolio";
-import { parseImport, savePortfolio, usePortfolio } from "@/lib/storage";
+import { parseImport, savePortfolio, useActiveDepot } from "@/lib/storage";
 import {
   decodeText,
   isImported,
@@ -29,7 +30,7 @@ import {
   swissquoteListings,
   tickerCandidates,
 } from "@/lib/swissquote";
-import type { CashAccount, Transaction } from "@/lib/types";
+import type { CashAccount, Depot, Transaction } from "@/lib/types";
 import { useMarketData } from "@/lib/useMarketData";
 
 /** Verified Yahoo tickers for imported securities; the import falls back to its own guess without them. */
@@ -47,7 +48,13 @@ async function resolveTickers(listings: ReturnType<typeof swissquoteListings>): 
 }
 
 export default function Home() {
-  const portfolio = usePortfolio();
+  const depot = useActiveDepot();
+  // Switching depots starts the dashboard afresh, so no prices or import report carry over.
+  return <Dashboard key={depot.id} depot={depot} />;
+}
+
+function Dashboard({ depot }: { depot: Depot }) {
+  const portfolio = depot.data;
   const { transactions, cash, settings } = portfolio;
   const base = settings.baseCurrency;
   const [refreshKey, setRefreshKey] = useState(0);
@@ -112,7 +119,8 @@ export default function Home() {
     const blob = new Blob([JSON.stringify(portfolio, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `portfolio-${new Date().toISOString().slice(0, 10)}.json`;
+    const slug = depot.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "portfolio";
+    a.download = `${slug}-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   }
@@ -281,7 +289,7 @@ export default function Home() {
       <TopProgress active={market.loading} />
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-semibold">Depot</h1>
+          <DepotMenu />
           <p className="text-xs text-zinc-500">
             {market.loading
               ? "Updating prices…"

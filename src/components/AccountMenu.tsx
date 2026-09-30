@@ -29,8 +29,8 @@ export function AccountMenu() {
           {sync.status === "signed-in" ? (
             <div className="space-y-3">
               <p>
-                Signed in as <span className="font-medium break-all">{sync.email}</span>. Your portfolio syncs to every
-                device you sign in on.
+                Signed in as <span className="font-medium break-all">{sync.email}</span>. Your depots sync to every device
+                you sign in on.
               </p>
               {sync.error && <p className="text-red-600 dark:text-red-400">Last sync failed: {sync.error}</p>}
               <div className="flex gap-2">
