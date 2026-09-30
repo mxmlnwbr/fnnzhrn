@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { AccountMenu } from "@/components/AccountMenu";
 import { CashAccounts } from "@/components/CashAccounts";
+import { DepotMenu } from "@/components/DepotMenu";
 import { AllocationCard } from "@/components/AllocationCard";
 import { useChoice } from "@/components/ChoiceDialog";
 import { HoldingsTable } from "@/components/HoldingsTable";
@@ -17,7 +18,8 @@ import { buttonClass } from "@/components/ui";
 import { BASE_CURRENCIES } from "@/lib/currency";
 import { setDiscreet, useDiscreet } from "@/lib/discreet";
 import { buildHistory, incomeOverview, summarize } from "@/lib/portfolio";
-import { parseImport, savePortfolio, usePortfolio } from "@/lib/storage";
+import { parseImport, savePortfolio, useActiveDepot, useDepots } from "@/lib/storage";
+import { ALL_DEPOTS_ID, depotIdOf } from "@/lib/sync";
 import {
   decodeText,
   isImported,
@@ -29,7 +31,7 @@ import {
   swissquoteListings,
   tickerCandidates,
 } from "@/lib/swissquote";
-import type { CashAccount, Transaction } from "@/lib/types";
+import type { CashAccount, Depot, Transaction } from "@/lib/types";
 import { useMarketData } from "@/lib/useMarketData";
 
 /** Verified Yahoo tickers for imported securities; the import falls back to its own guess without them. */
@@ -47,7 +49,17 @@ async function resolveTickers(listings: ReturnType<typeof swissquoteListings>): 
 }
 
 export default function Home() {
-  const portfolio = usePortfolio();
+  const depot = useActiveDepot();
+  // Switching depots starts the dashboard afresh, so no prices or import report carry over.
+  return <Dashboard key={depot.id} depot={depot} />;
+}
+
+function Dashboard({ depot }: { depot: Depot }) {
+  const portfolio = depot.data;
+  /** All depots added up: shown, but transactions and cash are edited in their own depot. */
+  const combined = depot.id === ALL_DEPOTS_ID;
+  const depots = useDepots();
+  const depotNames = useMemo(() => new Map(depots.map((d) => [d.id, d.name])), [depots]);
   const { transactions, cash, settings } = portfolio;
   const base = settings.baseCurrency;
   const [refreshKey, setRefreshKey] = useState(0);
@@ -112,7 +124,8 @@ export default function Home() {
     const blob = new Blob([JSON.stringify(portfolio, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `portfolio-${new Date().toISOString().slice(0, 10)}.json`;
+    const slug = depot.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "portfolio";
+    a.download = `${slug}-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
   }
@@ -281,7 +294,7 @@ export default function Home() {
       <TopProgress active={market.loading} />
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-semibold">Depot</h1>
+          <DepotMenu />
           <p className="text-xs text-zinc-500">
             {market.loading
               ? "Updating prices…"
@@ -298,7 +311,7 @@ export default function Home() {
           {currencySelect}
           {refreshButton}
           {exportButton}
-          {importButton}
+          {!combined && importButton}
         </div>
         <div className="flex shrink-0 items-center gap-2 sm:hidden">
           {discreetButton}
@@ -321,10 +334,10 @@ export default function Home() {
               <span className="text-sm text-zinc-500">Base currency</span>
               {currencySelect}
             </div>
-            <div className="grid grid-cols-3 gap-2 [&>button]:justify-center">
+            <div className={`grid ${combined ? "grid-cols-2" : "grid-cols-3"} gap-2 [&>button]:justify-center`}>
               {refreshButton}
               {exportButton}
-              {importButton}
+              {!combined && importButton}
             </div>
             {/* Its popover opens to the right, so keep it on the left edge. */}
             <div className="empty:hidden">
@@ -378,14 +391,15 @@ export default function Home() {
           </div>
         </div>
         <div className="min-w-0 space-y-4">
-          <CashAccounts accounts={cash} fx={market.fx} currency={base} onChange={setCash} />
-          <TransactionForm onAdd={(t) => setTransactions([...transactions, t])} />
+          <CashAccounts accounts={cash} fx={market.fx} currency={base} onChange={combined ? undefined : setCash} />
+          {!combined && <TransactionForm onAdd={(t) => setTransactions([...transactions, t])} />}
           <TransactionList
             transactions={transactions}
             quotes={market.quotes}
-            onDelete={(id) => setTransactions(transactions.filter((t) => t.id !== id))}
+            onDelete={combined ? undefined : (id) => setTransactions(transactions.filter((t) => t.id !== id))}
             canDelete={transactions.length + cash.length > 0}
             onDeleteMany={() => void deleteMany()}
+            depotOf={combined ? (t) => depotNames.get(depotIdOf(t.id)) : undefined}
           />
         </div>
       </div>

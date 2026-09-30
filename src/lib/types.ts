@@ -95,3 +95,18 @@ export interface PortfolioData {
   transactions: Transaction[];
   cash: CashAccount[];
 }
+
+/** One portfolio, e.g. an account at one broker. */
+export interface Depot {
+  id: string;
+  name: string;
+  data: PortfolioData;
+}
+
+/** Everything a user keeps: one or more depots. This is what's stored locally and synced. */
+export interface DepotStore {
+  version: 2;
+  depots: Depot[];
+  /** Settings of the view that adds up all depots; asset classes come from the depots instead. */
+  combined?: Omit<Settings, "categories">;
+}
