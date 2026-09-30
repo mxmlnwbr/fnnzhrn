@@ -6,7 +6,7 @@ A personal dashboard for tracking the performance of your share portfolio and yo
 
 ## Features
 
-- **Several depots**: keep each broker account (or any other split) as its own depot, with its own transactions, cash accounts, base currency and targets. Switch, add, rename and delete depots from the menu under the title. Export and Import work on the depot shown.
+- **Several depots**: keep each broker account (or any other split) as its own depot, with its own transactions, cash accounts, base currency and targets. Switch, add, rename and delete depots from the menu under the title. Export and Import work on the depot shown. **All depots** adds them up into one view with its own base currency and rebalance targets; transactions and cash are edited in their own depot, and changing a position's asset class there changes it in every depot.
 - Record **buy**, **sell** and **dividend** transactions, with fees and withholding tax. Symbol search runs against Yahoo Finance, so SIX tickers like `NESN.SW` and `NOVN.SW` work, as do US, LSE and XETRA ones.
 - **Holdings** show average cost, the current price, today's change, market value, unrealized P/L and portfolio weight.
 - **Cash accounts** track your liquidity: add each bank or broker account with its currency and current balance, and edit the balance when it changes. Balances are converted to the base currency and added to your net worth. Importing a Swissquote CSV fills in the account's latest cash balance per currency.

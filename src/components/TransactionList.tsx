@@ -29,7 +29,8 @@ export function TransactionList({
 }: {
   transactions: Transaction[];
   quotes: Record<string, Quote>;
-  onDelete: (id: string) => void;
+  /** Absent in the combined view, where transactions are shown but not deleted. */
+  onDelete?: (id: string) => void;
   /** Whether there's anything (transactions or cash accounts) for the bulk delete to remove. */
   canDelete: boolean;
   /** Opens the choice between deleting imported data only or everything. */
@@ -51,7 +52,8 @@ export function TransactionList({
     <Card
       title={`Transactions (${transactions.length})`}
       action={
-        canDelete && (
+        canDelete &&
+        onDelete && (
           <button className={`${buttonClass} text-xs`} onClick={onDeleteMany}>
             Delete…
           </button>
@@ -111,13 +113,15 @@ export function TransactionList({
                 </div>
                 <div className="flex items-center gap-2">
                   {!discreet && <span className="tabular-nums">{formatMoney(total, currency)}</span>}
-                  <button
-                    onClick={() => confirm(`Delete this ${t.type} of ${t.symbol}?`) && onDelete(t.id)}
-                    className="rounded px-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800"
-                    aria-label="Delete transaction"
-                  >
-                    ×
-                  </button>
+                  {onDelete && (
+                    <button
+                      onClick={() => confirm(`Delete this ${t.type} of ${t.symbol}?`) && onDelete(t.id)}
+                      className="rounded px-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800"
+                      aria-label="Delete transaction"
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               </li>
             );

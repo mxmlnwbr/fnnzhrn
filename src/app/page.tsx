@@ -19,6 +19,7 @@ import { BASE_CURRENCIES } from "@/lib/currency";
 import { setDiscreet, useDiscreet } from "@/lib/discreet";
 import { buildHistory, incomeOverview, summarize } from "@/lib/portfolio";
 import { parseImport, savePortfolio, useActiveDepot } from "@/lib/storage";
+import { ALL_DEPOTS_ID } from "@/lib/sync";
 import {
   decodeText,
   isImported,
@@ -55,6 +56,8 @@ export default function Home() {
 
 function Dashboard({ depot }: { depot: Depot }) {
   const portfolio = depot.data;
+  /** All depots added up: shown, but transactions and cash are edited in their own depot. */
+  const combined = depot.id === ALL_DEPOTS_ID;
   const { transactions, cash, settings } = portfolio;
   const base = settings.baseCurrency;
   const [refreshKey, setRefreshKey] = useState(0);
@@ -306,7 +309,7 @@ function Dashboard({ depot }: { depot: Depot }) {
           {currencySelect}
           {refreshButton}
           {exportButton}
-          {importButton}
+          {!combined && importButton}
         </div>
         <div className="flex shrink-0 items-center gap-2 sm:hidden">
           {discreetButton}
@@ -329,10 +332,10 @@ function Dashboard({ depot }: { depot: Depot }) {
               <span className="text-sm text-zinc-500">Base currency</span>
               {currencySelect}
             </div>
-            <div className="grid grid-cols-3 gap-2 [&>button]:justify-center">
+            <div className={`grid ${combined ? "grid-cols-2" : "grid-cols-3"} gap-2 [&>button]:justify-center`}>
               {refreshButton}
               {exportButton}
-              {importButton}
+              {!combined && importButton}
             </div>
             {/* Its popover opens to the right, so keep it on the left edge. */}
             <div className="empty:hidden">
@@ -386,12 +389,12 @@ function Dashboard({ depot }: { depot: Depot }) {
           </div>
         </div>
         <div className="min-w-0 space-y-4">
-          <CashAccounts accounts={cash} fx={market.fx} currency={base} onChange={setCash} />
-          <TransactionForm onAdd={(t) => setTransactions([...transactions, t])} />
+          <CashAccounts accounts={cash} fx={market.fx} currency={base} onChange={combined ? undefined : setCash} />
+          {!combined && <TransactionForm onAdd={(t) => setTransactions([...transactions, t])} />}
           <TransactionList
             transactions={transactions}
             quotes={market.quotes}
-            onDelete={(id) => setTransactions(transactions.filter((t) => t.id !== id))}
+            onDelete={combined ? undefined : (id) => setTransactions(transactions.filter((t) => t.id !== id))}
             canDelete={transactions.length + cash.length > 0}
             onDeleteMany={() => void deleteMany()}
           />

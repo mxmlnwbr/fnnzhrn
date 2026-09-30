@@ -107,4 +107,6 @@ export interface Depot {
 export interface DepotStore {
   version: 2;
   depots: Depot[];
+  /** Settings of the view that adds up all depots; asset classes come from the depots instead. */
+  combined?: Omit<Settings, "categories">;
 }

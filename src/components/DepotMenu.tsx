@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createDepot, deleteDepot, renameDepot, selectDepot, useActiveDepot, useDepots } from "@/lib/storage";
+import { ALL_DEPOTS_ID } from "@/lib/sync";
 import { useChoice } from "./ChoiceDialog";
 import { buttonClass, inputClass, primaryButtonClass } from "./ui";
 
@@ -15,6 +16,13 @@ export function DepotMenu() {
   const [name, setName] = useState("");
   const [choiceDialog, ask] = useChoice();
   const root = useRef<HTMLDivElement>(null);
+  const combined = current.id === ALL_DEPOTS_ID;
+  const options = [
+    ...(depots.length > 1
+      ? [{ id: ALL_DEPOTS_ID, name: "All depots", hint: `${depots.length} added up` }]
+      : []),
+    ...depots.map((d) => ({ id: d.id, name: d.name, hint: d.data.settings.baseCurrency })),
+  ];
 
   useEffect(() => {
     if (!open) return;
@@ -78,7 +86,7 @@ export function DepotMenu() {
       {open && (
         <div className="animate-fade-in absolute left-0 z-20 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-zinc-200 bg-white p-2 text-sm shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
           <ul role="listbox" aria-label="Depots" className="max-h-72 overflow-y-auto">
-            {depots.map((d) => (
+            {options.map((d) => (
               <li key={d.id}>
                 <button
                   role="option"
@@ -91,7 +99,7 @@ export function DepotMenu() {
                 >
                   <span className="w-4 shrink-0">{d.id === current.id && <CheckIcon />}</span>
                   <span className="min-w-0 flex-1 truncate">{d.name}</span>
-                  <span className="shrink-0 text-xs text-zinc-500">{d.data.settings.baseCurrency}</span>
+                  <span className="shrink-0 text-xs text-zinc-500">{d.hint}</span>
                 </button>
               </li>
             ))}
@@ -129,8 +137,8 @@ export function DepotMenu() {
             ) : (
               <div className="flex flex-col">
                 <MenuItem onClick={() => edit("new")}>New depot</MenuItem>
-                <MenuItem onClick={() => edit("rename")}>Rename “{current.name}”</MenuItem>
-                {depots.length > 1 && (
+                {!combined && <MenuItem onClick={() => edit("rename")}>Rename “{current.name}”</MenuItem>}
+                {!combined && depots.length > 1 && (
                   <MenuItem danger onClick={() => void remove()}>
                     Delete “{current.name}”
                   </MenuItem>

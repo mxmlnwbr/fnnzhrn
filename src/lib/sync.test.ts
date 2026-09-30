@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { EMPTY_PORTFOLIO, EMPTY_STORE, mergePortfolios, mergeStores, normalizePortfolio, normalizeStore } from "./sync";
+import {
+  combineDepots,
+  EMPTY_PORTFOLIO,
+  EMPTY_STORE,
+  mergePortfolios,
+  mergeStores,
+  normalizePortfolio,
+  normalizeStore,
+  saveCombinedSettings,
+} from "./sync";
 import type { Depot, DepotStore, PortfolioData, Transaction } from "./types";
 
 const tx = (id: string): Transaction => ({ id, symbol: "ABC", type: "buy", date: "2026-01-01", quantity: 1, price: 10, fees: 0 });
@@ -84,5 +93,41 @@ describe("mergeStores", () => {
   it("returns the account's data when nothing is new locally", () => {
     const remote = store(depot("main", ["a"]), depot("x", []));
     expect(mergeStores(EMPTY_STORE, remote)).toEqual(remote);
+  });
+});
+
+describe("combineDepots", () => {
+  const withSettings = (d: Depot, settings: Partial<PortfolioData["settings"]>): Depot => ({
+    ...d,
+    data: { ...d.data, settings: { ...d.data.settings, ...settings } },
+  });
+
+  it("adds up transactions and cash, keeping ids unique", () => {
+    const a = { ...depot("a", ["t"]), data: { ...portfolio(["t"]), cash: [{ id: "c", name: "Bank", currency: "CHF", balance: 1 }] } };
+    const all = combineDepots(store(a, depot("b", ["t"]))).data;
+    expect(all.transactions.map((t) => t.id)).toEqual(["t@a", "t@b"]);
+    expect(all.cash).toEqual([{ id: "c@a", name: "Bank · a", currency: "CHF", balance: 1 }]);
+  });
+
+  it("uses its own base currency and targets, and the depots' asset classes", () => {
+    const s = store(withSettings(depot("a", []), { categories: { X: "Bonds" } }), withSettings(depot("b", []), { baseCurrency: "USD", categories: { Y: "Gold" } }));
+    expect(combineDepots(s).data.settings).toEqual({ baseCurrency: "CHF", categories: { X: "Bonds", Y: "Gold" }, targets: {} });
+    expect(combineDepots({ ...s, combined: { baseCurrency: "EUR", targets: { X: 50 } } }).data.settings).toMatchObject({
+      baseCurrency: "EUR",
+      targets: { X: 50 },
+    });
+  });
+});
+
+describe("saveCombinedSettings", () => {
+  it("stores base currency and targets for the combined view", () => {
+    const saved = saveCombinedSettings(store(depot("a", [])), { baseCurrency: "USD", targets: { X: 100 } });
+    expect(saved.combined).toEqual({ baseCurrency: "USD", targets: { X: 100 } });
+  });
+
+  it("applies asset class changes in every depot", () => {
+    const a: Depot = { ...depot("a", []), data: { ...portfolio([]), settings: { baseCurrency: "CHF", categories: { X: "Bonds" } } } };
+    const saved = saveCombinedSettings(store(a, depot("b", [])), { baseCurrency: "CHF", categories: { Y: "Gold" } });
+    expect(saved.depots.map((d) => d.data.settings.categories)).toEqual([{ Y: "Gold" }, { Y: "Gold" }]);
   });
 });

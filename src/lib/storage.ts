@@ -2,7 +2,16 @@
 
 import { useSyncExternalStore } from "react";
 import { getSupabase } from "./supabase";
-import { EMPTY_PORTFOLIO, EMPTY_STORE, mergeStores, normalizePortfolio, normalizeStore } from "./sync";
+import {
+  ALL_DEPOTS_ID,
+  combineDepots,
+  EMPTY_PORTFOLIO,
+  EMPTY_STORE,
+  mergeStores,
+  normalizePortfolio,
+  normalizeStore,
+  saveCombinedSettings,
+} from "./sync";
 import type { Depot, DepotStore, PortfolioData } from "./types";
 
 const KEY = "portfolio-tracker:v1";
@@ -23,6 +32,8 @@ export type SyncState =
 
 let cache: DepotStore | null = null;
 let activeId: string | null = null;
+/** The combined view of the store it was built from, so it keeps its identity between renders. */
+let combinedCache: { store: DepotStore; depot: Depot } | null = null;
 let sync: SyncState = { status: "disabled" };
 let userId: string | null = null;
 let started = false;
@@ -63,11 +74,18 @@ function read(): DepotStore {
   return cache;
 }
 
-/** The depot shown, falling back to the first one when the chosen one is gone (e.g. deleted on another device). */
+/**
+ * The depot shown, or all depots added up. Falls back to the first depot when the chosen one is gone
+ * (e.g. deleted on another device), and when only one depot is left to add up.
+ */
 function active(): Depot {
-  const { depots } = read();
+  const store = read();
   activeId ??= getItem(ACTIVE_KEY);
-  return depots.find((d) => d.id === activeId) ?? depots[0];
+  if (activeId === ALL_DEPOTS_ID && store.depots.length > 1) {
+    if (combinedCache?.store !== store) combinedCache = { store, depot: combineDepots(store) };
+    return combinedCache.depot;
+  }
+  return store.depots.find((d) => d.id === activeId) ?? store.depots[0];
 }
 
 function writeLocal(data: DepotStore, dirty: boolean) {
@@ -93,9 +111,10 @@ function save(data: DepotStore) {
   }
 }
 
-/** Saves the depot currently shown. */
+/** Saves the depot currently shown. In the combined view only settings can change. */
 export function savePortfolio(data: PortfolioData) {
   const id = active().id;
+  if (id === ALL_DEPOTS_ID) return save(saveCombinedSettings(read(), data.settings));
   save({ ...read(), depots: read().depots.map((d) => (d.id === id ? { ...d, data } : d)) });
 }
 

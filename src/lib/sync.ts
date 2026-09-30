@@ -1,10 +1,12 @@
-import type { Depot, DepotStore, PortfolioData } from "./types";
+import type { Depot, DepotStore, PortfolioData, Settings } from "./types";
 
 export const EMPTY_PORTFOLIO: PortfolioData = { version: 1, settings: { baseCurrency: "CHF" }, transactions: [], cash: [] };
 
 /** Id of the depot that data from before multiple depots moves into, so every device picks the same one. */
 export const FIRST_DEPOT_ID = "main";
 export const FIRST_DEPOT_NAME = "Depot 1";
+/** Id of the view that adds up all depots. */
+export const ALL_DEPOTS_ID = "all";
 
 export const EMPTY_STORE: DepotStore = {
   version: 2,
@@ -32,7 +34,9 @@ export function normalizeStore(data: Partial<DepotStore> | Partial<PortfolioData
         data: normalizePortfolio(d.data),
       }),
     );
-    return depots.length ? { version: 2, depots } : EMPTY_STORE;
+    if (!depots.length) return EMPTY_STORE;
+    const combined = data.combined && typeof data.combined === "object" ? { combined: data.combined } : {};
+    return { version: 2, depots, ...combined };
   }
   return {
     version: 2,
@@ -66,6 +70,7 @@ const isEmpty = (d: Depot) => d.data.transactions.length === 0 && d.data.cash.le
 export function mergeStores(local: DepotStore, remote: DepotStore): DepotStore {
   const localById = new Map(local.depots.map((d) => [d.id, d]));
   const remoteIds = new Set(remote.depots.map((d) => d.id));
+  const combined = remote.combined ?? local.combined;
   return {
     version: 2,
     depots: [
@@ -75,5 +80,56 @@ export function mergeStores(local: DepotStore, remote: DepotStore): DepotStore {
       }),
       ...local.depots.filter((d) => !remoteIds.has(d.id) && !isEmpty(d)),
     ],
+    ...(combined ? { combined } : {}),
+  };
+}
+
+/** Asset class overrides of all depots together; where they disagree, the later depot wins. */
+function allCategories(store: DepotStore): Record<string, string> {
+  return Object.assign({}, ...store.depots.map((d) => d.data.settings.categories));
+}
+
+/**
+ * All depots added up into one portfolio. Ids get the depot's id appended so they stay unique
+ * (the same import in two depots yields the same ids), and cash accounts are labelled with their depot.
+ */
+export function combineDepots(store: DepotStore): Depot {
+  const { depots, combined } = store;
+  return {
+    id: ALL_DEPOTS_ID,
+    name: "All depots",
+    data: {
+      version: 1,
+      settings: {
+        baseCurrency: combined?.baseCurrency ?? depots[0].data.settings.baseCurrency,
+        categories: allCategories(store),
+        targets: combined?.targets ?? {},
+      },
+      transactions: depots.flatMap((d) => d.data.transactions.map((t) => ({ ...t, id: `${t.id}@${d.id}` }))),
+      cash: depots.flatMap((d) => d.data.cash.map((a) => ({ ...a, id: `${a.id}@${d.id}`, name: `${a.name} · ${d.name}` }))),
+    },
+  };
+}
+
+/**
+ * Saves settings changed in the combined view. Asset classes belong to a security, not a depot,
+ * so a change there is applied in every depot.
+ */
+export function saveCombinedSettings(store: DepotStore, settings: Settings): DepotStore {
+  const before = allCategories(store);
+  const after = settings.categories ?? {};
+  const changed = Object.entries(after).filter(([k, v]) => before[k] !== v);
+  const removed = Object.keys(before).filter((k) => !(k in after));
+  return {
+    ...store,
+    depots:
+      changed.length || removed.length
+        ? store.depots.map((d) => {
+            const categories = { ...d.data.settings.categories, ...Object.fromEntries(changed) };
+            for (const k of removed) delete categories[k];
+            return { ...d, data: { ...d.data, settings: { ...d.data.settings, categories } } };
+          })
+        : store.depots,
+    combined: { baseCurrency: settings.baseCurrency, targets: settings.targets },
   };
 }
