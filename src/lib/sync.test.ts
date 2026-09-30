@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   combineDepots,
+  depotIdOf,
   EMPTY_PORTFOLIO,
   EMPTY_STORE,
   mergePortfolios,
@@ -106,6 +107,7 @@ describe("combineDepots", () => {
     const a = { ...depot("a", ["t"]), data: { ...portfolio(["t"]), cash: [{ id: "c", name: "Bank", currency: "CHF", balance: 1 }] } };
     const all = combineDepots(store(a, depot("b", ["t"]))).data;
     expect(all.transactions.map((t) => t.id)).toEqual(["t@a", "t@b"]);
+    expect(all.transactions.map((t) => depotIdOf(t.id))).toEqual(["a", "b"]);
     expect(all.cash).toEqual([{ id: "c@a", name: "Bank · a", currency: "CHF", balance: 1 }]);
   });
 

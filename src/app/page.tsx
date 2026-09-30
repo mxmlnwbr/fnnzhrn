@@ -18,8 +18,8 @@ import { buttonClass } from "@/components/ui";
 import { BASE_CURRENCIES } from "@/lib/currency";
 import { setDiscreet, useDiscreet } from "@/lib/discreet";
 import { buildHistory, incomeOverview, summarize } from "@/lib/portfolio";
-import { parseImport, savePortfolio, useActiveDepot } from "@/lib/storage";
-import { ALL_DEPOTS_ID } from "@/lib/sync";
+import { parseImport, savePortfolio, useActiveDepot, useDepots } from "@/lib/storage";
+import { ALL_DEPOTS_ID, depotIdOf } from "@/lib/sync";
 import {
   decodeText,
   isImported,
@@ -58,6 +58,8 @@ function Dashboard({ depot }: { depot: Depot }) {
   const portfolio = depot.data;
   /** All depots added up: shown, but transactions and cash are edited in their own depot. */
   const combined = depot.id === ALL_DEPOTS_ID;
+  const depots = useDepots();
+  const depotNames = useMemo(() => new Map(depots.map((d) => [d.id, d.name])), [depots]);
   const { transactions, cash, settings } = portfolio;
   const base = settings.baseCurrency;
   const [refreshKey, setRefreshKey] = useState(0);
@@ -397,6 +399,7 @@ function Dashboard({ depot }: { depot: Depot }) {
             onDelete={combined ? undefined : (id) => setTransactions(transactions.filter((t) => t.id !== id))}
             canDelete={transactions.length + cash.length > 0}
             onDeleteMany={() => void deleteMany()}
+            depotOf={combined ? (t) => depotNames.get(depotIdOf(t.id)) : undefined}
           />
         </div>
       </div>

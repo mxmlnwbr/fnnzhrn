@@ -26,11 +26,14 @@ export function TransactionList({
   onDelete,
   canDelete,
   onDeleteMany,
+  depotOf,
 }: {
   transactions: Transaction[];
   quotes: Record<string, Quote>;
   /** Absent in the combined view, where transactions are shown but not deleted. */
   onDelete?: (id: string) => void;
+  /** Name of the depot a transaction belongs to, shown in the combined view. */
+  depotOf?: (t: Transaction) => string | undefined;
   /** Whether there's anything (transactions or cash accounts) for the bulk delete to remove. */
   canDelete: boolean;
   /** Opens the choice between deleting imported data only or everything. */
@@ -104,6 +107,11 @@ export function TransactionList({
                   <div className="flex items-center gap-2">
                     <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${TYPE_STYLE[t.type]}`}>{t.type}</span>
                     <span className="font-medium">{t.symbol}</span>
+                    {depotOf?.(t) && (
+                      <span className="truncate rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                        {depotOf(t)}
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs tabular-nums text-zinc-500">
                     {t.date}

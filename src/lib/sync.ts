@@ -105,10 +105,16 @@ export function combineDepots(store: DepotStore): Depot {
         categories: allCategories(store),
         targets: combined?.targets ?? {},
       },
+      // `depotIdOf` reads the depot back from these ids.
       transactions: depots.flatMap((d) => d.data.transactions.map((t) => ({ ...t, id: `${t.id}@${d.id}` }))),
       cash: depots.flatMap((d) => d.data.cash.map((a) => ({ ...a, id: `${a.id}@${d.id}`, name: `${a.name} · ${d.name}` }))),
     },
   };
+}
+
+/** The depot an id from the combined view came from. */
+export function depotIdOf(combinedId: string): string {
+  return combinedId.slice(combinedId.lastIndexOf("@") + 1);
 }
 
 /**
