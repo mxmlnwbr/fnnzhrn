@@ -31,6 +31,7 @@ import {
   swissquoteListings,
   tickerCandidates,
 } from "@/lib/swissquote";
+import { isYuhCsv, parseYuhCsv, yuhListings } from "@/lib/yuh";
 import type { CashAccount, Depot, Transaction } from "@/lib/types";
 import { useMarketData } from "@/lib/useMarketData";
 
@@ -135,15 +136,20 @@ function Dashboard({ depot }: { depot: Depot }) {
       const text = decodeText(await file.arrayBuffer());
       let data;
       let result: ImportResult;
-      if (isSwissquoteCsv(text)) {
-        const listings = swissquoteListings(text);
+      const bank = isSwissquoteCsv(text)
+        ? { name: "Swissquote" as const, listings: swissquoteListings, parse: parseSwissquoteCsv }
+        : isYuhCsv(text)
+          ? { name: "Yuh" as const, listings: yuhListings, parse: parseYuhCsv }
+          : null;
+      if (bank) {
+        const listings = bank.listings(text);
         const tickers = await resolveTickers(listings);
-        const parsed = parseSwissquoteCsv(text, tickers ?? {});
+        const parsed = bank.parse(text, tickers ?? {});
         let mode: "keep" | "all" | null = "keep";
         if (transactions.length || cash.length) {
           const manual = removeImported(portfolio);
           mode = await ask(
-            "Import Swissquote file",
+            `Import ${bank.name} file`,
             `The file has ${describeEntries(parsed.transactions, parsed.cash)}. What should happen to what's there now?`,
             [
               {
@@ -171,12 +177,13 @@ function Dashboard({ depot }: { depot: Depot }) {
         data = applyImport(mode === "all" ? { ...portfolio, transactions: [], cash: [] } : portfolio, parsed);
         result = {
           file: file.name,
-          format: "Swissquote CSV",
+          format: `${bank.name} CSV`,
           at: new Date(),
           transactions: parsed.transactions.length,
           cash: parsed.cash.length,
           skipped: Object.values(parsed.skipped).reduce((a, b) => a + b, 0),
           unknown: parsed.unknown,
+          warnings: parsed.warnings,
           securities: listings.map((l) => {
             const key = l.isin || l.symbol;
             return { ...l, ticker: tickers?.[key] ?? tickerCandidates(l)[0], verified: Boolean(tickers?.[key]) };
