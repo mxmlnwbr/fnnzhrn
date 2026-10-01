@@ -109,4 +109,6 @@ export interface DepotStore {
   depots: Depot[];
   /** Settings of the view that adds up all depots; asset classes come from the depots instead. */
   combined?: Omit<Settings, "categories">;
+  /** Ids of deleted depots, so a device still holding one doesn't upload it again. */
+  deletedDepots?: string[];
 }

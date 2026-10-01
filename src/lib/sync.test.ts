@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyDeletions,
   combineDepots,
   depotIdOf,
   EMPTY_PORTFOLIO,
@@ -8,6 +9,7 @@ import {
   mergeStores,
   normalizePortfolio,
   normalizeStore,
+  removeDepot,
   saveCombinedSettings,
 } from "./sync";
 import type { Depot, DepotStore, PortfolioData, Transaction } from "./types";
@@ -131,5 +133,46 @@ describe("saveCombinedSettings", () => {
     const a: Depot = { ...depot("a", []), data: { ...portfolio([]), settings: { baseCurrency: "CHF", categories: { X: "Bonds" } } } };
     const saved = saveCombinedSettings(store(a, depot("b", [])), { baseCurrency: "CHF", categories: { Y: "Gold" } });
     expect(saved.depots.map((d) => d.data.settings.categories)).toEqual([{ Y: "Gold" }, { Y: "Gold" }]);
+  });
+});
+
+describe("removeDepot", () => {
+  it("removes the depot with all its data and remembers it was deleted", () => {
+    const imported = { ...depot("a", []), data: { ...portfolio(["sq-1", "yuh-2", "manual"]), cash: [{ id: "sq-cash-CHF", name: "SQ", currency: "CHF", balance: 1 }] } };
+    const after = removeDepot(store(imported, depot("b", ["x"])), "a", "fresh");
+    expect(after.depots.map((d) => d.id)).toEqual(["b"]);
+    expect(after.deletedDepots).toEqual(["a"]);
+    expect(JSON.stringify(after)).not.toMatch(/sq-1|yuh-2|sq-cash/);
+  });
+
+  it("leaves a fresh empty depot when the last one goes", () => {
+    const after = removeDepot(store(depot("main", ["t"])), "main", "fresh");
+    expect(after.depots).toEqual([{ id: "fresh", name: "Depot 1", data: EMPTY_PORTFOLIO }]);
+  });
+
+  it("drops combined targets for positions no depot has any more", () => {
+    const a = { ...depot("a", []), data: { ...portfolio([]), transactions: [{ ...portfolio(["t"]).transactions[0], symbol: "GONE" }] } };
+    const s = { ...store(a, depot("b", ["t"])), combined: { baseCurrency: "CHF", targets: { GONE: 40, ABC: 60 } } };
+    expect(removeDepot(s, "a", "fresh").combined).toEqual({ baseCurrency: "CHF", targets: { ABC: 60 } });
+  });
+});
+
+describe("deleted depots and sync", () => {
+  it("drops depots deleted on another device before uploading local edits", () => {
+    const remote = { ...store(depot("b", ["x"])), deletedDepots: ["a"] };
+    const kept = applyDeletions(store(depot("a", ["offline"]), depot("b", ["x", "y"])), remote);
+    expect(kept.depots.map((d) => d.id)).toEqual(["b"]);
+    expect(kept.deletedDepots).toEqual(["a"]);
+  });
+
+  it("keeps the deletions when merging, but not over data entered while signed out", () => {
+    const remote = { ...store(depot("b", [])), deletedDepots: ["a", "main"] };
+    const merged = mergeStores(store(depot("main", ["new"])), remote);
+    expect(merged.depots.map((d) => d.id)).toEqual(["b", "main"]);
+    expect(merged.deletedDepots).toEqual(["a"]);
+  });
+
+  it("survives normalizing", () => {
+    expect(normalizeStore({ ...store(depot("b", [])), deletedDepots: ["a"] }).deletedDepots).toEqual(["a"]);
   });
 });

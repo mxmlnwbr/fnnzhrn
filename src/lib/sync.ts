@@ -36,7 +36,10 @@ export function normalizeStore(data: Partial<DepotStore> | Partial<PortfolioData
     );
     if (!depots.length) return EMPTY_STORE;
     const combined = data.combined && typeof data.combined === "object" ? { combined: data.combined } : {};
-    return { version: 2, depots, ...combined };
+    const deleted = Array.isArray(data.deletedDepots)
+      ? { deletedDepots: data.deletedDepots.filter((id): id is string => typeof id === "string") }
+      : {};
+    return { version: 2, depots, ...combined, ...deleted };
   }
   return {
     version: 2,
@@ -65,12 +68,15 @@ const isEmpty = (d: Depot) => d.data.transactions.length === 0 && d.data.cash.le
 
 /**
  * Same as `mergePortfolios` for all depots: depots are matched by id, and local ones the account
- * doesn't have are added unless they're empty.
+ * doesn't have are added unless they're empty. Data entered while signed out is kept even in a
+ * depot the account deleted (new browsers start with the same first depot id), which brings it back.
  */
 export function mergeStores(local: DepotStore, remote: DepotStore): DepotStore {
   const localById = new Map(local.depots.map((d) => [d.id, d]));
   const remoteIds = new Set(remote.depots.map((d) => d.id));
+  const added = local.depots.filter((d) => !remoteIds.has(d.id) && !isEmpty(d));
   const combined = remote.combined ?? local.combined;
+  const deletedDepots = remote.deletedDepots?.filter((id) => !added.some((d) => d.id === id));
   return {
     version: 2,
     depots: [
@@ -78,10 +84,44 @@ export function mergeStores(local: DepotStore, remote: DepotStore): DepotStore {
         const l = localById.get(d.id);
         return l ? { ...d, data: mergePortfolios(l.data, d.data) } : d;
       }),
-      ...local.depots.filter((d) => !remoteIds.has(d.id) && !isEmpty(d)),
+      ...added,
     ],
     ...(combined ? { combined } : {}),
+    ...(deletedDepots?.length ? { deletedDepots } : {}),
   };
+}
+
+/**
+ * Removes a depot with everything in it: transactions (imported or not), cash accounts and settings.
+ * Deleting the last one leaves a fresh empty depot, and the combined view drops targets for
+ * positions no depot has any more.
+ */
+export function removeDepot(store: DepotStore, id: string, freshId: string): DepotStore {
+  const rest = store.depots.filter((d) => d.id !== id);
+  const depots = rest.length ? rest : [{ id: freshId, name: FIRST_DEPOT_NAME, data: EMPTY_PORTFOLIO }];
+  const symbols = new Set(depots.flatMap((d) => d.data.transactions.map((t) => t.symbol)));
+  const targets = store.combined?.targets;
+  const combined = store.combined && {
+    ...store.combined,
+    ...(targets ? { targets: Object.fromEntries(Object.entries(targets).filter(([s]) => symbols.has(s))) } : {}),
+  };
+  return {
+    ...store,
+    depots,
+    ...(combined ? { combined } : {}),
+    deletedDepots: [...new Set([...(store.deletedDepots ?? []), id])],
+  };
+}
+
+/**
+ * Takes over the account's deletions before this device uploads its own copy, so offline edits
+ * don't bring back a depot deleted elsewhere.
+ */
+export function applyDeletions(local: DepotStore, remote: DepotStore): DepotStore {
+  const deleted = new Set([...(local.deletedDepots ?? []), ...(remote.deletedDepots ?? [])]);
+  if (!deleted.size) return local;
+  const depots = local.depots.filter((d) => !deleted.has(d.id));
+  return { ...local, depots: depots.length ? depots : remote.depots, deletedDepots: [...deleted] };
 }
 
 /** Asset class overrides of all depots together; where they disagree, the later depot wins. */
