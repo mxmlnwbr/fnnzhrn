@@ -18,13 +18,15 @@ export interface ImportedSecurity {
 
 export interface ImportResult {
   file: string;
-  format: "Swissquote CSV" | "JSON";
+  format: "Swissquote CSV" | "Yuh CSV" | "JSON";
   at: Date;
   transactions: number;
   cash: number;
   skipped: number;
   unknown: Record<string, { count: number; example: string }>;
   securities: ImportedSecurity[];
+  /** Signs that the file doesn't cover everything. */
+  warnings?: string[];
   /** The ticker check couldn't reach the server, so every ticker is a guess. */
   resolveFailed: boolean;
 }
@@ -59,6 +61,7 @@ export function ImportReport({
   const unknown = Object.entries(result.unknown);
 
   const issues: string[] = [];
+  issues.push(...(result.warnings ?? []));
   if (result.resolveFailed) issues.push("Couldn't verify tickers with Yahoo during import; tickers are best guesses.");
   if (!loading && error) issues.push(`Price update failed: ${error}`);
   for (const [type, u] of unknown) issues.push(`Row type "${type}" isn't supported yet (${u.count}×), so those rows were not imported.`);
@@ -123,6 +126,9 @@ export function ImportReport({
           </button>
         </div>
       </div>
+      {result.format === "Yuh CSV" && (
+        <p className="mt-2 text-xs text-zinc-500">Yuh exports don&apos;t include balances, so add your Yuh cash under Cash by hand.</p>
+      )}
       {status === "issues" && (
         <>
           <ul className="mt-3 list-disc space-y-1 pl-5 text-zinc-700 dark:text-zinc-300">

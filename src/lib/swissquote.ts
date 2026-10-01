@@ -81,6 +81,8 @@ export interface SwissquoteImport {
   skipped: Record<string, number>;
   /** Skipped rows of a type the importer doesn't know, with the first such row as an example. */
   unknown: Record<string, { count: number; example: string }>;
+  /** Signs that the file doesn't cover everything, e.g. shares held from before it starts. */
+  warnings?: string[];
 }
 
 /** Bank exports are often Windows-1252 rather than UTF-8. */
@@ -98,7 +100,8 @@ export function isSwissquoteCsv(text: string): boolean {
   return /^(Datum;Auftrag #|Date;Order #);/.test(text);
 }
 
-function splitLine(line: string): string[] {
+/** Splits a semicolon-separated CSV line, honouring quotes. */
+export function splitLine(line: string): string[] {
   const cells: string[] = [];
   let cell = "";
   let quoted = false;
@@ -118,7 +121,7 @@ function splitLine(line: string): string[] {
   return cells.map((s) => s.trim());
 }
 
-function num(s: string | undefined): number {
+export function num(s: string | undefined): number {
   const n = Number((s ?? "").replace(/'/g, ""));
   return Number.isFinite(n) ? n : 0;
 }
@@ -172,9 +175,12 @@ function cashBalances(rows: Row[]): CashAccount[] {
     .sort((a, b) => a.currency.localeCompare(b.currency));
 }
 
-/** Whether a transaction came from a Swissquote import rather than manual entry. */
+/** Id prefixes of transactions brought in by an import: Swissquote's, then Yuh's. */
+const IMPORTED_PREFIXES = [ID_PREFIX, "yuh-"];
+
+/** Whether a transaction came from an import (Swissquote or Yuh) rather than manual entry. */
 export function isImported(t: Transaction): boolean {
-  return t.id.startsWith(ID_PREFIX);
+  return IMPORTED_PREFIXES.some((p) => t.id.startsWith(p));
 }
 
 /** Everything an earlier import brought in goes; entries made by hand stay. */
@@ -193,7 +199,7 @@ export function applyImport(data: PortfolioData, parsed: Pick<SwissquoteImport, 
 }
 
 /** FNV-1a, so importing the same export twice yields the same ids. */
-function hash(s: string): string {
+export function hash(s: string): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
   return (h >>> 0).toString(36);
@@ -225,7 +231,12 @@ export function tickerCandidates({ symbol, isin, currency }: Listing): string[] 
   if (isCrypto(isin)) return [`${symbol}-USD`];
   if (/^(CH|LI)/.test(isin)) return [`${symbol}.SW`];
   // North American listings under the plain ticker; a Canadian share bought in EUR is a Frankfurt line.
-  if (!isin || isin.startsWith("US") || (isin.startsWith("CA") && currency === "USD")) return [symbol];
+  if (isin.startsWith("US") || (isin.startsWith("CA") && currency === "USD")) return [symbol];
+  // Without an ISIN (e.g. Yuh exports) only the trade currency hints at the exchange.
+  if (!isin) {
+    const first = currency === "USD" || !currency ? [""] : (SUFFIXES[currency] ?? []);
+    return [...new Set([...first, "", ".SW"])].map((suffix) => `${symbol}${suffix}`);
+  }
   const first = SUFFIXES[currency] ?? [".SW"];
   const rest = [".SW", ".DE", ".L", ".PA", ".AS", ".MI", ".F", ""];
   return [...new Set([...first, ...rest])].map((suffix) => `${symbol}${suffix}`);

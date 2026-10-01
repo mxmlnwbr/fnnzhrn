@@ -104,7 +104,7 @@ async function quoteMany(symbols: string[]): Promise<Record<string, Quote>> {
 
 /**
  * Yahoo ticker per listing (keyed by ISIN, or symbol without one). Tries the likely exchange
- * suffixes first, then whatever Yahoo's search finds for the ISIN (for crypto: the coin, which
+ * suffixes first, then whatever Yahoo's search finds for the ISIN, or the name when there is none (for crypto: the coin, which
  * Yahoo sometimes lists with a number, e.g. UNI7083-USD). Listings nothing matches are
  * left out, so the caller falls back to its best guess.
  */
@@ -116,21 +116,23 @@ export async function resolveTickers(listings: Listing[]): Promise<Record<string
   for (const l of listings) {
     const ticker = pickTicker(candidates.get(l.isin || l.symbol)!, quotes, l.currency);
     if (ticker) out[l.isin || l.symbol] = ticker;
-    else if (l.isin) unresolved.push(l);
+    else if (l.isin || l.name) unresolved.push(l);
   }
 
   const found = await Promise.all(
     unresolved.map((l) => {
       const coin = isCrypto(l.isin) && new RegExp(`^${l.symbol.replace(/[^A-Z0-9]/gi, "")}\\d*-USD$`, "i");
-      return searchSymbols(coin ? `${l.symbol}-USD` : l.isin)
-        .then((r) => r.map((q) => q.symbol).filter((s) => !coin || coin.test(s)))
+      // A search by name can find other securities, so only the listing's own symbol on any exchange counts.
+      const sameSymbol = (s: string) => s.split(".")[0].toUpperCase() === l.symbol.toUpperCase();
+      return searchSymbols(coin ? `${l.symbol}-USD` : l.isin || l.name!)
+        .then((r) => r.map((q) => q.symbol).filter((s) => (coin ? coin.test(s) : l.isin || sameSymbol(s))))
         .catch(() => [] as string[]);
     }),
   );
   const searchQuotes = await quoteMany([...new Set(found.flat())]);
   unresolved.forEach((l, i) => {
     const ticker = pickTicker(found[i], searchQuotes, l.currency);
-    if (ticker) out[l.isin] = ticker;
+    if (ticker) out[l.isin || l.symbol] = ticker;
   });
   return out;
 }

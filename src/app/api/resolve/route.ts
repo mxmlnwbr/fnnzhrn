@@ -8,7 +8,12 @@ export async function POST(request: NextRequest) {
   if (!Array.isArray(body)) return Response.json({ error: "Expected a list of listings" }, { status: 400 });
   const listings = body
     .filter((l) => l && typeof l.symbol === "string" && l.symbol)
-    .map((l) => ({ symbol: l.symbol, isin: String(l.isin ?? ""), currency: String(l.currency ?? "") }))
+    .map((l) => ({
+      symbol: l.symbol,
+      name: typeof l.name === "string" ? l.name.slice(0, 100) : undefined,
+      isin: String(l.isin ?? ""),
+      currency: String(l.currency ?? ""),
+    }))
     .slice(0, 500);
   try {
     return Response.json(await resolveTickers(listings));
