@@ -7,9 +7,11 @@ import {
   combineDepots,
   EMPTY_PORTFOLIO,
   EMPTY_STORE,
+  applyDeletions,
   mergeStores,
   normalizePortfolio,
   normalizeStore,
+  removeDepot,
   saveCombinedSettings,
 } from "./sync";
 import type { Depot, DepotStore, PortfolioData } from "./types";
@@ -139,10 +141,9 @@ export function renameDepot(id: string, name: string) {
   save({ ...read(), depots: read().depots.map((d) => (d.id === id ? { ...d, name } : d)) });
 }
 
-/** Removes a depot with everything in it. The last depot can't be deleted, only emptied. */
+/** Removes a depot with everything in it, imported data included; see `removeDepot`. */
 export function deleteDepot(id: string) {
-  const depots = read().depots.filter((d) => d.id !== id);
-  if (depots.length) save({ ...read(), depots });
+  save(removeDepot(read(), id, crypto.randomUUID()));
 }
 
 async function push() {
@@ -186,7 +187,14 @@ async function reconcile() {
       writeLocal(merged, needsUpload);
       if (needsUpload) return await push();
     } else if (getItem(DIRTY_KEY) || !remote) {
-      // Unsaved local edits (e.g. made offline) win over the server copy.
+      // Unsaved local edits (e.g. made offline) win over the server copy, except for depots deleted there.
+      if (remote) {
+        const kept = applyDeletions(local, remote);
+        if (kept !== local) {
+          revision++;
+          writeLocal(kept, true);
+        }
+      }
       return await push();
     } else if (JSON.stringify(remote) !== JSON.stringify(local)) {
       revision++;

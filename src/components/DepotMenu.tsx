@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createDepot, deleteDepot, renameDepot, selectDepot, useActiveDepot, useDepots } from "@/lib/storage";
+import { isImported, isImportedCash } from "@/lib/swissquote";
 import { ALL_DEPOTS_ID } from "@/lib/sync";
 import { useChoice } from "./ChoiceDialog";
 import { buttonClass, inputClass, primaryButtonClass } from "./ui";
@@ -57,14 +58,21 @@ export function DepotMenu() {
   async function remove() {
     close();
     const { transactions, cash } = current.data;
-    const ok = await ask(`Delete “${current.name}”`, "This can't be undone, so consider exporting it first.", [
-      {
-        value: true,
-        label: "Delete depot",
-        description: `Removes the depot with its ${transactions.length} transaction${transactions.length === 1 ? "" : "s"} and ${cash.length} cash account${cash.length === 1 ? "" : "s"}.`,
-        tone: "danger" as const,
-      },
-    ]);
+    const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+    const imported = transactions.filter(isImported).length + cash.filter(isImportedCash).length;
+    const last = depots.length === 1;
+    const ok = await ask(
+      `Delete “${current.name}”`,
+      `This can't be undone, so consider exporting it first.${last ? " It's your only depot, so you start over with an empty one." : ""}`,
+      [
+        {
+          value: true,
+          label: "Delete depot and all its data",
+          description: `Removes ${plural(transactions.length, "transaction")} and ${plural(cash.length, "cash account")}${imported ? ` (${imported} of them imported)` : ""}, along with the depot's settings and targets.`,
+          tone: "danger" as const,
+        },
+      ],
+    );
     if (ok) deleteDepot(current.id);
   }
 
@@ -138,7 +146,7 @@ export function DepotMenu() {
               <div className="flex flex-col">
                 <MenuItem onClick={() => edit("new")}>New depot</MenuItem>
                 {!combined && <MenuItem onClick={() => edit("rename")}>Rename “{current.name}”</MenuItem>}
-                {!combined && depots.length > 1 && (
+                {!combined && (
                   <MenuItem danger onClick={() => void remove()}>
                     Delete “{current.name}”
                   </MenuItem>
