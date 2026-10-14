@@ -66,6 +66,9 @@ function Dashboard({ depot }: { depot: Depot }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  /** The transaction open in the form; gone once it's deleted (here or on another device). */
+  const editing = transactions.find((t) => t.id === editingId);
   const [choiceDialog, ask] = useChoice();
   const importedCount = transactions.filter(isImported).length + cash.filter(isImportedCash).length;
   const manualCount = transactions.length + cash.length - importedCount;
@@ -399,11 +402,24 @@ function Dashboard({ depot }: { depot: Depot }) {
         </div>
         <div className="min-w-0 space-y-4">
           <CashAccounts accounts={cash} fx={market.fx} currency={base} onChange={combined ? undefined : setCash} />
-          {!combined && <TransactionForm currency={base} onAdd={(t) => setTransactions([...transactions, t])} />}
+          {!combined && (
+            <TransactionForm
+              key={editing?.id ?? "new"}
+              currency={base}
+              editing={editing}
+              onCancel={() => setEditingId(null)}
+              onAdd={(t) => {
+                setTransactions(editing ? transactions.map((x) => (x.id === t.id ? t : x)) : [...transactions, t]);
+                setEditingId(null);
+              }}
+            />
+          )}
           <TransactionList
             transactions={transactions}
             quotes={market.quotes}
             onDelete={combined ? undefined : (id) => setTransactions(transactions.filter((t) => t.id !== id))}
+            onEdit={combined ? undefined : (t) => setEditingId(t.id)}
+            editingId={editing?.id}
             canDelete={transactions.length + cash.length > 0}
             onDeleteMany={() => void deleteMany()}
             depotOf={combined ? (t) => depotNames.get(depotIdOf(t.id)) : undefined}
