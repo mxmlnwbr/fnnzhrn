@@ -11,6 +11,7 @@ import { type ImportResult, ImportReport } from "@/components/ImportReport";
 import { DividendCard, FeeCard } from "@/components/IncomeCards";
 import { RefreshIcon, SplashLoader, TopProgress } from "@/components/Loading";
 import { PerformanceChart } from "@/components/PerformanceChart";
+import { SignInScreen } from "@/components/SignIn";
 import { SummaryCards } from "@/components/SummaryCards";
 import { TransactionForm } from "@/components/TransactionForm";
 import { TransactionList } from "@/components/TransactionList";
@@ -18,7 +19,7 @@ import { buttonClass } from "@/components/ui";
 import { BASE_CURRENCIES } from "@/lib/currency";
 import { setDiscreet, useDiscreet } from "@/lib/discreet";
 import { buildHistory, incomeOverview, summarize } from "@/lib/portfolio";
-import { parseImport, savePortfolio, useActiveDepot, useDepots } from "@/lib/storage";
+import { parseImport, savePortfolio, useActiveDepot, useDepots, useSyncState } from "@/lib/storage";
 import { ALL_DEPOTS_ID, depotIdOf } from "@/lib/sync";
 import {
   decodeText,
@@ -50,7 +51,17 @@ async function resolveTickers(listings: ReturnType<typeof swissquoteListings>): 
 }
 
 export default function Home() {
+  const sync = useSyncState();
   const depot = useActiveDepot();
+  if (sync.status === "loading") {
+    return (
+      <main className="flex flex-1">
+        <SplashLoader />
+      </main>
+    );
+  }
+  // The tracker only opens for a signed-in account; without sign-in configured it stays locked.
+  if (sync.status !== "signed-in") return <SignInScreen configured={sync.status === "signed-out"} />;
   // Switching depots starts the dashboard afresh, so no prices or import report carry over.
   return <Dashboard key={depot.id} depot={depot} />;
 }
@@ -316,12 +327,12 @@ function Dashboard({ depot }: { depot: Depot }) {
           </p>
         </div>
         <div className="hidden flex-wrap items-center gap-2 sm:flex">
-          <AccountMenu />
           {discreetButton}
           {currencySelect}
           {refreshButton}
           {exportButton}
           {!combined && importButton}
+          <AccountMenu />
         </div>
         <div className="flex shrink-0 items-center gap-2 sm:hidden">
           {discreetButton}
@@ -334,6 +345,7 @@ function Dashboard({ depot }: { depot: Depot }) {
           >
             <MenuIcon open={menuOpen} />
           </button>
+          <AccountMenu />
         </div>
         {menuOpen && (
           <nav
@@ -348,10 +360,6 @@ function Dashboard({ depot }: { depot: Depot }) {
               {refreshButton}
               {exportButton}
               {!combined && importButton}
-            </div>
-            {/* Its popover opens to the right, so keep it on the left edge. */}
-            <div className="empty:hidden">
-              <AccountMenu />
             </div>
           </nav>
         )}

@@ -43,7 +43,7 @@ let cache: DepotStore | null = null;
 let activeId: string | null = null;
 /** The combined view of the store it was built from, so it keeps its identity between renders. */
 let combinedCache: { store: DepotStore; depot: Depot } | null = null;
-let sync: SyncState = { status: "disabled" };
+let sync: SyncState = ENABLED ? { status: "loading" } : { status: "disabled" };
 let userId: string | null = null;
 let started = false;
 let pushTimer: ReturnType<typeof setTimeout> | undefined;
@@ -277,7 +277,6 @@ function start() {
     // Edits waiting for Supabase come along with the copy; the merge at sign-in uploads them.
     setItem(DIRTY_KEY, null);
   }
-  sync = { status: "loading" };
   void checkSession();
 
   document.addEventListener("visibilitychange", () => {
@@ -315,10 +314,11 @@ export function useDepots(): Depot[] {
   return useSyncExternalStore(subscribe, () => read().depots, () => EMPTY.depots);
 }
 
-const DISABLED: SyncState = { status: "disabled" };
+const LOADING: SyncState = { status: "loading" };
 
+/** Server-rendered as loading, so the page never flashes the sign-in screen or the dashboard before the session is known. */
 export function useSyncState(): SyncState {
-  return useSyncExternalStore(subscribe, () => sync, () => DISABLED);
+  return useSyncExternalStore(subscribe, () => sync, () => LOADING);
 }
 
 export async function sendLoginLink(email: string) {

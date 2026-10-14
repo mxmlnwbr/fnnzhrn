@@ -14,8 +14,8 @@ A personal dashboard for tracking the performance of your share portfolio and yo
 - **Summary cards** show net worth (shares plus cash), today's change, unrealized P/L, and total return (unrealized + realized + dividends).
 - The **performance chart** plots daily market value against net invested capital, with 1M / 3M / YTD / 1Y / All ranges. The period return excludes deposits and uses the simple Dietz method.
 - **Multi-currency**: pick CHF, EUR, USD or GBP as the base currency. Positions are converted at current FX rates, and history at historical FX rates. LSE prices quoted in pence (GBp) are normalised to GBP.
-- **Sync across devices** (optional): sign in with your email (a sign-in link, no password) and your depots are saved to your account in a Neon Postgres database and load on every device you sign in on. The browser keeps a local copy, so the app opens instantly and edits made offline upload later.
-- **Local-first storage**: without sign-in, your transactions stay in your browser's `localStorage`. Use **Export** / **Import** to back them up as JSON.
+- **Sign-in required**: the tracker only opens once you sign in with your email (a sign-in link, no password). The API routes check the session too, so prices, search and imports don't work for signed-out visitors.
+- **Sync across devices**: your depots are saved to your account in a Neon Postgres database and load on every device you sign in on. The browser keeps a local copy, so the app opens instantly and edits made offline upload later. Use **Export** / **Import** to back them up as JSON.
 
 ## Getting started
 
@@ -42,7 +42,7 @@ Open http://localhost:3000.
 ```
 src/
   app/
-    page.tsx               Dashboard (client component)
+    page.tsx               Dashboard (client component), shown only when signed in
     api/quotes/route.ts    Current quotes   GET /api/quotes?symbols=AAPL,NESN.SW
     api/history/route.ts   Daily closes     GET /api/history?symbols=...&from=YYYY-MM-DD
     api/search/route.ts    Symbol search    GET /api/search?q=nestle
@@ -73,7 +73,7 @@ Yahoo Finance is called only from the server-side API routes, because the librar
 
 ## Deploying
 
-The app is a standard Next.js project and deploys to Vercel as-is. Without the sync settings below it runs in local-only mode: the sign-in button is hidden, and your data never leaves your browser, apart from the ticker symbols sent to fetch prices.
+The app is a standard Next.js project and deploys to Vercel as-is. It needs the sign-in settings below: without them it stays locked on a screen saying sign-in isn't set up.
 
 ### Custom domain
 
@@ -83,7 +83,7 @@ The app runs at `depot.fnnzhrn.ch`:
 2. At the registrar for `fnnzhrn.ch`, add the DNS record Vercel shows (a `CNAME` for `depot` pointing to Vercel).
 3. Set `BETTER_AUTH_URL` to `https://depot.fnnzhrn.ch` (see below), so sign-in links open the new domain.
 
-## Sync across devices
+## Sign-in and sync
 
 Sign-in and sync need three services, all with free tiers that are plenty for personal use: [Neon](https://neon.tech) (Postgres) stores your depots, [Better Auth](https://better-auth.com) handles sign-in inside the app, and [Resend](https://resend.com) sends the sign-in emails. One-time setup:
 
@@ -91,13 +91,13 @@ Sign-in and sync need three services, all with free tiers that are plenty for pe
 2. **Create the tables.** In the Neon console, open **SQL Editor**, paste [`db/schema.sql`](db/schema.sql) and run it (or `psql "$DATABASE_URL" -f db/schema.sql`). It's safe to run again.
 3. **Set up email.** Create a Resend account and an API key, and add it as `RESEND_API_KEY`. To send from your own address, verify `fnnzhrn.ch` under **Domains** in Resend and set `EMAIL_FROM`, e.g. `Depot <login@fnnzhrn.ch>`. Without it, Resend's test sender is used, which only delivers to the email of your Resend account. That's enough if you're the only user.
 4. **Add the auth settings.** Set `BETTER_AUTH_SECRET` to a random value (`openssl rand -base64 32`) and `BETTER_AUTH_URL` to `https://depot.fnnzhrn.ch`.
-5. **Redeploy** on Vercel so the new variables are built in. The sign-in button only appears when `DATABASE_URL`, `BETTER_AUTH_SECRET` and `RESEND_API_KEY` are all set.
+5. **Redeploy** on Vercel so the new variables are built in. The app only opens when `DATABASE_URL`, `BETTER_AUTH_SECRET` and `RESEND_API_KEY` are all set.
 
 For local development, copy `.env.example` to `.env.local` and fill in the same values, with `BETTER_AUTH_URL=http://localhost:3000`.
 
 How sync behaves:
 
-- The first time you sign in on a browser, anything you entered there while signed out is merged into your account (matched by depot, transaction and cash account id).
+- The first time you sign in on a browser, anything left there from before sign-in was required (or unsaved when you signed out) is merged into your account (matched by depot, transaction and cash account id).
 - All depots sync. Which depot is shown is remembered per device.
 - Every change uploads right away. When you come back to the tab, it pulls the latest version, so edits from your phone show up on your computer.
 - If both devices change the portfolio while one is offline, the last one to upload wins.

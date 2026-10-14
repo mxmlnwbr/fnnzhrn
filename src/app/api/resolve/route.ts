@@ -1,9 +1,12 @@
 import type { NextRequest } from "next/server";
+import { requireUser } from "@/lib/auth";
 import type { Listing } from "@/lib/swissquote";
 import { resolveTickers } from "@/lib/yahoo";
 
 /** Maps imported securities to Yahoo tickers that actually have a price. Body: `Listing[]`. */
 export async function POST(request: NextRequest) {
+  const user = await requireUser(request);
+  if (user instanceof Response) return user;
   const body = (await request.json().catch(() => null)) as Listing[] | null;
   if (!Array.isArray(body)) return Response.json({ error: "Expected a list of listings" }, { status: 400 });
   const listings = body
