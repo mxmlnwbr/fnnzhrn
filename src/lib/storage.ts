@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { getSupabase } from "./supabase";
+import { authClient } from "./auth-client";
 import {
   ALL_DEPOTS_ID,
   combineDepots,
@@ -18,12 +18,19 @@ import type { Depot, DepotStore, PortfolioData } from "./types";
 
 const KEY = "portfolio-tracker:v1";
 /** Id of the account the local copy belongs to; absent for signed-out data. */
-const OWNER_KEY = "portfolio-tracker:v1:owner";
+const OWNER_KEY = "portfolio-tracker:v1:account";
+/** Email of that account, to show while the server can't be reached. */
+const EMAIL_KEY = "portfolio-tracker:v1:email";
+/**
+ * Owner key from when sync ran on Supabase. Accounts there have other ids, so a copy it marks is
+ * treated as signed-out data and merged into the new account at sign-in instead of being dropped.
+ */
+const SUPABASE_OWNER_KEY = "portfolio-tracker:v1:owner";
+const ENABLED = process.env.NEXT_PUBLIC_SYNC_ENABLED === "1";
 /** Set while the local copy has changes the server hasn't confirmed yet. */
 const DIRTY_KEY = "portfolio-tracker:v1:dirty";
 /** Depot shown on this device; deliberately not synced, so each device remembers its own. */
 const ACTIVE_KEY = "portfolio-tracker:v1:active";
-const TABLE = "portfolios";
 const EMPTY = EMPTY_STORE;
 
 export type SyncState =
@@ -146,25 +153,37 @@ export function deleteDepot(id: string) {
   save(removeDepot(read(), id, crypto.randomUUID()));
 }
 
-async function push() {
-  const sb = getSupabase();
-  const uid = userId;
-  if (!sb || !uid) return;
-  const rev = revision;
-  setSync({ syncing: true });
-  const { error } = await sb
-    .from(TABLE)
-    .upsert({ user_id: uid, data: read(), updated_at: new Date().toISOString() });
-  if (uid !== userId) return;
-  if (!error && rev === revision) setItem(DIRTY_KEY, null);
-  setSync({ syncing: false, error: error ? error.message : null });
+/** Calls the portfolio API, turning failures (including a dropped session) into errors. */
+async function api(init?: RequestInit): Promise<{ data?: unknown }> {
+  const res = await fetch("/api/portfolio", { ...init, headers: { "Content-Type": "application/json" } });
+  const body = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    // The session ended (signed out elsewhere or expired): hand over to the signed-out state.
+    setTimeout(() => void checkSession(), 0);
+  }
+  if (!res.ok) throw new Error(body.error ?? `Request failed: ${res.status}`);
+  return body;
 }
 
-async function fetchRemote(uid: string): Promise<DepotStore | null> {
-  const sb = getSupabase()!;
-  const { data, error } = await sb.from(TABLE).select("data").eq("user_id", uid).maybeSingle();
-  if (error) throw error;
-  return data ? normalizeStore(data.data as DepotStore | PortfolioData) : null;
+async function push() {
+  const uid = userId;
+  if (!uid) return;
+  const rev = revision;
+  setSync({ syncing: true });
+  let error: string | null = null;
+  try {
+    await api({ method: "PUT", body: JSON.stringify({ data: read() }) });
+  } catch (e) {
+    error = (e as Error).message;
+  }
+  if (uid !== userId) return;
+  if (!error && rev === revision) setItem(DIRTY_KEY, null);
+  setSync({ syncing: false, error });
+}
+
+async function fetchRemote(): Promise<DepotStore | null> {
+  const { data } = await api();
+  return data ? normalizeStore(data as DepotStore | PortfolioData) : null;
 }
 
 /** Brings the local copy and the account in line after sign-in, on load and when the tab regains focus. */
@@ -173,7 +192,7 @@ async function reconcile() {
   if (!uid) return;
   setSync({ syncing: true });
   try {
-    const remote = await fetchRemote(uid);
+    const remote = await fetchRemote();
     if (uid !== userId) return;
     const local = read();
     const owner = getItem(OWNER_KEY);
@@ -211,6 +230,7 @@ function onSignedOut() {
   clearTimeout(pushTimer);
   if (getItem(OWNER_KEY)) {
     setItem(OWNER_KEY, null);
+    setItem(EMAIL_KEY, null);
     // Keep edits that never reached the server; they merge back in at the next sign-in.
     if (!getItem(DIRTY_KEY)) writeLocal(EMPTY, false);
   }
@@ -218,29 +238,53 @@ function onSignedOut() {
   notify();
 }
 
+function signedIn(id: string, email: string) {
+  // Already in sync with this account; a failed (e.g. offline) state reconciles again.
+  if (id === userId && sync.status === "signed-in" && !sync.error) return;
+  userId = id;
+  setItem(EMAIL_KEY, email);
+  sync = { status: "signed-in", email, syncing: true, error: null };
+  notify();
+  void reconcile();
+}
+
+/** Picks up sign-ins and sign-outs, including ones from another tab or device. */
+async function checkSession() {
+  const { data, error } = await authClient.getSession().catch((e: Error) => ({ data: null, error: e }));
+  if (error) {
+    // Server unreachable (e.g. offline): stay with the account this copy belongs to, so nothing is cleared.
+    const owner = getItem(OWNER_KEY);
+    if (owner) {
+      userId = owner;
+      sync = { status: "signed-in", email: getItem(EMAIL_KEY) ?? "", syncing: false, error: error.message || "Server unreachable" };
+      notify();
+    } else if (sync.status === "loading") {
+      sync = { status: "signed-out" };
+      notify();
+    }
+    return;
+  }
+  if (data?.user) signedIn(data.user.id, data.user.email);
+  else if (sync.status !== "signed-out") onSignedOut();
+}
+
 function start() {
   if (started) return;
   started = true;
-  const sb = getSupabase();
-  if (!sb) return;
+  if (!ENABLED) return;
+  if (getItem(SUPABASE_OWNER_KEY)) {
+    setItem(SUPABASE_OWNER_KEY, null);
+    // Edits waiting for Supabase come along with the copy; the merge at sign-in uploads them.
+    setItem(DIRTY_KEY, null);
+  }
   sync = { status: "loading" };
-
-  sb.auth.onAuthStateChange((_event, session) => {
-    const user = session?.user;
-    if (!user) {
-      if (sync.status !== "signed-out") onSignedOut();
-      return;
-    }
-    if (user.id === userId) return;
-    userId = user.id;
-    sync = { status: "signed-in", email: user.email ?? "", syncing: true, error: null };
-    notify();
-    // Supabase calls made inside this callback can deadlock, so run after it returns.
-    setTimeout(() => void reconcile(), 0);
-  });
+  void checkSession();
 
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && sync.status === "signed-in" && !sync.syncing) void reconcile();
+    if (document.visibilityState !== "visible" || (sync.status === "signed-in" && sync.syncing)) return;
+    // A known session is re-checked by the sync itself (a 401 signs out); otherwise look for a new one.
+    if (sync.status === "signed-in" && userId) void reconcile();
+    else void checkSession();
   });
 }
 
@@ -278,23 +322,22 @@ export function useSyncState(): SyncState {
 }
 
 export async function sendLoginLink(email: string) {
-  const { error } = await getSupabase()!.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: window.location.origin },
-  });
-  if (error) throw error;
+  const { error } = await authClient.signIn.magicLink({ email, callbackURL: "/" });
+  if (error) throw new Error(error.message || "Couldn't send the sign-in link");
 }
 
 export async function signOut() {
-  const sb = getSupabase();
-  if (!sb) return;
+  if (!ENABLED) return;
   clearTimeout(pushTimer);
   if (getItem(DIRTY_KEY)) await push();
-  await sb.auth.signOut();
+  await authClient.signOut();
+  onSignedOut();
 }
 
 export async function retrySync() {
-  await reconcile();
+  await checkSession();
+  // A recovered session already started syncing; otherwise sync again now.
+  if (sync.status === "signed-in" && !sync.syncing) await reconcile();
 }
 
 export function parseImport(text: string): PortfolioData {
