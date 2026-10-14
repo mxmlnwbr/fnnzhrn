@@ -222,3 +222,16 @@ describe("replacing imported data", () => {
     expect(next.cash).toEqual([manualCash, newCash]);
   });
 });
+
+describe("custody fees", () => {
+  it("imports Depotgebühren as custody fees in the account currency", () => {
+    const { transactions, skipped } = parseSwissquoteCsv(
+      csv("31-12-2025 00:00:00;00000000;Depotgebühren;;;;1.0;45.00;0.00;0.00;-45.00;CHF;-45.00;955.00;CHF"),
+    );
+    expect(transactions.map((t) => ({ ...t, id: undefined }))).toEqual([
+      { id: undefined, symbol: "", type: "fee", date: "2025-12-31", quantity: 0, price: 45, fees: 0, currency: "CHF" },
+    ]);
+    expect(transactions.every(isImported)).toBe(true);
+    expect(skipped).toEqual({});
+  });
+});

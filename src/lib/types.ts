@@ -1,4 +1,5 @@
-export type TransactionType = "buy" | "sell" | "dividend";
+/** A fee is a custody fee (Depotgebühr): charged for the account, not for a position. */
+export type TransactionType = "buy" | "sell" | "dividend" | "fee";
 
 export interface Transaction {
   id: string;
@@ -8,10 +9,12 @@ export interface Transaction {
   date: string;
   /** Number of shares (0 for dividends). */
   quantity: number;
-  /** Price per share for buy/sell, total amount for dividends. In the instrument's currency. */
+  /** Price per share for buy/sell, total amount for dividends and custody fees. In the instrument's currency. */
   price: number;
   fees: number;
   note?: string;
+  /** Currency of a custody fee, which has no instrument (its symbol is empty). */
+  currency?: string;
 }
 
 export interface Quote {
@@ -62,7 +65,9 @@ export interface PortfolioSummary {
   unrealizedPL: number;
   realizedPL: number;
   dividends: number;
+  /** Trading fees. */
   fees: number;
+  custodyFees: number;
   totalReturn: number;
   totalReturnPercent: number;
   dayChange: number;

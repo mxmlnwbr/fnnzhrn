@@ -56,7 +56,9 @@ export function SummaryCards({ summary, currency }: { summary: PortfolioSummary;
       <Stat
         label="Total return"
         value={m(summary.totalReturn)}
-        sub={`${formatPercent(summary.totalReturnPercent)} · realized ${m(summary.realizedPL)} · dividends ${m(summary.dividends)}`}
+        sub={`${formatPercent(summary.totalReturnPercent)} · realized ${m(summary.realizedPL)} · dividends ${m(summary.dividends)}${
+          summary.custodyFees ? ` · custody fees ${m(-summary.custodyFees)}` : ""
+        }`}
         tone={summary.totalReturn}
       />
     </div>

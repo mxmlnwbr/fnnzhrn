@@ -399,7 +399,7 @@ function Dashboard({ depot }: { depot: Depot }) {
         </div>
         <div className="min-w-0 space-y-4">
           <CashAccounts accounts={cash} fx={market.fx} currency={base} onChange={combined ? undefined : setCash} />
-          {!combined && <TransactionForm onAdd={(t) => setTransactions([...transactions, t])} />}
+          {!combined && <TransactionForm currency={base} onAdd={(t) => setTransactions([...transactions, t])} />}
           <TransactionList
             transactions={transactions}
             quotes={market.quotes}

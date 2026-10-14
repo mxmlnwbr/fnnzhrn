@@ -28,6 +28,8 @@ const DIVIDEND = new Set(["Dividende", "Dividend", "Capital Gain", "Kapitalrück
 const INCOMING = new Set(["Titeleingang", "Security Receipt", "Crypto Deposit", "Ausgabe von Anrechten", "Rights Issue"]);
 /** Shares or coins leaving without a trade; they leave at cost unless the row says otherwise. */
 const OUTGOING = new Set(["Titelausgang", "Security Delivery", "Crypto Withdrawal"]);
+/** The bank's charge for keeping the account, booked as a custody fee. */
+const CUSTODY_FEE = "Depotgebühren";
 /** Written off as worthless (e.g. lapsed subscription rights): a sale at zero. */
 const WRITE_OFF = new Set(["Wertlose Ausbuchung", "Worthless Write-off"]);
 /**
@@ -42,7 +44,6 @@ const IGNORED = new Set([
   "Forex-Belastung",
   "Fx-Gutschrift Comp.",
   "Fx-Belastung Comp.",
-  "Depotgebühren",
   "Zinsen auf Einlagen",
   "Zinsen auf Belastungen",
   "Spesen Steuerauszug",
@@ -67,6 +68,8 @@ interface Row {
   quantity: number;
   price: number;
   costs: number;
+  /** Net amount, negative for money going out. */
+  net: number;
   currency: string;
   /** Account balance after this row (raw, may be empty), in `accountCurrency`. */
   balance: string;
@@ -142,6 +145,7 @@ function parseRows(text: string): Row[] {
       quantity: num(c[6]),
       price: num(c[7]),
       costs: num(c[8]),
+      net: num(c[10]),
       currency: c[11] || c[14] || "",
       balance: c[13] ?? "",
       accountCurrency: c[14] ?? "",
@@ -361,6 +365,10 @@ export function parseSwissquoteCsv(text: string, tickers: Record<string, string>
       const cost = p && p.quantity > 0 ? p.cost / p.quantity : 0;
       const price = WRITE_OFF.has(r.type) ? 0 : cost;
       add({ symbol, type: "sell", date, quantity: Math.abs(r.quantity), price, fees: 0, note: r.type }, r.line);
+    } else if (r.type === CUSTODY_FEE) {
+      // A charge is negative; a refund comes out as a negative fee and offsets it.
+      const amount = r.net ? -r.net : r.quantity * r.price;
+      add({ symbol: "", type: "fee", date, quantity: 0, price: amount, fees: 0, currency: r.currency }, r.line);
     } else if (events.has(key)) {
       if (done.has(key)) continue;
       done.add(key);

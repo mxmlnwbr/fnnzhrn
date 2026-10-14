@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { formatMoney } from "@/lib/currency";
 import { useDiscreet } from "@/lib/discreet";
-import type { IncomeOverview, IncomeRow } from "@/lib/portfolio";
+import { CUSTODY_KEY, type IncomeOverview, type IncomeRow } from "@/lib/portfolio";
 import type { Quote } from "@/lib/types";
 import { Card } from "./ui";
 
@@ -130,28 +130,33 @@ export function FeeCard({ overview, quotes, currency }: { overview: IncomeOvervi
   const [view, setView] = useState<View>("year");
   const f = overview.fees;
   const m = (v: number) => formatMoney(v, currency);
-  const rate = f.volume ? f.total / f.volume : 0;
+  const rate = f.volume ? f.trading / f.volume : 0;
   const trades = (r: IncomeRow) => `${r.count} ${r.count === 1 ? "trade" : "trades"}`;
+  const tradeSummary = f.trades ? `${f.trades} trades · Ø ${m(f.trading / f.trades)} per trade · ${percent(rate)} of ${m(f.volume)} traded` : "";
+  const custodySummary = f.custody ? `custody fees ${m(f.custody)}` : "";
+  /** Per year: trades, plus the custody fees in that year. Per position: custody fees get their own row. */
+  const detail = (r: IncomeRow) => {
+    if (r.key === CUSTODY_KEY) return "";
+    const parts = [r.count ? trades(r) : "", view === "year" && r.gross ? `custody ${m(r.gross)}` : "", view === "position" ? (quotes[r.key]?.name ?? "") : ""];
+    return parts.filter(Boolean).join(" · ");
+  };
 
   return (
-    <Card title="Fees" action={f.trades > 0 && <ViewToggle view={view} onChange={setView} />}>
-      {f.trades === 0 ? (
-        <p className="text-sm text-zinc-500">No trades yet.</p>
+    <Card title="Fees" action={f.total > 0 && <ViewToggle view={view} onChange={setView} />}>
+      {f.trades === 0 && f.custody === 0 ? (
+        <p className="text-sm text-zinc-500">No trades or custody fees yet.</p>
       ) : (
         <>
           {discreet ? (
             <Headline value={`${percent(rate)} of volume`} sub={`${f.trades} trades · share of fees per ${view}`} />
           ) : (
-            <Headline
-              value={m(f.total)}
-              sub={`${f.trades} trades · Ø ${m(f.total / f.trades)} per trade · ${percent(rate)} of ${m(f.volume)} traded`}
-            />
+            <Headline value={m(f.total)} sub={[tradeSummary, custodySummary].filter(Boolean).join(" · ")} />
           )}
           <BarList
             rows={view === "year" ? f.byYear : f.bySymbol}
             total={f.total}
             label={(r) => r.key}
-            detail={view === "year" ? trades : (r) => `${trades(r)}${quotes[r.key]?.name ? ` · ${quotes[r.key].name}` : ""}`}
+            detail={detail}
             color="bg-amber-500"
             currency={currency}
           />
