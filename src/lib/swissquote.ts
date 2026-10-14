@@ -40,6 +40,8 @@ const IGNORED = new Set([
   "Einzahlung",
   "Auszahlung",
   "Zahlung",
+  "Twint",
+  "Kartentransaktion",
   "Forex-Gutschrift",
   "Forex-Belastung",
   "Fx-Gutschrift Comp.",
@@ -53,6 +55,8 @@ const IGNORED = new Set([
   "Dividende (Storniert)",
   "Storno (Capital Gain)",
   "Capital Gain (Storniert)",
+  // The cancelled booking's rows, which net to zero; its "Storno (Corporate Action)" counterpart is handled above.
+  "Corporate Action (Storniert)",
 ]);
 /** Swissquote books crypto under pseudo-ISINs like EX0X00BTC000. */
 export const isCrypto = (isin: string) => isin.startsWith("EX0X");

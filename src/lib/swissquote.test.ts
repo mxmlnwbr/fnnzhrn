@@ -235,3 +235,19 @@ describe("custody fees", () => {
     expect(skipped).toEqual({});
   });
 });
+
+describe("skipped rows", () => {
+  it("leaves out card and Twint payments and cancelled corporate actions without reporting them", () => {
+    const { transactions, skipped, unknown } = parseSwissquoteCsv(
+      csv(
+        "04-11-2022 18:23:14;00000000;Twint;;;;1.0;-150.00;0.00;0.00;-150.00;CHF;-150.00;394.75;CHF",
+        '11-12-2024 16:28:43;00000000;Kartentransaktion;;"SHOP*123";;1.0;-20.00;0.00;0.00;-20.00;USD;-20.00;124.55;USD',
+        '04-10-2023 04:30:26;00000000;Corporate Action (Storniert);SDZ;"SANDOZ GROUP N";CH1243598427;-5.6;0;0.00;0.00;-;;-;;',
+        '04-10-2023 04:30:26;00000000;Corporate Action (Storniert);SDZ;"SANDOZ GROUP N";CH1243598427;5.6;0;0.00;0.00;-;;-;;',
+      ),
+    );
+    expect(transactions).toEqual([]);
+    expect(skipped).toEqual({ Twint: 1, Kartentransaktion: 1, "Corporate Action (Storniert)": 2 });
+    expect(unknown).toEqual({});
+  });
+});
