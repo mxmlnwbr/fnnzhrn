@@ -237,6 +237,18 @@ describe("custody fees", () => {
 });
 
 describe("skipped rows", () => {
+  it("leaves out other credits and refunds to the account", () => {
+    const { transactions, skipped, unknown } = parseSwissquoteCsv(
+      csv(
+        "13-04-2026 10:16:07;00000000;Diverse;;;;1.0;500.00;0.00;0.00;500.00;CHF;500.00;2326.69;CHF",
+        "29-09-2026 14:02:40;00000000;Erstattung;;;;1.0;0.01;0.00;0.00;0.01;CHF;0.01;36014.88;CHF",
+      ),
+    );
+    expect(transactions).toEqual([]);
+    expect(skipped).toEqual({ Diverse: 1, Erstattung: 1 });
+    expect(unknown).toEqual({});
+  });
+
   it("leaves out card and Twint payments and cancelled corporate actions without reporting them", () => {
     const { transactions, skipped, unknown } = parseSwissquoteCsv(
       csv(
