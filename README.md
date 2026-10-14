@@ -14,7 +14,7 @@ A personal dashboard for tracking the performance of your share portfolio and yo
 - **Summary cards** show net worth (shares plus cash), today's change, unrealized P/L, and total return (unrealized + realized + dividends).
 - The **performance chart** plots daily market value against net invested capital, with 1M / 3M / YTD / 1Y / All ranges. The period return excludes deposits and uses the simple Dietz method.
 - **Multi-currency**: pick CHF, EUR, USD or GBP as the base currency. Positions are converted at current FX rates, and history at historical FX rates. LSE prices quoted in pence (GBp) are normalised to GBP.
-- **Sync across devices** (optional): sign in with your email (a sign-in link, no password) and your portfolio is saved to your account in Supabase and loads on every device you sign in on. The browser keeps a local copy, so the app opens instantly and edits made offline upload later.
+- **Sync across devices** (optional): sign in with your email (a sign-in link, no password) and your depots are saved to your account in a Neon Postgres database and load on every device you sign in on. The browser keeps a local copy, so the app opens instantly and edits made offline upload later.
 - **Local-first storage**: without sign-in, your transactions stay in your browser's `localStorage`. Use **Export** / **Import** to back them up as JSON.
 
 ## Getting started
@@ -46,6 +46,8 @@ src/
     api/quotes/route.ts    Current quotes   GET /api/quotes?symbols=AAPL,NESN.SW
     api/history/route.ts   Daily closes     GET /api/history?symbols=...&from=YYYY-MM-DD
     api/search/route.ts    Symbol search    GET /api/search?q=nestle
+    api/auth/[...all]/     Sign-in with email links (Better Auth)
+    api/portfolio/route.ts The signed-in user's depots   GET / PUT /api/portfolio
   lib/
     yahoo.ts               Server-only Yahoo Finance wrapper (yahoo-finance2)
     portfolio.ts           Position, P/L and history calculations (average-cost method)
@@ -53,10 +55,11 @@ src/
     swissquote.ts          Swissquote CSV import, and ticker guessing shared by the imports
     yuh.ts                 Yuh CSV import
     sync.ts                Depot store format and merge rules for signed-out data on sign-in
-    supabase.ts            Browser Supabase client (null when not configured)
+    auth.ts, db.ts         Server-only Better Auth setup and Neon connection pool
+    auth-client.ts         Browser side of sign-in
     useMarketData.ts       Fetches quotes, FX and history for the current transactions
   components/              UI
-supabase/schema.sql        Database table and access rules for sync
+db/schema.sql              Database tables for sign-in and sync
 ```
 
 Yahoo Finance is called only from the server-side API routes, because the library does not work in the browser.
@@ -70,7 +73,7 @@ Yahoo Finance is called only from the server-side API routes, because the librar
 
 ## Deploying
 
-The app is a standard Next.js project and deploys to Vercel as-is. Without the Supabase settings below it runs in local-only mode: the sign-in button is hidden, and your data never leaves your browser, apart from the ticker symbols sent to fetch prices.
+The app is a standard Next.js project and deploys to Vercel as-is. Without the sync settings below it runs in local-only mode: the sign-in button is hidden, and your data never leaves your browser, apart from the ticker symbols sent to fetch prices.
 
 ### Custom domain
 
@@ -78,18 +81,19 @@ The app runs at `depot.fnnzhrn.ch`:
 
 1. In Vercel, open the project → **Settings → Domains** and add `depot.fnnzhrn.ch`.
 2. At the registrar for `fnnzhrn.ch`, add the DNS record Vercel shows (a `CNAME` for `depot` pointing to Vercel).
-3. In Supabase, update **Authentication → URL Configuration** as described in step 3 below, so sign-in links open the new domain.
+3. Set `BETTER_AUTH_URL` to `https://depot.fnnzhrn.ch` (see below), so sign-in links open the new domain.
 
 ## Sync across devices
 
-Sign-in and sync use [Supabase](https://supabase.com) (the free tier is plenty). One-time setup:
+Sign-in and sync need three services, all with free tiers that are plenty for personal use: [Neon](https://neon.tech) (Postgres) stores your depots, [Better Auth](https://better-auth.com) handles sign-in inside the app, and [Resend](https://resend.com) sends the sign-in emails. One-time setup:
 
-1. **Create the project.** In Vercel, open the project → **Storage** → **Create Database** → **Supabase**, and connect it to this project. This adds `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` to the project's environment variables. (Or create a project at supabase.com and add `NEXT_PUBLIC_SUPABASE_URL` plus `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from **Project Settings → API Keys** yourself; see `.env.example`.)
-2. **Create the table.** In the Supabase dashboard, open **SQL Editor**, paste [`supabase/schema.sql`](supabase/schema.sql) and run it. Row-level security limits every user to their own row.
-3. **Allow your URL.** Under **Authentication → URL Configuration**, set **Site URL** to `https://depot.fnnzhrn.ch` (or your Vercel URL) and add `http://localhost:3000` to the redirect URLs for local development.
-4. **Redeploy** on Vercel so the new variables are built in.
+1. **Create the database.** In Vercel, open the project → **Storage** → **Create Database** → **Neon**, and connect it to this project. This adds `DATABASE_URL` to the project's environment variables. (Or create a project at neon.tech and add its pooled connection string as `DATABASE_URL` yourself.)
+2. **Create the tables.** In the Neon console, open **SQL Editor**, paste [`db/schema.sql`](db/schema.sql) and run it (or `psql "$DATABASE_URL" -f db/schema.sql`). It's safe to run again.
+3. **Set up email.** Create a Resend account and an API key, and add it as `RESEND_API_KEY`. To send from your own address, verify `fnnzhrn.ch` under **Domains** in Resend and set `EMAIL_FROM`, e.g. `Depot <login@fnnzhrn.ch>`. Without it, Resend's test sender is used, which only delivers to the email of your Resend account. That's enough if you're the only user.
+4. **Add the auth settings.** Set `BETTER_AUTH_SECRET` to a random value (`openssl rand -base64 32`) and `BETTER_AUTH_URL` to `https://depot.fnnzhrn.ch`.
+5. **Redeploy** on Vercel so the new variables are built in. The sign-in button only appears when `DATABASE_URL`, `BETTER_AUTH_SECRET` and `RESEND_API_KEY` are all set.
 
-For local development, copy `.env.example` to `.env.local` and fill in the same two values.
+For local development, copy `.env.example` to `.env.local` and fill in the same values, with `BETTER_AUTH_URL=http://localhost:3000`.
 
 How sync behaves:
 
@@ -97,5 +101,9 @@ How sync behaves:
 - All depots sync. Which depot is shown is remembered per device.
 - Every change uploads right away. When you come back to the tab, it pulls the latest version, so edits from your phone show up on your computer.
 - If both devices change the portfolio while one is offline, the last one to upload wins.
-- Signing out removes the portfolio from that browser. It stays in your account.
-- Supabase's built-in email service sends only a few emails per hour, and only to members of your Supabase organisation. That's fine for personal use; connect your own SMTP provider under **Authentication → Emails** to sign in other people.
+- Signing out removes the portfolio from that browser. It stays in your account. Sessions last a year and renew while you use the app.
+- Sign-in links work once and expire after 15 minutes.
+
+### Moving from Supabase
+
+Sync used to run on Supabase. Accounts don't carry over, but your data does, through the browser: open the updated app in a browser that has your synced copy and sign in with the new setup. That copy is uploaded to your new account, and every other device gets it when you sign in there. Once that's done, the Supabase project and its `NEXT_PUBLIC_SUPABASE_*` variables can be deleted.
