@@ -17,6 +17,7 @@ interface Position {
 export function buildPositions(transactions: Transaction[]): Map<string, Position> {
   const positions = new Map<string, Position>();
   for (const t of sortTransactions(transactions)) {
+    if (t.type === "fee") continue;
     const p = positions.get(t.symbol) ?? { quantity: 0, cost: 0, realized: 0, dividends: 0, fees: 0 };
     p.fees += t.fees;
     if (t.type === "buy") {
@@ -54,9 +55,11 @@ export function summarize(
   let realizedPL = 0;
   let dividends = 0;
   let fees = 0;
+  let custodyFees = 0;
   let invested = 0;
 
   for (const t of transactions) {
+    if (t.type === "fee") custodyFees += t.price * (fx[t.currency ?? ""] ?? 1);
     if (t.type !== "buy") continue;
     const rate = fx[quotes[t.symbol]?.currency ?? ""] ?? 1;
     invested += (t.quantity * t.price + t.fees) * rate;
@@ -102,7 +105,7 @@ export function summarize(
 
   const cash = cashAccounts.reduce((s, a) => s + a.balance * (fx[a.currency] ?? 1), 0);
   const unrealizedPL = marketValue - costBasis;
-  const totalReturn = unrealizedPL + realizedPL + dividends;
+  const totalReturn = unrealizedPL + realizedPL + dividends - custodyFees;
   return {
     holdings,
     marketValue,
@@ -111,6 +114,7 @@ export function summarize(
     realizedPL,
     dividends,
     fees,
+    custodyFees,
     totalReturn,
     totalReturnPercent: invested ? totalReturn / invested : 0,
     dayChange,
@@ -134,7 +138,8 @@ function lastOnOrBefore(series: PricePoint[], date: string, cursor: { i: number 
 }
 
 /**
- * Daily portfolio value and net invested capital, in the base currency.
+ * Daily portfolio value and net invested capital, in the base currency. Custody fees are paid
+ * from cash, which the chart doesn't cover, so they don't show here.
  * @param prices daily closes per symbol
  * @param currencies instrument currency per symbol
  * @param fxHistory daily rate (currency -> base) per currency; missing = 1
@@ -208,11 +213,14 @@ export function returnSeries(points: HistoryPoint[]): number[] {
   });
 }
 
+/** Key of the custody fees in the fees per position, which belong to no position. */
+export const CUSTODY_KEY = "Custody fees";
+
 export interface IncomeRow {
   key: string;
-  /** Dividends: net received. Fees: trading fees paid. */
+  /** Dividends: net received. Fees: trading and custody fees paid. */
   amount: number;
-  /** Dividends only: gross amount before withholding tax. */
+  /** Dividends: gross amount before withholding tax. Fees: the part that is custody fees. */
   gross: number;
   /** Dividends: withholding tax. Fees: number of trades. */
   tax: number;
@@ -221,8 +229,19 @@ export interface IncomeRow {
 
 export interface IncomeOverview {
   dividends: { net: number; gross: number; tax: number; last12Months: number; byYear: IncomeRow[]; bySymbol: IncomeRow[] };
-  /** Trading fees on buys and sells; withholding tax on dividends is counted under dividends. */
-  fees: { total: number; trades: number; volume: number; byYear: IncomeRow[]; bySymbol: IncomeRow[] };
+  /**
+   * Trading fees on buys and sells plus custody fees; withholding tax on dividends is counted under
+   * dividends. `total` includes custody fees, `trading` doesn't.
+   */
+  fees: {
+    total: number;
+    trading: number;
+    custody: number;
+    trades: number;
+    volume: number;
+    byYear: IncomeRow[];
+    bySymbol: IncomeRow[];
+  };
 }
 
 function addTo(map: Map<string, IncomeRow>, key: string, amount: number, gross: number, tax: number) {
@@ -234,8 +253,16 @@ function addTo(map: Map<string, IncomeRow>, key: string, amount: number, gross: 
   map.set(key, row);
 }
 
+/** Adds a custody fee to a fee row without counting it as a trade. */
+function addCustody(map: Map<string, IncomeRow>, key: string, amount: number) {
+  const row = map.get(key) ?? { key, amount: 0, gross: 0, tax: 0, count: 0 };
+  row.amount += amount;
+  row.gross += amount;
+  map.set(key, row);
+}
+
 /**
- * Dividends and trading fees per year and per position, in the base currency.
+ * Dividends, and trading and custody fees, per year and per position, in the base currency.
  * Converts at today's rate, like `summarize`, so totals match the summary cards.
  * @param today ISO date the trailing twelve months are counted back from.
  */
@@ -251,12 +278,18 @@ export function incomeOverview(
   const feeYear = new Map<string, IncomeRow>();
   const feeSymbol = new Map<string, IncomeRow>();
   const dividends = { net: 0, gross: 0, tax: 0, last12Months: 0 };
-  const fees = { total: 0, trades: 0, volume: 0 };
+  const fees = { total: 0, trading: 0, custody: 0, trades: 0, volume: 0 };
 
   for (const t of transactions) {
-    const rate = fx[quotes[t.symbol]?.currency ?? ""] ?? 1;
+    const rate = fx[(t.type === "fee" ? t.currency : quotes[t.symbol]?.currency) ?? ""] ?? 1;
     const year = t.date.slice(0, 4);
-    if (t.type === "dividend") {
+    if (t.type === "fee") {
+      const fee = t.price * rate;
+      fees.total += fee;
+      fees.custody += fee;
+      addCustody(feeYear, year, fee);
+      addCustody(feeSymbol, CUSTODY_KEY, fee);
+    } else if (t.type === "dividend") {
       const gross = t.price * rate;
       const tax = t.fees * rate;
       dividends.gross += gross;
@@ -268,6 +301,7 @@ export function incomeOverview(
     } else {
       const fee = t.fees * rate;
       fees.total += fee;
+      fees.trading += fee;
       fees.trades++;
       fees.volume += t.quantity * t.price * rate;
       addTo(feeYear, year, fee, 0, 0);

@@ -167,3 +167,44 @@ describe("incomeOverview", () => {
     expect(o.fees.bySymbol.map((r) => [r.key, r.amount])).toEqual([["AAPL", 7], ["NESN.SW", 5]]);
   });
 });
+
+describe("custody fees", () => {
+  const fee = (date: string, price: number, currency = "CHF") => tx({ type: "fee", date, symbol: "", price, currency });
+  const txs = [
+    tx({ type: "buy", date: "2024-01-01", quantity: 10, price: 100, fees: 10 }),
+    fee("2024-12-31", 40),
+    fee("2025-12-31", 20, "EUR"),
+  ];
+  const fx = { USD: 0.9, CHF: 1, EUR: 0.95 };
+
+  it("belong to no position", () => {
+    expect([...buildPositions(txs).keys()]).toEqual(["ABC"]);
+  });
+
+  it("lower the total return, converted from their own currency", () => {
+    const s = summarize(txs, { ABC: quote(110) }, fx);
+    expect(s.custodyFees).toBeCloseTo(40 + 20 * 0.95);
+    // (1100 - 1010) * 0.9 unrealized, minus 59 custody fees
+    expect(s.totalReturn).toBeCloseTo(81 - 59);
+    expect(s.fees).toBeCloseTo(10 * 0.9);
+  });
+
+  it("count as fees per year, but not as trades", () => {
+    const o = incomeOverview(txs, { ABC: quote(110) }, fx, "2026-01-15");
+    expect(o.fees.custody).toBeCloseTo(59);
+    expect(o.fees.trading).toBeCloseTo(9);
+    expect(o.fees.total).toBeCloseTo(68);
+    expect(o.fees.trades).toBe(1);
+    expect(o.fees.byYear.map((r) => [r.key, r.count, +r.gross.toFixed(2)])).toEqual([
+      ["2025", 0, 19],
+      ["2024", 1, 40],
+    ]);
+    expect(o.fees.bySymbol.find((r) => r.key === "Custody fees")?.amount).toBeCloseTo(59);
+  });
+
+  it("don't change the performance chart", () => {
+    const prices = { ABC: [{ date: "2024-01-01", close: 100 }, { date: "2025-12-31", close: 110 }] };
+    const history = buildHistory(txs, prices, { ABC: "USD" }, {}, "USD");
+    expect(history.at(-1)).toEqual({ date: "2025-12-31", value: 1100, invested: 1010 });
+  });
+});

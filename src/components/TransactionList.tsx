@@ -11,6 +11,7 @@ const TYPE_STYLE = {
   buy: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
   sell: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
   dividend: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300",
+  fee: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
 };
 
 const FILTERS: { type: TransactionType | "all"; label: string }[] = [
@@ -18,6 +19,7 @@ const FILTERS: { type: TransactionType | "all"; label: string }[] = [
   { type: "buy", label: "Buys" },
   { type: "sell", label: "Sells" },
   { type: "dividend", label: "Dividends" },
+  { type: "fee", label: "Custody fees" },
 ];
 
 export function TransactionList({
@@ -47,7 +49,8 @@ export function TransactionList({
   // Like the symbol below, a depot that's gone falls back to showing everything.
   const activeDepot = depots.includes(depot) ? depot : "";
   const byDepot = activeDepot ? transactions.filter((t) => depotOf?.(t) === activeDepot) : transactions;
-  const symbols = [...new Set(byDepot.map((t) => t.symbol))].sort();
+  // Custody fees have no symbol, so they only show without a position filter.
+  const symbols = [...new Set(byDepot.map((t) => t.symbol))].filter(Boolean).sort();
   // A symbol whose transactions were all deleted falls back to showing everything.
   const activeSymbol = symbols.includes(symbol) ? symbol : "";
   const bySymbol = activeSymbol ? byDepot.filter((t) => t.symbol === activeSymbol) : byDepot;
@@ -119,14 +122,16 @@ export function TransactionList({
       ) : (
         <ul className="max-h-96 divide-y divide-zinc-100 overflow-auto text-sm dark:divide-zinc-800">
           {rows.map((t) => {
-            const currency = quotes[t.symbol]?.currency ?? "USD";
-            const total = t.type === "dividend" ? t.price : t.quantity * t.price;
+            const fee = t.type === "fee";
+            const currency = (fee ? t.currency : quotes[t.symbol]?.currency) ?? "USD";
+            const total = t.type === "dividend" || fee ? t.price : t.quantity * t.price;
+            const label = fee ? "Custody fee" : t.symbol;
             return (
               <li key={t.id} className="flex items-center justify-between gap-2 py-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${TYPE_STYLE[t.type]}`}>{t.type}</span>
-                    <span className="font-medium">{t.symbol}</span>
+                    <span className="font-medium">{label}</span>
                     {!activeDepot && depotOf?.(t) && (
                       <span className="truncate rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                         {depotOf(t)}
@@ -135,15 +140,15 @@ export function TransactionList({
                   </div>
                   <div className="text-xs tabular-nums text-zinc-500">
                     {t.date}
-                    {!discreet && t.type !== "dividend" && ` · ${t.quantity} × ${formatMoney(t.price, currency)}`}
+                    {!discreet && t.type !== "dividend" && !fee && ` · ${t.quantity} × ${formatMoney(t.price, currency)}`}
                     {!discreet && t.fees > 0 && ` · ${t.type === "dividend" ? "tax" : "fees"} ${formatMoney(t.fees, currency)}`}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {!discreet && <span className="tabular-nums">{formatMoney(total, currency)}</span>}
+                  {!discreet && <span className="tabular-nums">{formatMoney(fee ? -total : total, currency)}</span>}
                   {onDelete && (
                     <button
-                      onClick={() => confirm(`Delete this ${t.type} of ${t.symbol}?`) && onDelete(t.id)}
+                      onClick={() => confirm(fee ? `Delete this custody fee from ${t.date}?` : `Delete this ${t.type} of ${t.symbol}?`) && onDelete(t.id)}
                       className="rounded px-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800"
                       aria-label="Delete transaction"
                     >

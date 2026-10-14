@@ -23,8 +23,10 @@ async function getJson<T>(url: string): Promise<T> {
   return body as T;
 }
 
-/** @param cashCurrencies currencies of cash accounts, which need FX rates but no prices. */
-async function load(transactions: Transaction[], cashCurrencies: string[], baseCurrency: string): Promise<MarketData> {
+/** @param cashCurrencies currencies of cash accounts and custody fees, which need FX rates but no prices. */
+async function load(all: Transaction[], cashCurrencies: string[], baseCurrency: string): Promise<MarketData> {
+  // Custody fees have no instrument to price.
+  const transactions = all.filter((t) => t.type !== "fee");
   const symbols = [...new Set(transactions.map((t) => t.symbol))];
   if (symbols.length === 0 && cashCurrencies.length === 0) return { ...EMPTY, updatedAt: new Date() };
 
@@ -58,7 +60,9 @@ async function load(transactions: Transaction[], cashCurrencies: string[], baseC
 }
 
 export function useMarketData(transactions: Transaction[], cash: CashAccount[], baseCurrency: string, refreshKey: number) {
-  const cashCurrencies = [...new Set(cash.map((a) => a.currency))].sort();
+  const cashCurrencies = [
+    ...new Set([...cash.map((a) => a.currency), ...transactions.flatMap((t) => (t.type === "fee" && t.currency ? [t.currency] : []))]),
+  ].sort();
   const key = JSON.stringify([transactions.map((t) => [t.symbol, t.date]), cashCurrencies, baseCurrency, refreshKey]);
   const [state, setState] = useState<{ key: string | null; data: MarketData }>({ key: null, data: EMPTY });
 
