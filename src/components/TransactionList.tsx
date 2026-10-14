@@ -29,11 +29,17 @@ export function TransactionList({
   canDelete,
   onDeleteMany,
   depotOf,
+  onEdit,
+  editingId,
 }: {
   transactions: Transaction[];
   quotes: Record<string, Quote>;
   /** Absent in the combined view, where transactions are shown but not deleted. */
   onDelete?: (id: string) => void;
+  /** Opens a transaction in the form; absent where transactions can't be changed. */
+  onEdit?: (t: Transaction) => void;
+  /** The transaction open in the form, highlighted in the list. */
+  editingId?: string;
   /** Name of the depot a transaction belongs to, shown in the combined view. */
   depotOf?: (t: Transaction) => string | undefined;
   /** Whether there's anything (transactions or cash accounts) for the bulk delete to remove. */
@@ -127,7 +133,10 @@ export function TransactionList({
             const total = t.type === "dividend" || fee ? t.price : t.quantity * t.price;
             const label = fee ? "Custody fee" : t.symbol;
             return (
-              <li key={t.id} className="flex items-center justify-between gap-2 py-2">
+              <li
+                key={t.id}
+                className={`flex items-center justify-between gap-2 py-2 ${t.id === editingId ? "-mx-2 rounded-md bg-amber-50 px-2 dark:bg-amber-950/30" : ""}`}
+              >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${TYPE_STYLE[t.type]}`}>{t.type}</span>
@@ -144,8 +153,18 @@ export function TransactionList({
                     {!discreet && t.fees > 0 && ` · ${t.type === "dividend" ? "tax" : "fees"} ${formatMoney(t.fees, currency)}`}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   {!discreet && <span className="tabular-nums">{formatMoney(fee ? -total : total, currency)}</span>}
+                  {onEdit && (
+                    <button
+                      onClick={() => onEdit(t)}
+                      className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                      aria-label="Edit transaction"
+                      title="Edit"
+                    >
+                      <PencilIcon />
+                    </button>
+                  )}
                   {onDelete && (
                     <button
                       onClick={() => confirm(fee ? `Delete this custody fee from ${t.date}?` : `Delete this ${t.type} of ${t.symbol}?`) && onDelete(t.id)}
@@ -162,5 +181,13 @@ export function TransactionList({
         </ul>
       )}
     </Card>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 20h4L18.5 9.5a2.12 2.12 0 0 0-3-3L5 17v3Z" />
+    </svg>
   );
 }
