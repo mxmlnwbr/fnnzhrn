@@ -42,6 +42,8 @@ const IGNORED = new Set([
   "Zahlung",
   "Twint",
   "Kartentransaktion",
+  "Diverse",
+  "Erstattung",
   "Forex-Gutschrift",
   "Forex-Belastung",
   "Fx-Gutschrift Comp.",
