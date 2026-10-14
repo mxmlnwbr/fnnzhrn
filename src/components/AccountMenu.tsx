@@ -1,119 +1,80 @@
 "use client";
 
-import { useState } from "react";
-import { retrySync, sendLoginLink, signOut, useSyncState } from "@/lib/storage";
-import { buttonClass, inputClass, primaryButtonClass } from "./ui";
+import { useEffect, useRef, useState } from "react";
+import { retrySync, signOut, useSyncState } from "@/lib/storage";
+import { buttonClass } from "./ui";
 
+/** The signed-in account: an avatar with the sync status, opening a popover to retry or sign out. */
 export function AccountMenu() {
   const sync = useSyncState();
   const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
 
-  if (sync.status === "disabled") return null;
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !root.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
 
-  let label = "Sign in to sync";
-  if (sync.status === "loading") label = "…";
-  if (sync.status === "signed-in") label = sync.error ? "Sync failed" : sync.syncing ? "Syncing…" : "Synced";
+  if (sync.status !== "signed-in") return null;
+
+  const status = sync.error ? "Sync failed" : sync.syncing ? "Syncing…" : "Synced";
+  const dot = sync.error ? "bg-red-500" : sync.syncing ? "bg-sky-500 motion-safe:animate-pulse" : "bg-emerald-500";
 
   return (
-    <div className="relative">
+    <div className="relative" ref={root}>
       <button
-        className={`${buttonClass} ${sync.status === "signed-in" && sync.error ? "text-red-600 dark:text-red-400" : ""}`}
+        className="relative flex h-8 w-8 items-center justify-center rounded-full bg-zinc-900 text-sm font-semibold text-white uppercase hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
         onClick={() => setOpen((o) => !o)}
-        disabled={sync.status === "loading"}
         aria-expanded={open}
+        aria-label={`Account: ${sync.email || "signed in"}, ${status}`}
+        title={status}
       >
-        {label}
+        {sync.email.charAt(0) || "?"}
+        <span
+          className={`absolute -right-0.5 -bottom-0.5 h-3 w-3 rounded-full ring-2 ring-zinc-50 dark:ring-zinc-950 ${dot}`}
+          aria-hidden
+        />
       </button>
       {open && (
-        <div className="absolute left-0 z-10 sm:right-0 sm:left-auto mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-zinc-200 bg-white p-4 text-sm shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
-          {sync.status === "signed-in" ? (
-            <div className="space-y-3">
-              <p>
-                Signed in as <span className="font-medium break-all">{sync.email}</span>. Your depots sync to every device
-                you sign in on.
-              </p>
-              {sync.error && <p className="text-red-600 dark:text-red-400">Last sync failed: {sync.error}</p>}
-              <div className="flex gap-2">
-                {sync.error && (
-                  <button className={buttonClass} onClick={() => void retrySync()}>
-                    Retry
-                  </button>
-                )}
-                <button
-                  className={buttonClass}
-                  onClick={() => {
-                    setOpen(false);
-                    void signOut();
-                  }}
-                >
-                  Sign out
-                </button>
-              </div>
-            </div>
-          ) : (
-            <SignInForm />
-          )}
+        <div className="animate-fade-in absolute right-0 z-10 mt-2 w-72 max-w-[calc(100vw-2rem)] space-y-3 rounded-xl border border-zinc-200 bg-white p-4 text-sm shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
+          <div>
+            <p className="text-xs text-zinc-500">Signed in as</p>
+            <p className="font-medium break-all">{sync.email}</p>
+          </div>
+          <p className="flex items-center gap-2 text-zinc-500">
+            <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} aria-hidden />
+            {sync.error ? (
+              <span className="text-red-600 dark:text-red-400">Last sync failed: {sync.error}</span>
+            ) : (
+              `${status} across your devices`
+            )}
+          </p>
+          <div className="flex gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+            {sync.error && (
+              <button className={buttonClass} onClick={() => void retrySync()}>
+                Retry
+              </button>
+            )}
+            <button
+              className={buttonClass}
+              onClick={() => {
+                setOpen(false);
+                void signOut();
+              }}
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       )}
     </div>
-  );
-}
-
-function SignInForm() {
-  const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function send() {
-    setBusy(true);
-    setError(null);
-    try {
-      await sendLoginLink(email.trim());
-      setSent(true);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (sent) {
-    return (
-      <div className="space-y-3">
-        <p>
-          We sent a sign-in link to <span className="font-medium break-all">{email}</span>. Open it on this device and
-          you&apos;re signed in; this page picks it up by itself.
-        </p>
-        <button className={buttonClass} onClick={() => setSent(false)}>
-          Use a different email
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <form
-      className="space-y-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void send();
-      }}
-    >
-      <p>Sign in with your email to keep your portfolio in sync across devices. No password needed.</p>
-      <input
-        className={inputClass}
-        type="email"
-        required
-        autoComplete="email"
-        placeholder="you@example.com"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      {error && <p className="text-red-600 dark:text-red-400">{error}</p>}
-      <button className={`${primaryButtonClass} w-full`} disabled={busy}>
-        {busy ? "Sending…" : "Email me a sign-in link"}
-      </button>
-    </form>
   );
 }

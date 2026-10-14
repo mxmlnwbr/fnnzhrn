@@ -1,7 +1,10 @@
 import type { NextRequest } from "next/server";
+import { requireUser } from "@/lib/auth";
 import { getQuotes } from "@/lib/yahoo";
 
 export async function GET(request: NextRequest) {
+  const user = await requireUser(request);
+  if (user instanceof Response) return user;
   const symbols = (request.nextUrl.searchParams.get("symbols") ?? "")
     .split(",")
     .map((s) => s.trim())

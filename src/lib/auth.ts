@@ -39,8 +39,16 @@ function createAuth() {
 
 let instance: ReturnType<typeof createAuth> | null | undefined;
 
-/** Better Auth, or null when sync isn't configured (the app then runs local-only). */
+/** Better Auth, or null when sign-in isn't configured (the app then stays locked). */
 export function getAuth() {
   instance ??= syncConfigured() ? createAuth() : null;
   return instance;
+}
+
+/** The signed-in user's id, or the response to send instead: 503 without sign-in configured, 401 when signed out. */
+export async function requireUser(request: Request): Promise<string | Response> {
+  const auth = getAuth();
+  if (!auth) return Response.json({ error: "Sign-in isn't configured" }, { status: 503 });
+  const session = await auth.api.getSession({ headers: request.headers });
+  return session?.user.id ?? Response.json({ error: "Not signed in" }, { status: 401 });
 }
