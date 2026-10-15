@@ -18,7 +18,9 @@ export function ToolNav({ current }: { current: "depot" | "cockpit" | "budget" }
           fnnzhrn<span className="text-emerald-600 dark:text-emerald-400">.</span>
         </Link>
         {link("/depot", "Depot", "depot")}
-        {link("/cockpit", "Cockpit", "cockpit")}
+        <span aria-disabled="true" title="Coming soon" className="cursor-default rounded-full px-2.5 py-0.5 text-zinc-400 dark:text-zinc-600">
+          Cockpit <span className="text-xs">(bald)</span>
+        </span>
         {link("/budget", "Finanzen", "budget")}
       </div>
     </nav>
