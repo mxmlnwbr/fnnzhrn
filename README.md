@@ -101,7 +101,8 @@ A tile dashboard that goes from market overview to news to opportunities to buy 
 
 | Tile | Endpoint | Source |
 | --- | --- | --- |
-| Mein Depot, Märkte, Makro-Markt, Beobachtungsliste, SMI movers | `/api/cockpit/quotes` | Yahoo Finance chart API |
+| Mein Depot | `/api/cockpit/depot` | Your depots from the tracker (same calculation as `/depot`), Yahoo prices |
+| Märkte, Makro-Markt, Beobachtungsliste, SMI movers | `/api/cockpit/quotes` | Yahoo Finance chart API |
 | Tagesgewinner / -verlierer (USA), Value-Chancen | `/api/cockpit/screener` | Yahoo predefined screeners |
 | Schnäppchen-Radar | `/api/cockpit/radar` | Yahoo screeners + charts (US stocks) |
 | News zu meinen Aktien, Übernahmen & Gerüchte | `/api/cockpit/news` | Google News RSS, keyword-tagged |
@@ -109,7 +110,7 @@ A tile dashboard that goes from market overview to news to opportunities to buy 
 | Marktstimmung | `/api/cockpit/sentiment` | CNN Fear & Greed (incl. put/call, VIX) |
 | Buffett-Radar | `/api/cockpit/investors` | SEC EDGAR 13F filings |
 
-The Cockpit's own depot and watchlist are stored in the browser's `localStorage` (export/import as JSON in the editor). None of these sources has an official API contract, so a tile can break if a provider changes its format.
+"Mein Depot" shows the signed-in user's depots from the tracker, all added up or one at a time, using the tracker's own holdings calculation. Year to date compares today's holdings with those on 1 January, net of this year's buys and sells. The watchlist is stored in the browser's `localStorage` (export/import as JSON in the editor). None of these sources has an official API contract, so a tile can break if a provider changes its format.
 
 ## Deploying
 

@@ -326,11 +326,12 @@
     <div class="grid">
       <section class="tile" id="t-depot">
         <div class="tile-head">
-          <div><h3>Mein Depot</h3><p>Werte in CHF · Daten bleiben in diesem Browser</p></div>
-          <div class="tools"><button class="btn" type="button" data-edit="depot">Bearbeiten</button></div>
+          <div><h3>Mein Depot</h3><p id="depot-sub">Aus deinem Depot-Tracker</p></div>
+          <div class="tools"><a class="btn" href="/depot">Im Depot öffnen →</a></div>
         </div>
+        <div class="chips" role="group" aria-label="Depot" data-depot-group hidden></div>
         <div class="tile-body"></div>
-        <div class="tile-foot"><span class="when"></span><span class="src">Kurse: Yahoo Finance · Dividenden brutto, geschätzt ab Kaufdatum</span></div>
+        <div class="tile-foot"><span class="when"></span><span class="src">Positionen &amp; Dividenden aus dem Depot · Kurse: Yahoo Finance · Fremdwährungen zum aktuellen Kurs</span></div>
       </section>
 
       <section class="tile s4" id="t-markets">
@@ -394,7 +395,7 @@
     <div class="grid">
       <section class="tile s4" id="t-news">
         <div class="tile-head">
-          <div><h3>News zu meinen Aktien</h3><p>Letzte 7 Tage · Depot &amp; Watchlist</p></div>
+          <div><h3>News zu meinen Aktien</h3><p>Letzte 7 Tage · Depot &amp; Beobachtungsliste</p></div>
         </div>
         <div class="chips" role="group" aria-label="Filter" data-news-group>
           <button class="chip" type="button" data-filter="all" aria-pressed="true">Alle</button>
@@ -552,16 +553,6 @@
     var SMI = ['NESN.SW', 'NOVN.SW', 'ROG.SW', 'UBSG.SW', 'ZURN.SW', 'CFR.SW', 'ABBN.SW', 'SIKA.SW', 'LONN.SW', 'ALC.SW',
       'GIVN.SW', 'HOLN.SW', 'SREN.SW', 'PGHN.SW', 'SCMN.SW', 'SLHN.SW', 'GEBN.SW', 'KNIN.SW', 'LOGN.SW', 'SDZ.SW'];
     var FIELDS = {
-      depot: {
-        title: 'Depot bearbeiten',
-        hint: 'Symbol wie bei Yahoo Finance (z. B. NESN.SW, NVDA, UBSG.SW). Kaufkurs in der Handelswährung des Titels. Das Kaufdatum wird für die Dividenden „seit Beginn“ genutzt.',
-        cols: [
-          { k: 'symbol', l: 'Symbol', t: 'text', req: true },
-          { k: 'qty', l: 'Anzahl', t: 'number', step: 'any', req: true },
-          { k: 'buy', l: 'Kaufkurs', t: 'number', step: 'any', req: true },
-          { k: 'date', l: 'Kaufdatum', t: 'date' }
-        ]
-      },
       watch: {
         title: 'Beobachtungsliste bearbeiten',
         hint: 'Kaufziel = Kurs, ab dem du kaufen würdest. Fair Value ist optional (z. B. aus eigener Bewertung oder Analystenziel).',
@@ -572,25 +563,20 @@
         ]
       }
     };
-    var EXAMPLE_DEPOT = [
-      { symbol: 'NESN.SW', qty: 40, buy: 88.5, date: '2024-03-15' },
-      { symbol: 'UBSG.SW', qty: 120, buy: 24.1, date: '2024-06-03' },
-      { symbol: 'MSFT', qty: 10, buy: 410, date: '2025-01-10' },
-      { symbol: 'NVDA', qty: 25, buy: 120, date: '2025-04-08' }
-    ];
     var REFRESH_MS = 5 * 60 * 1000;
 
     // ================= State =================
     var STORE = 'fnnzhrn-cockpit-v1';
     var state = load();
-    var ui = { period: 'd', gainers: 'us', losers: 'us', news: 'all', newsStock: '', earn: 'all', mna: 'rumour', radar: { threshold: -50, profitable: false, large: false }, value: { pe: 15, growth: true, pb: false }, fund: 0 };
+    var ui = { depot: null, period: 'd', gainers: 'us', losers: 'us', news: 'all', newsStock: '', earn: 'all', mna: 'rumour', radar: { threshold: -50, profitable: false, large: false }, value: { pe: 15, growth: true, pb: false }, fund: 0 };
     var cache = {};
 
     function load() {
-      var fallback = { depot: [], watch: [{ symbol: 'MSFT', target: 500 }, { symbol: 'NVDA', target: 190 }] };
+      // The depot itself comes from the tracker; only the watchlist is kept in the browser.
+      var fallback = { watch: [{ symbol: 'MSFT', target: 500 }, { symbol: 'NVDA', target: 190 }] };
       try {
         var s = JSON.parse(localStorage.getItem(STORE));
-        if (s && Array.isArray(s.depot) && Array.isArray(s.watch)) return s;
+        if (s && Array.isArray(s.watch)) return { watch: s.watch };
       } catch (e) { /* ignore */ }
       return fallback;
     }
@@ -615,12 +601,6 @@
       if (v == null || !isFinite(v)) return '<span class="muted">–</span>';
       var cls = v > 0 ? 'up' : v < 0 ? 'down' : 'muted';
       return '<span class="num ' + cls + '">' + (v > 0 ? '+' : v < 0 ? '−' : '') + nf(d == null ? 2 : d).format(Math.abs(v)) + ' %</span>';
-    }
-    function chf(v, signed) {
-      if (v == null || !isFinite(v)) return '–';
-      var s = nf(Math.abs(v) >= 1000 ? 0 : 2).format(Math.abs(v));
-      if (signed) return '<span class="num ' + (v > 0 ? 'up' : v < 0 ? 'down' : 'muted') + '">' + (v > 0 ? '+' : v < 0 ? '−' : '') + s + ' CHF</span>';
-      return '<span class="num">' + (v < 0 ? '−' : '') + s + ' CHF</span>';
     }
     function cap(v) {
       if (!v) return '–';
@@ -720,91 +700,74 @@
     }
 
     // ================= Depot =================
-    function fxSymbol(cur) {
-      if (!cur || cur === 'CHF') return null;
-      if (cur === 'GBp') return 'GBPCHF=X';
-      return cur.toUpperCase() + 'CHF=X';
-    }
-    function fxRate(map, cur) {
-      if (!cur || cur === 'CHF') return 1;
-      var q = map[fxSymbol(cur)];
-      if (!q || q.error) return null;
-      return cur === 'GBp' ? q.price / 100 : q.price;
-    }
-
-    tile('t-depot', function () {
-      if (!state.depot.length) return Promise.resolve({ empty: true });
-      var syms = state.depot.map(function (p) { return p.symbol; });
-      return quotes(syms, true).then(function (map) {
-        var fx = Array.from(new Set(syms.map(function (s) { return fxSymbol(map[s] && map[s].currency); }).filter(Boolean)));
-        return quotes(fx).then(function (fxMap) { return { map: map, fx: fxMap }; });
-      });
-    }, function (d) {
-      if (d.empty) {
-        return '<div class="empty">Noch keine Positionen erfasst.<br><br>' +
-          '<button class="btn primary" type="button" data-edit="depot">Position hinzufügen</button> ' +
-          '<button class="btn" type="button" data-example>Beispieldepot laden</button></div>';
+    // Holdings come from the signed-in user's depot in the tracker (/depot), summarised by the server.
+    var depotSymbols = [];
+    var depotRequest = null;
+    function loadDepot() {
+      if (!depotRequest) {
+        depotRequest = api('/api/cockpit/depot' + (ui.depot ? '?depot=' + encodeURIComponent(ui.depot) : '')).then(function (d) {
+          depotSymbols = (d.holdings || []).map(function (h) { return h.symbol; });
+          // Tiles that mark "my" stocks redraw once the depot is known.
+          ['t-gainers', 't-losers', 't-earnings'].forEach(function (id) { if (tiles[id]) tiles[id].draw(); });
+          return d;
+        }).finally(function () { setTimeout(function () { depotRequest = null; }, 1000); });
       }
-      var year = new Date().getFullYear();
-      var yearStart = new Date(year, 0, 1).getTime();
-      var rows = [], total = 0, cost = 0, day = 0, ytd = 0, divYtd = 0, divAll = 0, missing = 0, noDate = false;
-      state.depot.forEach(function (p) {
-        var q = d.map[p.symbol];
-        if (!q || q.error) { missing++; rows.push({ p: p, err: (q && q.error) || 'keine Daten' }); return; }
-        var rate = fxRate(d.fx, q.currency);
-        if (rate == null) { missing++; rows.push({ p: p, err: 'Wechselkurs fehlt' }); return; }
-        var qty = +p.qty, buy = +p.buy;
-        var value = qty * q.price * rate;
-        var c = qty * buy * rate;
-        var bought = p.date ? new Date(p.date).getTime() : null;
-        var ytdBase = bought && bought > yearStart ? buy : q.yearStartPrice;
-        var dYtd = 0, dAll = 0;
-        (q.dividends || []).forEach(function (dv) {
-          if (bought && dv.date < bought) return;
-          var amt = dv.amount * qty * rate;
-          if (bought) dAll += amt;
-          if (dv.date >= yearStart) dYtd += amt;
-        });
-        if (!bought) noDate = true;
-        total += value; cost += c;
-        day += qty * (q.price - q.prevClose) * rate;
-        ytd += ytdBase ? qty * (q.price - ytdBase) * rate : 0;
-        divYtd += dYtd; divAll += dAll;
-        rows.push({ p: p, q: q, value: value, cost: c, pl: value - c, plPct: buy ? (q.price / buy - 1) * 100 : null });
-      });
-      var dayPct = total - day ? day / (total - day) * 100 : null;
-      var ytdPct = total - ytd ? ytd / (total - ytd) * 100 : null;
-      rows.sort(function (a, b) { return (b.value || 0) - (a.value || 0); });
+      return depotRequest;
+    }
+    function money(v, cur, signed) {
+      if (v == null || !isFinite(v)) return '<span class="muted">–</span>';
+      var s = nf(Math.abs(v) >= 1000 ? 0 : 2).format(Math.abs(v)) + (cur ? ' ' + esc(cur) : '');
+      if (signed) return '<span class="num ' + (v > 0 ? 'up' : v < 0 ? 'down' : 'muted') + '">' + (v > 0 ? '+' : v < 0 ? '−' : '') + s + '</span>';
+      return '<span class="num">' + (v < 0 ? '−' : '') + s + '</span>';
+    }
 
+    tile('t-depot', loadDepot, function (d) {
+      var group = $('[data-depot-group]');
+      group.hidden = d.depots.length < 2;
+      if (d.depots.length > 1) {
+        var opts = [{ id: 'all', name: 'Alle Depots' }].concat(d.depots);
+        group.innerHTML = opts.map(function (o) {
+          return '<button class="chip" type="button" data-depot="' + esc(o.id) + '" aria-pressed="' + (o.id === d.selected) + '">' + esc(o.name) + '</button>';
+        }).join('');
+      }
+      if (d.empty || !d.holdings.length) {
+        $('#depot-sub').textContent = 'Aus deinem Depot-Tracker';
+        return '<div class="empty">Im Depot sind noch keine Positionen erfasst.<br><br><a class="btn primary" href="/depot">Depot öffnen</a></div>';
+      }
+      var cur = d.baseCurrency;
+      $('#depot-sub').textContent = 'Aus deinem Depot-Tracker · Werte in ' + cur;
+      var year = new Date().getFullYear();
       var html = '<div class="kpis">' +
-        kpi('Depotwert', chf(total), pct((total / cost - 1) * 100) + ' <span class="muted">gesamt</span>') +
-        kpi('Gewinn/Verlust', chf(total - cost, true), 'Einstand ' + chf(cost)) +
-        kpi('Heute', chf(day, true), pct(dayPct)) +
-        kpi('Seit Jahresbeginn', chf(ytd, true), pct(ytdPct)) +
-        kpi('Dividenden ' + year, chf(divYtd), noDate ? '<span class="muted">seit Beginn: Kaufdatum fehlt</span>' : 'seit Beginn ' + chf(divAll)) +
+        kpi('Depotwert', money(d.marketValue, cur), d.cash ? 'mit Cash ' + money(d.netWorth, cur) : '<span class="muted">ohne Cash</span>') +
+        kpi('Gewinn/Verlust', money(d.unrealizedPL, cur, true), pct(d.costBasis ? (d.unrealizedPL / d.costBasis) * 100 : null) + ' · Einstand ' + money(d.costBasis, cur)) +
+        kpi('Heute', money(d.dayChange, cur, true), pct(d.dayChangePercent)) +
+        kpi('Seit Jahresbeginn', d.ytd == null ? '<span class="muted">–</span>' : money(d.ytd, cur, true), d.ytd == null ? '<span class="muted">Kurs per 1.1. fehlt</span>' : pct(d.ytdPercent)) +
+        kpi('Dividenden ' + year, money(d.dividendsYtd, cur), 'seit Beginn ' + money(d.dividendsTotal, cur)) +
         '</div>';
       html += '<div class="table-wrap"><table><thead><tr>' +
-        '<th>Aktie</th><th class="r">Anzahl</th><th class="r">Kaufkurs</th><th class="r">Aktuell</th><th class="r">Heute</th>' +
-        '<th class="r">G/V CHF</th><th class="r">G/V %</th><th>Anteil</th></tr></thead><tbody>';
-      rows.forEach(function (r) {
-        if (r.err) {
-          html += '<tr><td><span class="sym">' + esc(r.p.symbol) + '</span><span class="sub">' + esc(r.err) + '</span></td><td class="r num">' + num(+r.p.qty, 0) + '</td><td class="r num">' + num(+r.p.buy) + '</td><td colspan="5" class="muted">–</td></tr>';
-          return;
-        }
-        var share = total ? r.value / total * 100 : 0;
-        html += '<tr><td><span class="sym">' + esc(r.p.symbol) + '</span><span class="sub">' + esc(r.q.name) + '</span></td>' +
-          '<td class="r num">' + num(+r.p.qty, +r.p.qty % 1 ? 2 : 0) + '</td>' +
-          '<td class="r num">' + num(+r.p.buy) + ' <span class="muted small">' + esc(r.q.currency) + '</span></td>' +
-          '<td class="r num">' + num(r.q.price) + '</td>' +
-          '<td class="r">' + pct(r.q.chg.d) + '</td>' +
-          '<td class="r">' + chf(r.pl, true) + '</td>' +
-          '<td class="r">' + pct(r.plPct) + '</td>' +
-          '<td><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="flex:1"><span style="width:' + share.toFixed(1) + '%"></span></div><span class="num small">' + nf(1).format(share) + ' %</span></div></td></tr>';
+        '<th>Aktie</th><th class="r">Anzahl</th><th class="r">Kaufkurs Ø</th><th class="r">Aktuell</th><th class="r">Heute</th>' +
+        '<th class="r">G/V ' + esc(cur) + '</th><th class="r">G/V %</th><th>Anteil</th></tr></thead><tbody>';
+      d.holdings.forEach(function (h) {
+        html += '<tr><td><span class="sym">' + esc(h.symbol) + '</span><span class="sub">' + esc(h.name) + '</span></td>' +
+          '<td class="r num">' + num(h.quantity, h.quantity % 1 ? 2 : 0) + '</td>' +
+          '<td class="r num">' + num(h.avgCost) + ' <span class="muted small">' + esc(h.currency) + '</span></td>' +
+          '<td class="r num">' + (h.price ? num(h.price) : '<span class="muted">kein Kurs</span>') + '</td>' +
+          '<td class="r">' + pct(h.dayChangePercent) + '</td>' +
+          '<td class="r">' + money(h.unrealizedPL, '', true) + '</td>' +
+          '<td class="r">' + pct(h.unrealizedPLPercent) + '</td>' +
+          '<td><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="flex:1"><span style="width:' + h.weight.toFixed(1) + '%"></span></div><span class="num small">' + nf(1).format(h.weight) + ' %</span></div></td></tr>';
       });
-      html += '</tbody></table></div>';
-      if (missing) html += '<p class="small down">' + missing + ' Position(en) ohne Kurs – Symbol prüfen.</p>';
-      return html;
+      return html + '</tbody></table></div>';
     });
+    $('[data-depot-group]').addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-depot]');
+      if (!b) return;
+      ui.depot = b.getAttribute('data-depot');
+      try { localStorage.setItem(STORE + ':depot', ui.depot); } catch (err) { /* ignore */ }
+      depotRequest = null;
+      tiles['t-depot'].load();
+    });
+    try { ui.depot = localStorage.getItem(STORE + ':depot'); } catch (err) { /* ignore */ }
 
     function kpi(label, value, delta) {
       return '<div class="kpi"><div class="label">' + esc(label) + '</div><div class="value">' + value + '</div><div class="delta">' + (delta || '') + '</div></div>';
@@ -863,7 +826,7 @@
 
     function myBases() {
       var m = {};
-      state.depot.concat(state.watch).forEach(function (p) { m[base(p.symbol)] = true; });
+      depotSymbols.concat(state.watch.map(function (w) { return w.symbol; })).forEach(function (sym) { m[base(sym)] = true; });
       return m;
     }
 
@@ -932,10 +895,14 @@
     var NEWS_TAGS = { earnings: 'Quartalszahlen', mna: 'Übernahme', analyst: 'Analysten' };
     function newsSymbols() {
       var seen = {}, list = [];
-      state.depot.concat(state.watch).forEach(function (p) { if (!seen[p.symbol]) { seen[p.symbol] = 1; list.push(p.symbol); } });
+      depotSymbols.concat(state.watch.map(function (w) { return w.symbol; })).forEach(function (sym) { if (!seen[sym]) { seen[sym] = 1; list.push(sym); } });
       return list.slice(0, 25);
     }
     tile('t-news', function () {
+      // Needs the depot's symbols; a failed depot load still leaves the watchlist.
+      return loadDepot().catch(function () { return null; }).then(loadNews);
+    }, renderNews);
+    function loadNews() {
       var syms = newsSymbols();
       if (!syms.length) return Promise.resolve({ items: [], empty: true });
       // Names first so the news search uses "Nestlé" instead of "NESN.SW"
@@ -943,7 +910,8 @@
         var qs = syms.map(function (s) { return 's=' + encodeURIComponent(s + '|' + ((map[s] && map[s].name) || s)); }).join('&');
         return api('/api/cockpit/news?' + qs);
       });
-    }, function (d) {
+    }
+    function renderNews(d) {
       if (d.empty) return '<div class="empty">Erfasse Titel im Depot oder in der Beobachtungsliste, um News zu sehen.</div>';
       var sel = $('[data-news-stock]');
       var stocks = {};
@@ -960,7 +928,7 @@
       });
       if (!items.length) return '<div class="empty">Keine passenden News in den letzten 7 Tagen.</div>';
       return '<ul class="news">' + items.slice(0, 60).map(newsItem).join('') + '</ul>';
-    });
+    }
     function newsItem(it) {
       return '<li><a href="' + esc(it.link) + '" target="_blank" rel="noopener noreferrer">' + esc(it.title) + '</a>' +
         '<div class="meta">' + (it.stock ? '<span class="pill neutral">' + esc(it.stock) + '</span>' : '') +
@@ -1172,11 +1140,6 @@
     document.addEventListener('click', function (e) {
       var ed = e.target.closest('[data-edit]');
       if (ed) openEditor(ed.getAttribute('data-edit'));
-      if (e.target.closest('[data-example]')) {
-        state.depot = EXAMPLE_DEPOT.slice();
-        save();
-        reloadMine();
-      }
     });
     $('tbody', dlg).addEventListener('click', function (e) {
       if (e.target.closest('[data-remove]')) e.target.closest('tr').remove();
@@ -1231,7 +1194,7 @@
 
     // ================= Boot & refresh =================
     function reloadMine() {
-      ['t-depot', 't-watch', 't-news'].forEach(function (id) { tiles[id].load(); });
+      ['t-watch', 't-news'].forEach(function (id) { tiles[id].load(); });
       ['t-gainers', 't-losers', 't-earnings'].forEach(function (id) { tiles[id].draw(); });
     }
     function loadAll(quiet) {
