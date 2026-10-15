@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+/* Loading animations; see src/components/Loading.tsx. */
+@keyframes draw-line {
+  0% { stroke-dashoffset: 100; }
+  55%, 80% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+@keyframes fade-area {
+  0%, 30% { opacity: 0; }
+  55%, 80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes slide-bar {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(400%); }
+}
+
+.animate-draw-line { stroke-dasharray: 100; animation: draw-line 1.8s ease-in-out infinite; }
+.animate-fade-area { animation: fade-area 1.8s ease-in-out infinite; }
+.animate-slide-bar { animation: slide-bar 1.2s ease-in-out infinite; }
+.animate-fade-in { animation: fade-in 0.4s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-draw-line, .animate-fade-area, .animate-slide-bar, .animate-fade-in { animation: none; }
+}
+
+/* Categorical chart colors (validated for colour-blind separation on both surfaces). */
+:root {
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #4a3aa7;
+  --series-8: #e34948;
+  --series-other: #a1a1aa;
+  --chart-surface: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
+    --series-other: #71717a;
+    --chart-surface: #18181b;
+  }
+}
