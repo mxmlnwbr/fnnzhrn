@@ -8,6 +8,7 @@
 | `/login` | One sign-in for all tools (email link, no password) | public |
 | `/depot` | Depot: portfolio tracker for shares and cash | signed in |
 | `/cockpit` | Cockpit: market dashboard (depot, markets, news, opportunities) | signed in |
+| `/budget` | Finanzen: income, fixed costs and how much of it to invest | signed in |
 
 The Depot used to be a separate repository on `depot.fnnzhrn.ch`. Its full history is merged into this one, and the old subdomain redirects to `/depot`.
 
@@ -32,24 +33,28 @@ npm run dev                  # http://localhost:3000
 
 ```
 src/
-  proxy.ts                 Sends signed-out visitors of /depot and /cockpit to /login
+  proxy.ts                 Sends signed-out visitors of /depot, /cockpit and /budget to /login
   app/
     page.tsx, site.css     Landing page (styles scoped to .site)
     login/page.tsx         Sign-in page; ?next= is where to go afterwards
     depot/                 Depot dashboard (client component)
     cockpit/route.ts       Serves cockpit.html to signed-in users
     cockpit/cockpit.html   Cockpit page (plain HTML/JS, data from /api/cockpit/*)
+    budget/                Finanzen page (loads the budget on the server)
     api/auth/[...all]/     Sign-in with email links (Better Auth)
     api/portfolio, api/profile          The signed-in user's depots and profile
     api/quotes, history, search, resolve Depot market data (yahoo-finance2)
     api/cockpit/*          Cockpit data (see below)
+    api/budget             The signed-in user's financial overview
   lib/
     auth.ts, db.ts, session.ts  Server-only Better Auth setup, Neon pool, session helpers
     auth-client.ts         Browser side of sign-in
     cockpit/               Cockpit data sources
+    budget.ts              Financial overview: data model and totals
     portfolio.ts, storage.ts, sync.ts, swissquote.ts, yuh.ts, ...  Depot logic
   components/              Depot UI; site/ holds the landing and sign-in components
-db/schema.sql              Database tables for sign-in and sync
+db/schema.sql              Database tables for sign-in, depots and budgets
+db/seed-*.sql              One-off data imports
 ```
 
 Every tool route checks the session on the server: the proxy only does a fast cookie check and redirects, while `/cockpit`, all `/api/*` routes except sign-in, and the depot sync verify the session themselves and answer 401 (or redirect) otherwise.
@@ -111,6 +116,12 @@ A tile dashboard that goes from market overview to news to opportunities to buy 
 | Buffett-Radar | `/api/cockpit/investors` | SEC EDGAR 13F filings |
 
 "Mein Depot" shows the signed-in user's depots from the tracker, all added up or one at a time, using the tracker's own holdings calculation. Year to date compares today's holdings with those on 1 January, net of this year's buys and sells. The watchlist is stored in the browser's `localStorage` (export/import as JSON in the editor). None of these sources has an official API contract, so a tile can break if a provider changes its format.
+
+## Finanzen
+
+A financial overview per account: **Einnahmen** (net income), **Fixkosten** (costs that are certain each month or year) and **Investieren** (what goes into the 3rd pillar, shares and so on). Each entry is paid per month, per year, or per month 13× (a salary with a 13th month's pay). The top cards and the split bar show income, fixed costs, investments and what is left, per month or per year, with the fixed-cost share and the savings rate. Monthly figures leave out the 13th month's pay; yearly ones include it and spread yearly costs over twelve months. Changes save to the `budgets` table as you type.
+
+To import an existing overview, put it in a seed file like [`db/seed-budget-maximilian.sql`](db/seed-budget-maximilian.sql) and run it once the person has signed in (`psql "$DATABASE_URL" -f db/seed-budget-maximilian.sql`). It never overwrites a budget that's already saved.
 
 ## Deploying
 

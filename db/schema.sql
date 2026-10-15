@@ -60,3 +60,10 @@ create table if not exists portfolios (
   data jsonb not null,
   updated_at timestamptz not null default now()
 );
+
+-- One row per user holding their financial overview (income, fixed costs, investments) as JSON.
+create table if not exists budgets (
+  user_id text primary key references "user" ("id") on delete cascade,
+  data jsonb not null,
+  updated_at timestamptz not null default now()
+);
