@@ -1,7 +1,6 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { amounts, EMPTY_BUDGET, normalizeBudget, summarizeBudget } from "./budget";
+import { BUDGET_SEEDS } from "./budget-seeds";
 
 describe("amounts", () => {
   it("leaves the 13th payment out of the month but counts it in the year", () => {
@@ -25,9 +24,9 @@ describe("summarizeBudget", () => {
   });
 
   it("matches the totals of the spreadsheet the seed was made from", () => {
-    const sql = readFileSync(path.join(__dirname, "../../db/seed-budget-maximilian.sql"), "utf8");
-    const json = sql.match(/\$budget\$([\s\S]*)\$budget\$/)![1];
-    const s = summarizeBudget(normalizeBudget(JSON.parse(json)));
+    const seed = BUDGET_SEEDS["maximilian.weber@bluewin.ch"];
+    expect(normalizeBudget(seed)).toEqual(seed);
+    const s = summarizeBudget(seed);
     // Übersicht: Einnahmen TOTAL, Ausgaben TOTAL and Überschuss (Einkommen - Fixkosten).
     expect(s.income.month).toBeCloseTo(5123.15, 2);
     expect(s.income.year).toBeCloseTo(66700.95, 2);

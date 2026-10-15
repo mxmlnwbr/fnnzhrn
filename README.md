@@ -51,10 +51,10 @@ src/
     auth-client.ts         Browser side of sign-in
     cockpit/               Cockpit data sources
     budget.ts              Financial overview: data model and totals
+    budget-store.ts, budget-seeds.ts  Loading and saving it; spreadsheets imported per account
     portfolio.ts, storage.ts, sync.ts, swissquote.ts, yuh.ts, ...  Depot logic
   components/              Depot UI; site/ holds the landing and sign-in components
 db/schema.sql              Database tables for sign-in, depots and budgets
-db/seed-*.sql              One-off data imports
 ```
 
 Every tool route checks the session on the server: the proxy only does a fast cookie check and redirects, while `/cockpit`, all `/api/*` routes except sign-in, and the depot sync verify the session themselves and answer 401 (or redirect) otherwise.
@@ -121,7 +121,7 @@ A tile dashboard that goes from market overview to news to opportunities to buy 
 
 A financial overview per account: **Einnahmen** (net income), **Fixkosten** (costs that are certain each month or year) and **Investieren** (what goes into the 3rd pillar, shares and so on). Each entry is paid per month, per year, or per month 13× (a salary with a 13th month's pay). The top cards and the split bar show income, fixed costs, investments and what is left, per month or per year, with the fixed-cost share and the savings rate. Monthly figures leave out the 13th month's pay; yearly ones include it and spread yearly costs over twelve months. Changes save to the `budgets` table as you type.
 
-To import an existing overview, put it in a seed file like [`db/seed-budget-maximilian.sql`](db/seed-budget-maximilian.sql) and run it once the person has signed in (`psql "$DATABASE_URL" -f db/seed-budget-maximilian.sql`). It never overwrites a budget that's already saved.
+The `budgets` table is created on first use. To bring in an existing overview, add it to `src/lib/budget-seeds.ts` under the account's email: the account starts with it the first time it opens Finanzen, and from then on only what's saved counts.
 
 ## Deploying
 
