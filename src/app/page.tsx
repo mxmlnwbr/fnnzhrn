@@ -26,6 +26,7 @@ const TOOLS = [
     href: "/cockpit",
     title: "Cockpit",
     text: "Depot, Märkte, News und Chancen auf einen Blick",
+    soon: true,
     icon: (
       <svg {...iconProps}>
         <rect x="3" y="3" width="7" height="9" rx="1" />

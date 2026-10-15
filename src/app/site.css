@@ -211,7 +211,7 @@
       color: var(--muted);
     }
 .site ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-.site a.project {
+.site .project {
       --x: 50%;
       --y: 50%;
       position: relative;
@@ -334,6 +334,17 @@
   transition: border-color 0.15s;
 }
 .site .pill-btn:hover, .site .pill-btn:focus-visible { border-color: var(--accent); outline: none; }
+.site .project.soon { opacity: 0.6; cursor: default; }
+.site .soon-tag {
+      flex: none;
+      padding: 2px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--muted);
+      white-space: nowrap;
+    }
 .site .lock { flex: none; display: grid; place-items: center; color: var(--muted); }
 .site .hint { margin: 18px 2px 0; font-size: 0.875rem; color: var(--muted); }
 .site .hint a { color: var(--accent); }

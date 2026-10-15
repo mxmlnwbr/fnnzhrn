@@ -2,8 +2,21 @@
 
 import type { ReactNode } from "react";
 
-/** A tool on the landing page; signed-out visitors go through the sign-in page first. */
-export function ProjectCard({ href, icon, title, text, locked }: { href: string; icon: ReactNode; title: string; text: string; locked: boolean }) {
+/** A tool on the landing page; signed-out visitors go through the sign-in page first. Tools marked `soon` are shown but can't be opened yet. */
+export function ProjectCard({ href, icon, title, text, locked, soon }: { href: string; icon: ReactNode; title: string; text: string; locked: boolean; soon?: boolean }) {
+  if (soon)
+    return (
+      <div className="project soon" aria-disabled="true">
+        <span className="icon" aria-hidden>
+          {icon}
+        </span>
+        <span className="text">
+          <strong>{title}</strong>
+          <span>{text}</span>
+        </span>
+        <span className="soon-tag">Coming soon</span>
+      </div>
+    );
   return (
     <a
       className="project"

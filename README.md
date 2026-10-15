@@ -7,7 +7,7 @@
 | `/` | Landing page (Swiss German copy) | public |
 | `/login` | One sign-in for all tools (email link, no password) | public |
 | `/depot` | Depot: portfolio tracker for shares and cash | signed in |
-| `/cockpit` | Cockpit: market dashboard (depot, markets, news, opportunities) | signed in |
+| `/cockpit` | Cockpit: market dashboard (depot, markets, news, opportunities) | coming soon (redirects to `/`) |
 
 The Depot used to be a separate repository on `depot.fnnzhrn.ch`. Its full history is merged into this one, and the old subdomain redirects to `/depot`.
 
@@ -32,12 +32,12 @@ npm run dev                  # http://localhost:3000
 
 ```
 src/
-  proxy.ts                 Sends signed-out visitors of /depot and /cockpit to /login
+  proxy.ts                 Sends signed-out visitors of /depot to /login
   app/
     page.tsx, site.css     Landing page (styles scoped to .site)
     login/page.tsx         Sign-in page; ?next= is where to go afterwards
     depot/                 Depot dashboard (client component)
-    cockpit/route.ts       Serves cockpit.html to signed-in users
+    cockpit/route.ts       Coming soon: redirects to /; serves cockpit.html to signed-in users once COMING_SOON is off
     cockpit/cockpit.html   Cockpit page (plain HTML/JS, data from /api/cockpit/*)
     api/auth/[...all]/     Sign-in with email links (Better Auth)
     api/portfolio, api/profile          The signed-in user's depots and profile

@@ -6,7 +6,11 @@ import { getAuth } from "@/lib/auth";
 const FILE = path.join(process.cwd(), "src/app/cockpit/cockpit.html");
 let html: Promise<string> | undefined;
 
+// Not ready yet: the landing page shows it as "Coming soon", so send everyone home until it launches.
+const COMING_SOON = true;
+
 export async function GET(request: Request) {
+  if (COMING_SOON) return Response.redirect(new URL("/", request.url), 307);
   const session = await getAuth()?.api.getSession({ headers: request.headers });
   if (!session) return Response.redirect(new URL("/login?next=/cockpit", request.url), 307);
   html ??= readFile(FILE, "utf8");
