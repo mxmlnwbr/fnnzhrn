@@ -14,6 +14,9 @@ function createAuth() {
     database: getPool()!,
     secret: cleanEnv(process.env.BETTER_AUTH_SECRET),
     baseURL: cleanEnv(process.env.BETTER_AUTH_URL),
+    // Sign-in requests are accepted from these sites besides BETTER_AUTH_URL, so a www. address or a
+    // leftover BETTER_AUTH_URL from the old depot.fnnzhrn.ch project doesn't block signing in.
+    trustedOrigins: ["https://fnnzhrn.ch", "https://www.fnnzhrn.ch"],
     session: {
       // Stay signed in like before: a year, renewed daily while the app is used.
       expiresIn: 60 * 60 * 24 * 365,

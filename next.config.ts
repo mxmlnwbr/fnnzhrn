@@ -8,7 +8,9 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: { "/cockpit": ["./src/app/cockpit/cockpit.html"] },
   async redirects() {
     return [
-      // The tracker used to live on its own subdomain.
+      // The tracker used to live on its own subdomain. API paths keep their path, so sign-in links
+      // that still point there (e.g. while BETTER_AUTH_URL was the old address) keep working.
+      { source: "/api/:path*", has: [{ type: "host", value: "depot.fnnzhrn.ch" }], destination: "https://fnnzhrn.ch/api/:path*", permanent: false },
       { source: "/:path*", has: [{ type: "host", value: "depot.fnnzhrn.ch" }], destination: "https://fnnzhrn.ch/depot", permanent: true },
     ];
   },
