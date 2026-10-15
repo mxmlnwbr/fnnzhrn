@@ -109,7 +109,7 @@ export function BudgetPlanner({ initial }: { initial: Budget }) {
       </header>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Einkommen" value={m(summary.income[period])} sub={period === "month" ? "ohne 13. Monatslohn" : "inkl. 13. Monatslohn"} />
+        <Stat label="Einkommen" value={m(summary.income[period])} sub={period === "month" ? "inkl. 13. Monatslohn (verteilt)" : "inkl. 13. Monatslohn"} />
         <Stat label="Fixkosten" value={m(summary.fixed[period])} sub={`${share(summary.fixed[period])} vom Einkommen`} />
         <Stat label="Investieren" value={m(summary.invest[period])} sub={`Sparquote ${share(summary.invest[period])}`} />
         <Stat

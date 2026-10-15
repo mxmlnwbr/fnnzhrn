@@ -36,12 +36,13 @@ export interface Amounts {
 }
 
 /**
- * The amount per month and per year. Monthly figures leave out the 13th payment (like a payslip),
- * yearly ones include it. Yearly amounts are spread evenly over the months.
+ * The amount per month and per year. Yearly amounts and the 13th payment are spread evenly over the
+ * months, so a month is always a twelfth of the year.
  */
 export function amounts(item: Pick<BudgetItem, "amount" | "interval">): Amounts {
   if (item.interval === "year") return { month: item.amount / 12, year: item.amount };
-  return { month: item.amount, year: item.amount * (item.interval === "month13" ? 13 : 12) };
+  const year = item.amount * (item.interval === "month13" ? 13 : 12);
+  return { month: year / 12, year };
 }
 
 export function sum(items: BudgetItem[]): Amounts {
