@@ -13,20 +13,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://depot.fnnzhrn.ch"),
-  title: "Depot · fnnzhrn",
-  description: "Track your shares and cash in one place",
-  applicationName: "Depot",
-  alternates: { canonical: "/" },
+  metadataBase: new URL("https://fnnzhrn.ch"),
+  title: "fnnzhrn",
+  description: "fnnzhrn – ein Freundeskreis, der sich für Finanzen, Märkte und Investieren interessiert.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">{children}</body>
+    <html lang="de-CH" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+      <body className="flex min-h-full flex-col">{children}</body>
     </html>
   );
 }

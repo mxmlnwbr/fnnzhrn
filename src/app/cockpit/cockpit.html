@@ -83,6 +83,10 @@
     .brand small { font-weight: 600; letter-spacing: 0; color: var(--muted); font-size: 0.9rem; margin-left: 6px; }
     .top-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
     .stamp { font-size: 0.8rem; color: var(--muted); }
+    .top-nav { display: flex; gap: 4px; }
+    .top-nav a { padding: 4px 10px; border-radius: 999px; color: var(--muted); text-decoration: none; font-size: 0.875rem; }
+    .top-nav a:hover { color: var(--fg); }
+    .top-nav a[aria-current="page"] { color: var(--fg); background: var(--accent-soft); }
 
     .btn {
       display: inline-flex;
@@ -299,12 +303,17 @@
   <header class="top">
     <div class="top-inner">
       <a class="brand" href="/">fnnzhrn<span class="dot">.</span><small>Cockpit</small></a>
+      <nav class="top-nav" aria-label="Tools">
+        <a href="/depot">Depot</a>
+        <a href="/cockpit" aria-current="page">Cockpit</a>
+      </nav>
       <div class="top-actions">
         <span class="stamp" id="stamp"></span>
         <button class="btn" id="refresh-all" type="button" title="Alle Kacheln neu laden">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
           Aktualisieren
         </button>
+        <button class="btn ghost" id="sign-out" type="button">Abmelden</button>
       </div>
     </div>
   </header>
@@ -650,6 +659,8 @@
 
     function api(path) {
       return fetch(path, { headers: { Accept: 'application/json' } }).then(function (r) {
+        // Session ended (e.g. signed out in another tab): back to the sign-in page
+        if (r.status === 401) location.replace('/login?next=' + encodeURIComponent(location.pathname));
         return r.json().catch(function () { return {}; }).then(function (j) {
           if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
           return j;
@@ -658,7 +669,7 @@
     }
     function quotes(symbols, dividends) {
       if (!symbols.length) return Promise.resolve({});
-      return api('/api/quotes?symbols=' + encodeURIComponent(symbols.join(',')) + (dividends ? '&dividends=1' : '')).then(function (j) {
+      return api('/api/cockpit/quotes?symbols=' + encodeURIComponent(symbols.join(',')) + (dividends ? '&dividends=1' : '')).then(function (j) {
         var map = {};
         j.quotes.forEach(function (q) { map[q.symbol] = q; });
         return map;
@@ -834,7 +845,7 @@
             return { rows: rows.slice(0, 10) };
           });
         }
-        return api('/api/screener?id=' + screenerId + '&count=10').then(function (j) { return { rows: j.quotes }; });
+        return api('/api/cockpit/screener?id=' + screenerId + '&count=10').then(function (j) { return { rows: j.quotes }; });
       }, function (d) {
         if (!d.rows.length) return '<div class="empty">Heute (noch) keine Titel über der Schwelle.</div>';
         var mine = myBases();
@@ -894,7 +905,7 @@
         '<text x="100" y="86" text-anchor="middle" font-size="26" font-weight="800">' + Math.round(score) + '</text></svg>';
     }
     tile('t-mood', function () {
-      return api('/api/sentiment').catch(function () {
+      return api('/api/cockpit/sentiment').catch(function () {
         // Fallback: at least show the VIX from Yahoo
         return quotes(['^VIX']).then(function (m) { return { vixOnly: m['^VIX'] }; });
       });
@@ -930,7 +941,7 @@
       // Names first so the news search uses "Nestlé" instead of "NESN.SW"
       return quotes(syms).then(function (map) {
         var qs = syms.map(function (s) { return 's=' + encodeURIComponent(s + '|' + ((map[s] && map[s].name) || s)); }).join('&');
-        return api('/api/news?' + qs);
+        return api('/api/cockpit/news?' + qs);
       });
     }, function (d) {
       if (d.empty) return '<div class="empty">Erfasse Titel im Depot oder in der Beobachtungsliste, um News zu sehen.</div>';
@@ -960,7 +971,7 @@
     $('[data-news-stock]').addEventListener('change', function (e) { ui.newsStock = e.target.value; tiles['t-news'].draw(); });
 
     // ================= Earnings =================
-    tile('t-earnings', function () { return api('/api/earnings?days=7'); }, function (d) {
+    tile('t-earnings', function () { return api('/api/cockpit/earnings?days=7'); }, function (d) {
       var mine = myBases();
       var rows = d.rows.filter(function (r) { return ui.earn === 'all' || mine[r.symbol]; });
       if (!rows.length) return '<div class="empty">' + (ui.earn === 'mine' ? 'Keiner deiner Titel meldet in den nächsten 7 Handelstagen.' : 'Keine Termine gefunden.') + '</div>';
@@ -980,7 +991,7 @@
     chipGroup('[data-earn-group]', 'data-earn', function (v) { ui.earn = v; tiles['t-earnings'].draw(); });
 
     // ================= M&A =================
-    tile('t-mna', function () { return api('/api/news?topic=mna'); }, function (d) {
+    tile('t-mna', function () { return api('/api/cockpit/news?topic=mna'); }, function (d) {
       var items = d.items.filter(function (it) { return it.group === ui.mna; }).sort(function (a, b) { return b.date - a.date; });
       if (!items.length) return '<div class="empty">Aktuell keine passenden Schlagzeilen.</div>';
       return '<ul class="news">' + items.slice(0, 30).map(newsItem).join('') + '</ul>';
@@ -988,7 +999,7 @@
     chipGroup('[data-mna-group]', 'data-mna', function (v) { ui.mna = v; tiles['t-mna'].draw(); });
 
     // ================= Radar =================
-    tile('t-radar', function () { return api('/api/radar'); }, function (d) {
+    tile('t-radar', function () { return api('/api/cockpit/radar'); }, function (d) {
       var f = ui.radar;
       var rows = d.rows.filter(function (r) {
         return r.chg6m <= f.threshold && (!f.profitable || r.eps > 0) && (!f.large || r.marketCap >= 1e10);
@@ -1016,8 +1027,8 @@
     // ================= Value =================
     tile('t-value', function () {
       return Promise.all([
-        api('/api/screener?id=undervalued_large_caps&count=100'),
-        api('/api/screener?id=undervalued_growth_stocks&count=100').catch(function () { return { quotes: [] }; })
+        api('/api/cockpit/screener?id=undervalued_large_caps&count=100'),
+        api('/api/cockpit/screener?id=undervalued_growth_stocks&count=100').catch(function () { return { quotes: [] }; })
       ]).then(function (res) {
         var seen = {}, rows = [];
         res.forEach(function (j) { j.quotes.forEach(function (q) { if (!seen[q.symbol]) { seen[q.symbol] = 1; rows.push(q); } }); });
@@ -1058,7 +1069,7 @@
       var d = new Date(iso);
       return 'Q' + (Math.floor(d.getUTCMonth() / 3) + 1) + ' ' + d.getUTCFullYear();
     }
-    tile('t-investors', function () { return api('/api/investors'); }, function (d) {
+    tile('t-investors', function () { return api('/api/cockpit/investors'); }, function (d) {
       var f = d.funds[ui.fund] || d.funds[0];
       var html = '<div class="fund-tabs" role="group" aria-label="Investor">' + d.funds.map(function (x, i) {
         return '<button class="chip" type="button" data-fund="' + i + '" aria-pressed="' + (i === ui.fund) + '">' + esc(x.name) + '</button>';
@@ -1199,7 +1210,7 @@
       if (q.length < 2) { list.hidden = true; return; }
       searchTimer = setTimeout(function () {
         api('/api/search?q=' + encodeURIComponent(q)).then(function (j) {
-          list.innerHTML = j.results.map(function (r) {
+          list.innerHTML = j.map(function (r) {
             return '<li><button type="button" data-symbol="' + esc(r.symbol) + '"><span class="sym">' + esc(r.symbol) + '</span><span class="muted">' + esc(r.name) + ' · ' + esc(r.exchange) + '</span></button></li>';
           }).join('') || '<li class="muted small" style="padding:8px">Nichts gefunden</li>';
           list.hidden = false;
@@ -1232,6 +1243,10 @@
       });
     }
     $('#refresh-all').addEventListener('click', function () { loadAll(true); });
+    $('#sign-out').addEventListener('click', function () {
+      fetch('/api/auth/sign-out', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+        .finally(function () { location.assign('/'); });
+    });
 
     var lastLoad = Date.now();
     loadAll(false);

@@ -321,11 +321,6 @@ export function useSyncState(): SyncState {
   return useSyncExternalStore(subscribe, () => sync, () => LOADING);
 }
 
-export async function sendLoginLink(email: string) {
-  const { error } = await authClient.signIn.magicLink({ email, callbackURL: "/" });
-  if (error) throw new Error(error.message || "Couldn't send the sign-in link");
-}
-
 export async function signOut() {
   if (!ENABLED) return;
   clearTimeout(pushTimer);

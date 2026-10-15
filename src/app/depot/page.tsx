@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AccountMenu } from "@/components/AccountMenu";
 import { CashAccounts } from "@/components/CashAccounts";
 import { DepotMenu } from "@/components/DepotMenu";
@@ -11,7 +11,6 @@ import { type ImportResult, ImportReport } from "@/components/ImportReport";
 import { DividendCard, FeeCard } from "@/components/IncomeCards";
 import { RefreshIcon, SplashLoader, TopProgress } from "@/components/Loading";
 import { PerformanceChart } from "@/components/PerformanceChart";
-import { SignInScreen } from "@/components/SignIn";
 import { SummaryCards } from "@/components/SummaryCards";
 import { TransactionForm } from "@/components/TransactionForm";
 import { TransactionList } from "@/components/TransactionList";
@@ -60,10 +59,21 @@ export default function Home() {
       </main>
     );
   }
-  // The tracker only opens for a signed-in account; without sign-in configured it stays locked.
-  if (sync.status !== "signed-in") return <SignInScreen configured={sync.status === "signed-out"} />;
+  // The tracker only opens for a signed-in account: everyone else goes to the fnnzhrn sign-in page.
+  if (sync.status !== "signed-in") return <GoToLogin />;
   // Switching depots starts the dashboard afresh, so no prices or import report carry over.
   return <Dashboard key={depot.id} depot={depot} />;
+}
+
+function GoToLogin() {
+  useEffect(() => {
+    location.replace("/login?next=/depot");
+  }, []);
+  return (
+    <main className="flex flex-1">
+      <SplashLoader />
+    </main>
+  );
 }
 
 function Dashboard({ depot }: { depot: Depot }) {
