@@ -380,5 +380,5 @@
 .site .primary:active { transform: scale(0.99); }
 .site .primary[disabled] { opacity: 0.6; cursor: default; }
 .site .secondary { width: 100%; justify-content: center; }
-.site .error { color: #c93434; font-size: 0.875rem; margin: -4px 0 12px; }
+.site .card .error { color: #e5484d; font-size: 0.875rem; margin: -4px 0 12px; }
 .site .card code { font-family: ui-monospace, monospace; font-size: 0.85em; }
