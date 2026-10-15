@@ -26,7 +26,7 @@ export default async function Login({ searchParams }: PageProps<"/login">) {
           Anmelden
         </h1>
         <p className="lead site-reveal" style={reveal(0.2)}>
-          Ein Login für alle Tools.
+          Ein Login für alle Tools: Depot und Finanzen.
         </p>
         <div className="site-reveal" style={reveal(0.3)}>
           <LoginForm next={next} configured={syncConfigured()} />
