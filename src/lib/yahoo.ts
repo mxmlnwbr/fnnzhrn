@@ -4,7 +4,8 @@ import { normaliseCurrency } from "./currency";
 import { isCrypto, type Listing, pickTicker, tickerCandidates } from "./swissquote";
 import type { PricePoint, Profile, Quote } from "./types";
 
-const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
+/** The shared client; the Cockpit's screener borrows its cookie jar and crumb. */
+export const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
 /**
  * Runs a Yahoo call with schema validation and, if Yahoo's response doesn't match the library's

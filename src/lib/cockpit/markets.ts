@@ -1,11 +1,14 @@
 import "server-only";
 import { failed, fetchJson, mapLimit } from "./http";
-import { yahooChart, yahooScreener } from "./yahoo";
+import { market, screenCached } from "./screener";
+import { inMarket, radarScreen } from "./screens";
+import { yahooChart } from "./yahoo";
 
 /** Upcoming quarterly reports (Nasdaq earnings calendar: US listings incl. ADRs like UBS). */
 export async function earnings(days: number, minCap: number) {
   const dates: string[] = [];
-  const d = new Date();
+  // Nasdaq's calendar runs on New York days.
+  const d = new Date(new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" }));
   while (dates.length < days) {
     const wd = d.getUTCDay();
     if (wd !== 0 && wd !== 6) dates.push(d.toISOString().slice(0, 10));
@@ -18,6 +21,9 @@ export async function earnings(days: number, minCap: number) {
       rows: j.data?.rows ?? [],
     })),
   );
+  // One day may fail; nothing at all means the calendar is unreachable.
+  const first = lists.find(failed);
+  if (first && lists.every(failed)) throw new Error(first.error);
   const rows = [];
   for (const l of lists) {
     if (failed(l)) continue;
@@ -61,25 +67,16 @@ export async function sentiment() {
   };
 }
 
-const RADAR_POOLS = ["most_actives", "day_losers", "undervalued_large_caps", "undervalued_growth_stocks", "growth_technology_stocks", "aggressive_small_caps", "most_shorted_stocks"];
-
 /**
- * Stocks with large drawdowns. Yahoo has no free custom screener, so this pools several
- * predefined US screeners, keeps the big 12-month losers and computes the exact 6-month move.
+ * Stocks with large drawdowns: a market's biggest 12-month losers from Yahoo's screener, with the exact
+ * 6-month move computed from their charts. The screen leaves out micro caps and illiquid listings.
  */
-export async function radar() {
-  const pools = await mapLimit(RADAR_POOLS, 4, (id) => yahooScreener(id, 250));
-  const seen = new Map<string, Awaited<ReturnType<typeof yahooScreener>>[number]>();
-  for (const list of pools) {
-    if (failed(list)) continue;
-    for (const s of list) {
-      // Skip micro caps and penny stocks; too noisy for a radar.
-      if (!s.marketCap || s.marketCap < 3e8 || !(s.price != null && s.price >= 1)) continue;
-      if ((s.chg52w != null && s.chg52w <= -35) || (s.fromHigh52 != null && s.fromHigh52 <= -45)) seen.set(s.symbol, s);
-    }
-  }
-  const candidates = [...seen.values()].sort((a, b) => (a.chg52w ?? 0) - (b.chg52w ?? 0)).slice(0, 60);
+export async function radar(marketId: string | null) {
+  const m = market(marketId);
+  const candidates = (await screenCached(radarScreen(m), 1800)).filter((q) => inMarket(q, m));
   const charts = await mapLimit(candidates, 8, (c) => yahooChart(c.symbol));
+  const firstFailure = charts.find(failed);
+  if (firstFailure && charts.every(failed)) throw new Error(firstFailure.error);
   const rows = candidates
     .map((c, i) => {
       const ch = charts[i];
@@ -99,5 +96,5 @@ export async function radar() {
     })
     .filter((r): r is typeof r & { chg6m: number } => r.chg6m != null)
     .sort((a, b) => a.chg6m - b.chg6m);
-  return { rows, pooled: seen.size };
+  return { market: m.id, rows };
 }

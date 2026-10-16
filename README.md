@@ -7,7 +7,7 @@
 | `/` | Landing page (Swiss German copy) | public |
 | `/login` | One sign-in for all tools (email link, no password) | public |
 | `/depot` | Depot: portfolio tracker for shares and cash | signed in |
-| `/cockpit` | Cockpit: market dashboard (depot, markets, news, opportunities) | coming soon (redirects to `/`) |
+| `/cockpit` | Cockpit: market dashboard (depot, markets, news, opportunities) | signed in |
 | `/budget` | Finanzen: income, fixed costs and how much of it to invest | signed in |
 
 The Depot used to be a separate repository on `depot.fnnzhrn.ch`. Its full history is merged into this one, and the old subdomain redirects to `/depot`.
@@ -33,12 +33,12 @@ npm run dev                  # http://localhost:3000
 
 ```
 src/
-  proxy.ts                 Sends signed-out visitors of /depot and /budget to /login
+  proxy.ts                 Sends signed-out visitors of /depot, /budget and /cockpit to /login
   app/
     page.tsx, site.css     Landing page (styles scoped to .site)
     login/page.tsx         Sign-in page; ?next= is where to go afterwards
     depot/                 Depot dashboard (client component)
-    cockpit/route.ts       Coming soon: redirects to /; serves cockpit.html to signed-in users once COMING_SOON is off
+    cockpit/route.ts       Serves cockpit.html to signed-in users
     cockpit/cockpit.html   Cockpit page (plain HTML/JS, data from /api/cockpit/*)
     budget/                Finanzen page (loads the budget on the server)
     api/auth/[...all]/     Sign-in with email links (Better Auth)
@@ -49,7 +49,7 @@ src/
   lib/
     auth.ts, db.ts, session.ts  Server-only Better Auth setup, Neon pool, session helpers
     auth-client.ts         Browser side of sign-in
-    cockpit/               Cockpit data sources
+    cockpit/               Cockpit data sources; screens.ts defines markets and screens, screener.ts runs them on Yahoo
     budget.ts              Financial overview: data model and totals
     budget-store.ts, budget-seeds.ts  Loading and saving it; spreadsheets imported per account
     portfolio.ts, storage.ts, sync.ts, swissquote.ts, yuh.ts, ...  Depot logic
@@ -107,15 +107,18 @@ A tile dashboard that goes from market overview to news to opportunities to buy 
 | Tile | Endpoint | Source |
 | --- | --- | --- |
 | Mein Depot | `/api/cockpit/depot` | Your depots from the tracker (same calculation as `/depot`), Yahoo prices |
-| Märkte, Makro-Markt, Beobachtungsliste, SMI movers | `/api/cockpit/quotes` | Yahoo Finance chart API |
-| Tagesgewinner / -verlierer (USA), Value-Chancen | `/api/cockpit/screener` | Yahoo predefined screeners |
-| Schnäppchen-Radar | `/api/cockpit/radar` | Yahoo screeners + charts (US stocks) |
+| Märkte, Makro-Markt, Beobachtungsliste | `/api/cockpit/quotes` | Yahoo Finance chart API |
+| Tagesgewinner / -verlierer | `/api/cockpit/movers` | Yahoo stock screener, per market |
+| Value-Chancen | `/api/cockpit/value` | Yahoo stock screener (KGV, Gewinnwachstum, Verschuldung) |
+| Schnäppchen-Radar | `/api/cockpit/radar` | Yahoo stock screener + charts, per market |
 | News zu meinen Aktien, Übernahmen & Gerüchte | `/api/cockpit/news` | Google News RSS, keyword-tagged |
 | Nächste Quartalszahlen | `/api/cockpit/earnings` | Nasdaq earnings calendar |
 | Marktstimmung | `/api/cockpit/sentiment` | CNN Fear & Greed (incl. put/call, VIX) |
 | Buffett-Radar | `/api/cockpit/investors` | SEC EDGAR 13F filings |
 
 "Mein Depot" shows the signed-in user's depots from the tracker, all added up or one at a time, using the tracker's own holdings calculation. Year to date compares today's holdings with those on 1 January, net of this year's buys and sells. The watchlist is stored in the browser's `localStorage` (export/import as JSON in the editor). None of these sources has an official API contract, so a tile can break if a provider changes its format.
+
+Gainers/losers, the Schnäppchen-Radar and Value-Chancen each come per market: USA, Schweiz, Deutschland, Europa, UK and Japan, chosen with chips on the tile and remembered per device. The lists come from Yahoo's stock screener, called with the crumb and cookies that `yahoo-finance2` already holds for the depot's quotes (`src/lib/cockpit/screener.ts`); the markets, their liquidity floors and the screens are defined in `src/lib/cockpit/screens.ts`. Secondary listings are kept out by a volume floor and the market's currency. Routes that fan out to many upstream requests set `maxDuration`, so Vercel gives them a minute.
 
 ## Finanzen
 

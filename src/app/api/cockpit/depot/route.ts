@@ -10,6 +10,9 @@ import { buildPositions } from "@/lib/portfolio";
 import { ALL_DEPOTS_ID, combineDepots, normalizeStore } from "@/lib/sync";
 import { getQuotes } from "@/lib/yahoo";
 
+// Quotes, FX rates and one chart per position held on 1 January: more than Vercel's default allows.
+export const maxDuration = 60;
+
 export async function GET(request: Request) {
   const user = await requireUser(request);
   if (user instanceof Response) return user;
