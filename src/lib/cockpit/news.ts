@@ -1,12 +1,19 @@
 import "server-only";
 import { BadRequest, failed, fetchText, mapLimit } from "./http";
 
+/** A whole-word match that also treats umlauts as letters (`\b` only knows ASCII). */
+const words = (alternatives: string) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${alternatives})(?![\\p{L}\\p{N}])`, "iu");
+
 /** Headline keywords (English and German) that tag a news item. */
 const CATEGORIES = {
-  earnings: /\b(earnings|quarterly|quarter|q[1-4]|results|revenue|guidance|eps|profit|quartal\w*|zahlen|umsatz|gewinn\w*|prognose|jahresergebnis)\b/i,
-  mna: /(acqui|merger|takeover|buyout|bid for|deal to buy|to buy|buys |stake in|übernahme|übernimmt|fusion|kauft |beteiligung)/i,
-  analyst:
-    /(upgrade|downgrade|price target|outperform|underperform|overweight|underweight|initiat\w* coverage|kursziel|hochgestuft|herabgestuft|abgestuft|analyst|kaufempfehlung|rating)/i,
+  earnings: words("earnings|quarterly|quarter|q[1-4]|results|revenue|guidance|eps|profit|quartal\\p{L}*|zahlen|umsatz|gewinn\\p{L}*|prognose|jahresergebnis"),
+  mna: words(
+    // "Pfizer to buy Metsera" is a takeover; "3 stocks to buy now" and "upgraded to Buy" are not.
+    "acqui\\p{L}*|merger|takeover|buyout|bid for|to buy(?= [\\p{L}\\p{N}$])(?! (?:now|in|before|this|the|an?|these|right|and|as|more|for|or|on|if|with|at|after|during|while|today|ahead|amid|despite|under|over|its|your|my|our|their|from)\\b)|to acquire|buys|stake in|übernahme\\p{L}*|übernimmt|fusion\\p{L}*|kauft|beteiligung",
+  ),
+  analyst: words(
+    "upgrades?|upgraded|downgrades?|downgraded|price target|outperform|underperform|overweight|underweight|initiat\\p{L}* coverage|kursziel\\p{L}*|hochgestuft|herabgestuft|abgestuft|analyst\\p{L}*|kaufempfehlung|rating",
+  ),
 };
 
 type Lang = "en" | "de";
@@ -38,7 +45,10 @@ export type NewsItem = {
 /** Takeover rumours and companies looking for a buyer, from headline searches. */
 export async function mnaNews() {
   const lists = await mapLimit(MNA_QUERIES, 4, (m) => rss(m.q, m.lang).then((items) => items.map((it) => ({ ...it, group: m.group }))));
-  return dedupe(lists.flatMap((l) => (failed(l) ? [] : l))).slice(0, 60);
+  failLoudly(lists);
+  // Each group keeps its own share of the list; the rumours alone would fill a shared one.
+  const group = (g: (typeof MNA_QUERIES)[number]["group"]) => dedupe(lists.flatMap((l, i) => (failed(l) || MNA_QUERIES[i].group !== g ? [] : l))).slice(0, 40);
+  return [...group("rumour"), ...group("seller")];
 }
 
 /** News of the last 7 days per stock; `entries` are "SYMBOL|Company name". */
@@ -58,9 +68,16 @@ export async function stockNews(entries: string[]) {
   const lists = await mapLimit(jobs, 6, (j) =>
     rss(j.q, j.lang).then((items) => items.slice(0, 12).map((it) => ({ ...it, symbol: j.s.symbol, stock: j.s.name }))),
   );
+  failLoudly(lists);
   return dedupe(lists.flatMap((l) => (failed(l) ? [] : l)))
     .sort((a, b) => b.date - a.date)
     .slice(0, 150);
+}
+
+/** One search may fail; all of them failing means the news source is unreachable, not that there is no news. */
+function failLoudly(lists: unknown[]) {
+  const first = lists.find(failed);
+  if (first && lists.every(failed)) throw new Error(first.error);
 }
 
 async function rss(query: string, lang: Lang): Promise<NewsItem[]> {

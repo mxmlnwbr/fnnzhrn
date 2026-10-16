@@ -6,15 +6,18 @@ import { getAuth } from "@/lib/auth";
 const FILE = path.join(process.cwd(), "src/app/cockpit/cockpit.html");
 let html: Promise<string> | undefined;
 
-// Not ready yet: the landing page shows it as "Coming soon", so send everyone home until it launches.
-const COMING_SOON = true;
-
 export async function GET(request: Request) {
-  if (COMING_SOON) return Response.redirect(new URL("/", request.url), 307);
   const session = await getAuth()?.api.getSession({ headers: request.headers });
   if (!session) return Response.redirect(new URL("/login?next=/cockpit", request.url), 307);
-  html ??= readFile(FILE, "utf8");
-  return new Response(await html, {
+  // In development the file is read on every request, so edits show up without a restart.
+  const page =
+    process.env.NODE_ENV === "production"
+      ? (html ??= readFile(FILE, "utf8").catch((e) => {
+          html = undefined;
+          throw e;
+        }))
+      : readFile(FILE, "utf8");
+  return new Response(await page, {
     headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "private, no-store" },
   });
 }

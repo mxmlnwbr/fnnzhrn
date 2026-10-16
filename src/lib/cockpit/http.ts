@@ -12,12 +12,20 @@ export type FetchOptions = {
 };
 
 export async function fetchText(url: string, { headers = {}, timeout = 12000, revalidate = 0 }: FetchOptions = {}) {
-  const res = await fetch(url, {
-    headers: { "User-Agent": BROWSER_UA, ...headers },
-    signal: AbortSignal.timeout(timeout),
-    next: { revalidate },
-  });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText} (${new URL(url).host})`);
+  const host = new URL(url).host;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { "User-Agent": BROWSER_UA, ...headers },
+      signal: AbortSignal.timeout(timeout),
+      next: { revalidate },
+    });
+  } catch (e) {
+    // The tiles show these messages as they are.
+    const name = (e as Error).name;
+    throw new Error(name === "TimeoutError" || name === "AbortError" ? `Quelle antwortet nicht (${host})` : `Quelle nicht erreichbar (${host})`);
+  }
+  if (!res.ok) throw new Error(`Quelle antwortet mit ${res.status} (${host})`);
   return res.text();
 }
 

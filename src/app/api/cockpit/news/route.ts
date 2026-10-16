@@ -3,6 +3,8 @@
 import { cockpitRoute } from "@/lib/cockpit/http";
 import { mnaNews, stockNews } from "@/lib/cockpit/news";
 
+export const maxDuration = 60;
+
 export const GET = cockpitRoute(async (q) => {
   const items = q.get("topic") === "mna" ? await mnaNews() : await stockNews(q.getAll("s"));
   return { items, asOf: Date.now() };

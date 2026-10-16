@@ -1,5 +1,5 @@
 import "server-only";
-import { BadRequest, fetchJson } from "./http";
+import { fetchJson } from "./http";
 
 const YAHOO = "https://query1.finance.yahoo.com";
 // Yahoo rate-limits full browser user agents from cloud IPs more often than this short one.
@@ -86,62 +86,13 @@ export async function yahooChart(symbol: string, { range = "1y", withDividends =
   return quote;
 }
 
-/** Last close at or before time t (falls back to the first point). */
+/** Last close at or before time t; null when the history starts clearly later (a few days' slack for the range's first candle). */
 function closeAt(pts: [number, number][], t: number): number | null {
-  if (!pts.length) return null;
+  if (!pts.length || pts[0][0] - t > 7 * DAY) return null;
   let best = pts[0][1];
   for (const [time, close] of pts) {
     if (time > t) break;
     best = close;
   }
   return best;
-}
-
-const SCREENERS = [
-  "day_gainers",
-  "day_losers",
-  "most_actives",
-  "undervalued_large_caps",
-  "undervalued_growth_stocks",
-  "growth_technology_stocks",
-  "aggressive_small_caps",
-  "most_shorted_stocks",
-  "small_cap_gainers",
-];
-
-export type ScreenerQuote = ReturnType<typeof slimQuote>;
-
-export async function yahooScreener(id: string | null, count = 25) {
-  if (!id || !SCREENERS.includes(id)) throw new BadRequest(`Unbekannter Screener: ${id}`);
-  const j = await fetchJson<{ finance: { result?: { quotes: Record<string, unknown>[] }[] } }>(
-    `${YAHOO}/v1/finance/screener/predefined/saved?scrIds=${id}&count=${count}`,
-    { headers: YAHOO_HEADERS, revalidate: 300 },
-  );
-  const r = j.finance.result?.[0];
-  if (!r) throw new Error("Screener liefert keine Daten");
-  return r.quotes.map(slimQuote);
-}
-
-function slimQuote(q: Record<string, unknown>) {
-  const n = (k: string) => (typeof q[k] === "number" ? (q[k] as number) : null);
-  const s = (k: string) => (typeof q[k] === "string" ? (q[k] as string) : null);
-  return {
-    symbol: s("symbol") ?? "",
-    name: s("shortName") || s("longName") || s("displayName") || s("symbol") || "",
-    currency: s("currency"),
-    exchange: s("fullExchangeName"),
-    price: n("regularMarketPrice"),
-    chgPct: n("regularMarketChangePercent"),
-    marketCap: n("marketCap"),
-    pe: n("trailingPE"),
-    forwardPe: n("forwardPE"),
-    eps: n("epsTrailingTwelveMonths"),
-    epsForward: n("epsForward"),
-    priceToBook: n("priceToBook"),
-    chg52w: n("fiftyTwoWeekChangePercent"),
-    fromHigh52: n("fiftyTwoWeekHighChangePercent") != null ? n("fiftyTwoWeekHighChangePercent")! * 100 : null,
-    dividendYield: n("trailingAnnualDividendYield") != null ? n("trailingAnnualDividendYield")! * 100 : null,
-    earnings: n("earningsTimestamp") != null ? n("earningsTimestamp")! * 1000 : null,
-    rating: s("averageAnalystRating"),
-  };
 }
