@@ -408,7 +408,7 @@
 
       <section class="tile s4" id="t-earnings">
         <div class="tile-head">
-          <div><h3>Nächste Quartalszahlen</h3><p>Nächste 7 Handelstage · Marktkap. &gt; 10 Mrd. USD</p></div>
+          <div><h3>Nächste Quartalszahlen</h3><p>Nächste 7 Werktage · Marktkap. &gt; 10 Mrd. USD</p></div>
         </div>
         <div class="chips" role="group" aria-label="Filter" data-earn-group>
           <button class="chip" type="button" data-earn="all" aria-pressed="true">Alle</button>
@@ -466,7 +466,7 @@
           <button class="chip" type="button" data-value="pb" aria-pressed="false">KBV &lt; 3</button>
         </div>
         <div class="tile-body scroll"></div>
-        <div class="tile-foot"><span class="when"></span><span class="src">Yahoo-Screener · KGV der letzten 12 Monate · Gewinnwachstum = EPS letzte 12 Monate vs. Vorjahr · Verschuldung tief = Schulden unter 50 % des Eigenkapitals · „Wachstum erw.“ = erwartetes EPS vs. letzte 12 Monate</span></div>
+        <div class="tile-foot"><span class="when"></span><span class="src">Yahoo-Screener · KGV der letzten 12 Monate · Gewinnwachstum positiv = EPS letzte 12 Monate über Vorjahr und erwartetes Wachstum über null (ohne Schätzung fällt der Titel weg) · Verschuldung tief = Schulden unter 50 % des Eigenkapitals · „Wachstum erw.“ = erwartetes EPS vs. letzte 12 Monate</span></div>
       </section>
 
       <section class="tile" id="t-investors">
@@ -649,7 +649,6 @@
       if (diff === 1) return 'Morgen';
       return d.toLocaleDateString('de-CH', { weekday: 'long', day: '2-digit', month: '2-digit' });
     }
-    function base(sym) { return String(sym).toUpperCase().split('.')[0]; }
 
     function spark(values, up) {
       if (!values || values.length < 2) return '';
@@ -690,11 +689,15 @@
     var tiles = {};
     function tile(id, loader, render) {
       var el = document.getElementById(id);
-      var t = { el: el, body: $('.tile-body', el), when: $('.when', el), data: null, stamp: '', seq: 0, loader: loader, render: render };
+      var t = { el: el, body: $('.tile-body', el), when: $('.when', el), data: null, shown: false, stamp: '', seq: 0, loader: loader, render: render };
       t.load = function (quiet) {
         // Chips can fire several loads in a row; only the newest one may draw.
         var seq = ++t.seq;
-        if (!quiet || !t.data) t.body.innerHTML = '<div class="loading" aria-busy="true"><span class="sr-only">Wird geladen …</span><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>';
+        // A quiet load keeps what is on screen; otherwise (or when nothing is) the skeleton shows.
+        if (!quiet || !t.shown) {
+          t.shown = false;
+          t.body.innerHTML = '<div class="loading" aria-busy="true"><span class="sr-only">Wird geladen …</span><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>';
+        }
         return loader().then(function (data) {
           if (seq !== t.seq) return;
           t.data = data;
@@ -704,12 +707,17 @@
           t.draw();
         }).catch(function (e) {
           if (seq !== t.seq) return;
-          if (quiet && t.data) { t.when.textContent = t.stamp + ' · Aktualisierung fehlgeschlagen'; return; }
+          if (quiet && t.shown) { t.when.textContent = t.stamp + ' · Aktualisierung fehlgeschlagen'; return; }
+          t.shown = false;
           t.body.innerHTML = '<div class="error">Konnte nicht geladen werden: ' + esc(e.message) + ' <button class="btn" type="button">Erneut versuchen</button></div>';
           $('button', t.body).addEventListener('click', function () { t.load(); });
         });
       };
-      t.draw = function () { if (t.data) t.body.innerHTML = render(t.data); };
+      t.draw = function () {
+        if (!t.data) return;
+        t.body.innerHTML = render(t.data);
+        t.shown = true;
+      };
       tiles[id] = t;
       return t;
     }
@@ -855,10 +863,10 @@
         return loadMovers(ui[key]).then(function (d) { return { rows: d[key], asOf: d.asOf }; });
       }, function (d) {
         if (!d.rows.length) return '<div class="empty">Heute (noch) keine Kurse für diesen Markt.</div>';
-        var mine = myBases();
+        var mine = mySymbols(), names = myNames();
         var html = '<table><thead><tr><th>Aktie</th><th class="r">Kurs</th><th class="r">Heute</th></tr></thead><tbody>';
         d.rows.forEach(function (r) {
-          html += '<tr' + (mine[base(r.symbol)] ? ' class="mine" title="' + MINE_TITLE + '"' : '') + '><td><span class="sym">' + esc(r.symbol) + '</span><span class="sub">' + esc(r.name) + '</span></td>' +
+          html += '<tr' + (mine[r.symbol.toUpperCase()] || names[nameKey(r.name)] ? ' class="mine" title="' + MINE_TITLE + '"' : '') + '><td><span class="sym">' + esc(r.symbol) + '</span><span class="sub">' + esc(r.name) + '</span></td>' +
             '<td class="r num">' + num(r.price) + ' <span class="muted small">' + esc(r.currency) + '</span><span class="sub">' + cap(r.marketCap) + ' ' + esc(r.currency) + '</span></td><td class="r">' + pct(r.chgPct) + '</td></tr>';
         });
         return html + '</tbody></table>';
@@ -869,9 +877,10 @@
     moversTile('t-gainers', 'gainers');
     moversTile('t-losers', 'losers');
 
-    function myBases() {
+    // Own titles by their full Yahoo symbol (BA is Boeing, BA.L is BAE Systems); listings of the same company elsewhere match by name.
+    function mySymbols() {
       var m = {};
-      depotSymbols.concat(state.watch.map(function (w) { return w.symbol; })).forEach(function (sym) { m[base(sym)] = true; });
+      depotSymbols.concat(state.watch.map(function (w) { return w.symbol; })).forEach(function (sym) { m[String(sym).toUpperCase()] = true; });
       return m;
     }
     // Company names without legal form and accents, so "UBS Group AG" matches on both sides.
@@ -973,9 +982,10 @@
       var syms = newsSymbols();
       if (!syms.length) return Promise.resolve({ items: [], empty: true });
       // The search needs names ("Nestlé", not "NESN.SW"): the depot brings its own, the rest come from quotes.
-      var unnamed = syms.filter(function (s) { return !depotNames[s]; });
+      var named = function (s) { return depotNames[s] && depotNames[s] !== s ? depotNames[s] : ''; };
+      var unnamed = syms.filter(function (s) { return !named(s); });
       return quotes(unnamed).then(function (map) {
-        var qs = syms.map(function (s) { return 's=' + encodeURIComponent(s + '|' + (depotNames[s] || (map[s] && map[s].name) || s)); }).join('&');
+        var qs = syms.map(function (s) { return 's=' + encodeURIComponent(s + '|' + (named(s) || (map[s] && map[s].name) || s)); }).join('&');
         return api('/api/cockpit/news?' + qs);
       });
     }
@@ -1012,10 +1022,10 @@
     // ================= Earnings =================
     tile('t-earnings', function () { return api('/api/cockpit/earnings?days=7'); }, function (d) {
       // Swiss holdings report under their US listing (UBS for UBSG.SW), so the company name counts too.
-      var mine = myBases(), names = myNames();
-      var isMine = function (r) { return !!(mine[r.symbol] || names[nameKey(r.name)]); };
+      var mine = mySymbols(), names = myNames();
+      var isMine = function (r) { return !!(mine[r.symbol.toUpperCase()] || names[nameKey(r.name)]); };
       var rows = d.rows.filter(function (r) { return ui.earn === 'all' || isMine(r); });
-      if (!rows.length) return '<div class="empty">' + (ui.earn === 'mine' ? 'Keiner deiner Titel meldet in den nächsten 7 Handelstagen.' : 'Keine Termine gefunden.') + '</div>';
+      if (!rows.length) return '<div class="empty">' + (ui.earn === 'mine' ? 'Keiner deiner Titel meldet in den nächsten 7 Werktagen.' : 'Keine Termine gefunden.') + '</div>';
       var html = '', last = '';
       rows.forEach(function (r) {
         if (r.date !== last) {
@@ -1050,7 +1060,8 @@
       var rows = d.rows.filter(function (r) {
         return r.chg6m <= f.threshold && (!f.profitable || r.eps > 0) && (!f.large || r.marketCap >= m.large);
       });
-      if (!rows.length) return '<div class="empty">Keine Titel mit diesen Filtern. Schwelle lockern?</div>';
+      var missing = d.missing ? '<p class="small muted" style="margin:6px 0 0">' + d.missing + ' Titel ohne Kursverlauf – nicht dabei.</p>' : '';
+      if (!rows.length) return '<div class="empty">Keine Titel mit diesen Filtern. Schwelle lockern?</div>' + missing;
       var html = '<div class="table-wrap"><table><thead><tr><th>Aktie</th><th class="r">6 Monate</th><th class="r">12 Monate</th><th class="r">Marktkap. ' + esc(m.cur) + '</th><th class="r">KGV</th></tr></thead><tbody>';
       rows.forEach(function (r) {
         html += '<tr><td><span class="sym">' + esc(r.symbol) + '</span><span class="sub">' + esc(r.name) + '</span></td>' +
@@ -1058,7 +1069,7 @@
           '<td class="r num">' + cap(r.marketCap) + '</td>' +
           '<td class="r num">' + (r.eps == null ? '<span class="muted">–</span>' : r.eps > 0 ? (r.pe ? num(r.pe, 1) : '<span class="muted">–</span>') : '<span class="pill neutral">Verlust</span>') + '</td></tr>';
       });
-      return html + '</tbody></table></div>';
+      return html + '</tbody></table></div>' + missing;
     });
     marketChips($('[data-radar-group]'), 'data-radar-market', ui.radar.market, true);
     chipGroup('[data-radar-group]', 'data-radar-market', function (v) { ui.radar.market = v; rememberMarkets(); tiles['t-radar'].load(); });
@@ -1146,10 +1157,12 @@
 
     // ================= Watchlist =================
     tile('t-watch', function () {
+      watchNames = {};
       if (!state.watch.length) return Promise.resolve({ empty: true });
       return quotes(state.watch.map(function (w) { return w.symbol; })).then(function (map) {
-        watchNames = {};
         Object.keys(map).forEach(function (s) { if (!map[s].error) watchNames[s] = map[s].name; });
+        // Tiles that mark "my" stocks by name redraw once the names are known.
+        ['t-gainers', 't-losers', 't-earnings'].forEach(function (id) { if (tiles[id]) tiles[id].draw(); });
         return map;
       });
     }, function (map) {

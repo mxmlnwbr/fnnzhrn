@@ -90,11 +90,12 @@ export async function radar(marketId: string | null) {
         eps: c.eps,
         pe: c.pe,
         chg6m: ok ? ch.chg.m6 : null,
-        chg12m: ok ? ch.chg.y : c.chg52w,
+        // A listing younger than a year has no chart figure; Yahoo's is since listing.
+        chg12m: (ok ? ch.chg.y : null) ?? c.chg52w,
         fromHigh52: c.fromHigh52,
       };
     })
     .filter((r): r is typeof r & { chg6m: number } => r.chg6m != null)
     .sort((a, b) => a.chg6m - b.chg6m);
-  return { market: m.id, rows };
+  return { market: m.id, rows, missing: candidates.length - rows.length };
 }

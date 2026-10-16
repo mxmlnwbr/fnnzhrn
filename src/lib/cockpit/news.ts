@@ -7,7 +7,10 @@ const words = (alternatives: string) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${alte
 /** Headline keywords (English and German) that tag a news item. */
 const CATEGORIES = {
   earnings: words("earnings|quarterly|quarter|q[1-4]|results|revenue|guidance|eps|profit|quartal\\p{L}*|zahlen|umsatz|gewinn\\p{L}*|prognose|jahresergebnis"),
-  mna: words("acqui\\p{L}*|merger|takeover|buyout|bid for|deal to buy|agrees? to buy|to acquire|buys|stake in|übernahme\\p{L}*|übernimmt|fusion\\p{L}*|kauft|beteiligung"),
+  mna: words(
+    // "Pfizer to buy Metsera" is a takeover; "3 stocks to buy now" and "upgraded to Buy" are not.
+    "acqui\\p{L}*|merger|takeover|buyout|bid for|to buy(?= [\\p{L}\\p{N}$])(?! (?:now|in|before|this|the|an?|these|right|and|as|more|for|or|on|if|with|at|after|during|while|today|ahead|amid|despite|under|over|its|your|my|our|their|from)\\b)|to acquire|buys|stake in|übernahme\\p{L}*|übernimmt|fusion\\p{L}*|kauft|beteiligung",
+  ),
   analyst: words(
     "upgrades?|upgraded|downgrades?|downgraded|price target|outperform|underperform|overweight|underweight|initiat\\p{L}* coverage|kursziel\\p{L}*|hochgestuft|herabgestuft|abgestuft|analyst\\p{L}*|kaufempfehlung|rating",
   ),

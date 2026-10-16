@@ -1,4 +1,5 @@
 import "server-only";
+import YahooFinance from "yahoo-finance2";
 import { yahooFinance } from "../yahoo";
 import { BadRequest } from "./http";
 import {
@@ -28,6 +29,9 @@ const SCREENER_URL = "https://${YF_QUERY_HOST}/v1/finance/screener";
 
 type ScreenerResponse = { finance: { result?: { quotes: Record<string, unknown>[] }[] } };
 
+// The client whose crumb and cookies the screens use: the depot's, until Yahoo rejects its crumb.
+let client = yahooFinance;
+
 /**
  * Runs a custom screen on Yahoo. yahoo-finance2 only covers Yahoo's predefined screens (all US), but the
  * custom endpoint needs the same crumb and cookies, so this goes through the library's fetch and turns the
@@ -43,16 +47,16 @@ export async function runScreen(screen: Screen): Promise<ScreenerQuote[]> {
     headers.set("User-Agent", "Mozilla/5.0");
     return fetch(input, { ...init, method: "POST", headers, body, signal: AbortSignal.timeout(15000) });
   };
-  const run = () =>
-    yahooFinance._fetch(SCREENER_URL, { lang: "en-US", region: "US", formatted: "false" }, { fetch: post }, "json", true) as Promise<ScreenerResponse>;
+  const run = () => client._fetch(SCREENER_URL, { lang: "en-US", region: "US", formatted: "false" }, { fetch: post }, "json", true) as Promise<ScreenerResponse>;
   let res: ScreenerResponse;
   try {
     res = await run();
   } catch (e) {
-    // An expired crumb answers 401: start over with fresh cookies, once.
+    // A rejected crumb or cookie: once, with a fresh client of our own (a new cookie jar gets a new crumb).
+    // The shared client is left alone, since the library keeps its crumb memoised per jar.
     const err = e as Error & { code?: number };
-    if (err.code !== 401 && !/crumb/i.test(err.message)) throw e;
-    await yahooFinance._opts.cookieJar?.removeAllCookies();
+    if (err.code !== 401 && !/crumb|cookie|unauthori[sz]ed/i.test(err.message)) throw e;
+    client = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
     res = await run();
   }
   const r = res.finance.result?.[0];

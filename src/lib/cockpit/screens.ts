@@ -49,7 +49,7 @@ export const MARKETS: Record<MarketId, Market> = {
 export const MARKET_IDS = Object.keys(MARKETS) as MarketId[];
 
 export function isMarketId(id: string | null | undefined): id is MarketId {
-  return !!id && id in MARKETS;
+  return MARKET_IDS.includes(id as MarketId);
 }
 
 export type Screen = { sortField: string; sortType: "ASC" | "DESC"; size: number; conditions: Condition[] };
@@ -78,8 +78,8 @@ export type ValueFilters = { maxPe: number; growth: boolean; lowDebt: boolean };
 
 /**
  * Value candidates: cheap on trailing earnings, optionally with growing earnings and low debt, cheapest first.
- * A 5-year PEG ratio is required, which leaves out closed-end funds and preferred shares that would
- * otherwise pass a P/E screen.
+ * "Growing" means earnings up over the last twelve months and expected to grow (a positive 5-year PEG), which
+ * also leaves out closed-end funds and preferred shares; without the growth filter they can appear.
  */
 export function valueScreen(m: Market, { maxPe, growth, lowDebt }: ValueFilters, size = 60): Screen {
   return {
@@ -90,8 +90,7 @@ export function valueScreen(m: Market, { maxPe, growth, lowDebt }: ValueFilters,
       ...liquid(m),
       gt("peratio.lasttwelvemonths", 0),
       lt("peratio.lasttwelvemonths", maxPe),
-      gt("pegratio_5y", 0),
-      ...(growth ? [gt("epsgrowth.lasttwelvemonths", 0)] : []),
+      ...(growth ? [gt("epsgrowth.lasttwelvemonths", 0), gt("pegratio_5y", 0)] : []),
       ...(lowDebt ? [lt("totaldebtequity.lasttwelvemonths", MAX_DEBT_TO_EQUITY)] : []),
     ],
   };

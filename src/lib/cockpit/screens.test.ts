@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MARKETS, MAX_DEBT_TO_EQUITY, RADAR_CAP_FACTOR, inMarket, moversScreen, radarScreen, screenBody, slimQuote, valueScreen } from "./screens";
+import { MARKETS, MAX_DEBT_TO_EQUITY, RADAR_CAP_FACTOR, inMarket, isMarketId, moversScreen, radarScreen, screenBody, slimQuote, valueScreen } from "./screens";
 
 const conditions = (s: { conditions: { operator: string; operands: unknown[] }[] }) => s.conditions.map((c) => [c.operator, ...c.operands.map((o) => (typeof o === "object" ? "…" : o))].join(" "));
 
@@ -35,11 +35,9 @@ describe("valueScreen", () => {
     expect(c).toContain(`lt totaldebtequity.lasttwelvemonths ${MAX_DEBT_TO_EQUITY}`);
   });
 
-  it("leaves growth and debt out when switched off", () => {
+  it("leaves growth and debt out when switched off, with nothing hidden", () => {
     const c = conditions(valueScreen(MARKETS.us, { maxPe: 20, growth: false, lowDebt: false }));
-    expect(c.some((x) => x.startsWith("gt epsgrowth"))).toBe(false);
-    expect(c.some((x) => x.startsWith("lt totaldebtequity"))).toBe(false);
-    expect(c).toContain("lt peratio.lasttwelvemonths 20");
+    expect(c).toEqual([...conditions(moversScreen(MARKETS.us, "gainers")), "gt peratio.lasttwelvemonths 0", "lt peratio.lasttwelvemonths 20"]);
   });
 });
 
@@ -49,6 +47,18 @@ describe("radarScreen", () => {
     expect(s.sortField).toBe("fiftytwowkpercentchange");
     expect(s.sortType).toBe("ASC");
     expect(conditions(s)).toContain(`gt intradaymarketcap ${MARKETS.jp.minCap * RADAR_CAP_FACTOR}`);
+    // London in pence
+    expect(conditions(radarScreen(MARKETS.gb))).toContain("gt intradaymarketcap 30000000000");
+  });
+});
+
+describe("isMarketId", () => {
+  it("knows the markets and nothing else", () => {
+    expect(isMarketId("ch")).toBe(true);
+    expect(isMarketId("toString")).toBe(false);
+    expect(isMarketId("constructor")).toBe(false);
+    expect(isMarketId("")).toBe(false);
+    expect(isMarketId(null)).toBe(false);
   });
 });
 
