@@ -5,6 +5,7 @@ import { reveal } from "@/components/site/reveal";
 import { LoginForm } from "@/components/site/LoginForm";
 import { PendingAccess } from "@/components/site/PendingAccess";
 import { TickerBackground } from "@/components/site/TickerBackground";
+import { WeberStudioCredit } from "@/components/site/WeberStudioCredit";
 import { syncConfigured } from "@/lib/env";
 import { safeNext } from "@/lib/next-path";
 import { currentUser } from "@/lib/session";
@@ -40,7 +41,7 @@ export default async function Login({ searchParams }: PageProps<"/login">) {
         </div>
       </main>
       <footer>
-        © fnnzhrn · Keine Anlageberatung · Umsetzung: <a href="https://weberstudio.ch" target="_blank" rel="noopener noreferrer">weberstudio.ch</a>
+        © fnnzhrn · Keine Anlageberatung · <WeberStudioCredit />
       </footer>
     </div>
   );

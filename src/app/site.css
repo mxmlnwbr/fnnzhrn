@@ -301,6 +301,15 @@
 .site footer a:hover {
       color: var(--fg);
     }
+.site footer a.credit {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      vertical-align: bottom;
+    }
+.site footer a.credit svg {
+      flex: none;
+    }
 
 @media (prefers-reduced-motion: reduce) {
 .site *, .site *::before, .site *::after {

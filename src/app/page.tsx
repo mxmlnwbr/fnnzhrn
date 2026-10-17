@@ -2,6 +2,7 @@ import { ProjectCard } from "@/components/site/ProjectCard";
 import { reveal } from "@/components/site/reveal";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { TickerBackground } from "@/components/site/TickerBackground";
+import { WeberStudioCredit } from "@/components/site/WeberStudioCredit";
 import { currentUser } from "@/lib/session";
 import "./site.css";
 
@@ -105,7 +106,7 @@ export default async function Home() {
         )}
       </main>
       <footer className="site-reveal" style={reveal(1.6)}>
-        © fnnzhrn · Keine Anlageberatung · Umsetzung: <a href="https://weberstudio.ch" target="_blank" rel="noopener noreferrer">weberstudio.ch</a>
+        © fnnzhrn · Keine Anlageberatung · <WeberStudioCredit />
       </footer>
     </div>
   );
