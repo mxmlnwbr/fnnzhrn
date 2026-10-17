@@ -13,22 +13,58 @@ export interface BudgetItem {
   /** In the budget's currency, per interval. Negative for deductions, e.g. a lunch allowance taken off the salary. */
   amount: number;
   interval: Interval;
+  /** Id of one of the budget's categories; only expenses (fixed and variable) have one. */
+  category?: string;
 }
 
-export const SECTIONS = ["income", "fixed", "invest"] as const;
+export const SECTIONS = ["income", "fixed", "variable", "invest"] as const;
 export type Section = (typeof SECTIONS)[number];
 
-/** One person's financial overview: what comes in, what is fixed, and what goes into investments. */
+/** The sections whose items are expenses and can be sorted into categories. */
+export const EXPENSE_SECTIONS = ["fixed", "variable"] as const satisfies readonly Section[];
+export type ExpenseSection = (typeof EXPENSE_SECTIONS)[number];
+
+export interface Category {
+  id: string;
+  name: string;
+}
+
+/** What a budget starts with; each person can rename, remove and add their own. */
+export const DEFAULT_CATEGORIES: Category[] = [
+  { id: "cat-wohnen", name: "Wohnen" },
+  { id: "cat-versicherungen", name: "Versicherungen" },
+  { id: "cat-mobilitaet", name: "Mobilität" },
+  { id: "cat-gesundheit", name: "Gesundheit & Pflege" },
+  { id: "cat-abos", name: "Abos & Kommunikation" },
+  { id: "cat-essen", name: "Essen & Haushalt" },
+  { id: "cat-freizeit", name: "Freizeit" },
+];
+
+/**
+ * One person's financial overview: what comes in, what is fixed, what is spent flexibly (groceries,
+ * going out), and what goes into investments.
+ */
 export interface Budget {
   version: 1;
   currency: string;
+  categories: Category[];
   income: BudgetItem[];
   fixed: BudgetItem[];
+  variable: BudgetItem[];
   invest: BudgetItem[];
   note: string;
 }
 
-export const EMPTY_BUDGET: Budget = { version: 1, currency: "CHF", income: [], fixed: [], invest: [], note: "" };
+export const EMPTY_BUDGET: Budget = {
+  version: 1,
+  currency: "CHF",
+  categories: DEFAULT_CATEGORIES,
+  income: [],
+  fixed: [],
+  variable: [],
+  invest: [],
+  note: "",
+};
 
 export interface Amounts {
   month: number;
@@ -58,44 +94,91 @@ export function sum(items: BudgetItem[]): Amounts {
 export interface BudgetSummary {
   income: Amounts;
   fixed: Amounts;
+  variable: Amounts;
+  /** Fixed and variable expenses together. */
+  expenses: Amounts;
   invest: Amounts;
   /** Income left after fixed costs. */
   available: Amounts;
-  /** Left after fixed costs and investments: what's there for everything else. */
+  /** Left after all expenses and investments: what's there for everything else. */
   free: Amounts;
 }
+
+const plus = (a: Amounts, b: Amounts) => ({ month: a.month + b.month, year: a.year + b.year });
+const minus = (a: Amounts, b: Amounts) => ({ month: a.month - b.month, year: a.year - b.year });
 
 export function summarizeBudget(budget: Budget): BudgetSummary {
   const income = sum(budget.income);
   const fixed = sum(budget.fixed);
+  const variable = sum(budget.variable);
+  const expenses = plus(fixed, variable);
   const invest = sum(budget.invest);
-  const minus = (a: Amounts, b: Amounts) => ({ month: a.month - b.month, year: a.year - b.year });
-  const available = minus(income, fixed);
   return {
     income,
     fixed,
+    variable,
+    expenses,
     invest,
-    available,
-    free: minus(available, invest),
+    available: minus(income, fixed),
+    free: minus(minus(income, expenses), invest),
   };
 }
 
-const MAX_ITEMS = 200;
+export interface CategoryTotal {
+  /** Undefined for the expenses that have no category. */
+  category?: Category;
+  fixed: Amounts;
+  variable: Amounts;
+  total: Amounts;
+}
 
-function normalizeItems(value: unknown, section: Section): BudgetItem[] {
+/** Expenses per category, in the budget's category order; expenses without a category come last, if there are any. */
+export function categoryTotals(budget: Budget): CategoryTotal[] {
+  const known = new Set(budget.categories.map((c) => c.id));
+  const total = (filter: (item: BudgetItem) => boolean) => {
+    const fixed = sum(budget.fixed.filter(filter));
+    const variable = sum(budget.variable.filter(filter));
+    return { fixed, variable, total: plus(fixed, variable) };
+  };
+  const rows: CategoryTotal[] = budget.categories.map((category) => ({ category, ...total((i) => i.category === category.id) }));
+  const uncategorized = (i: BudgetItem) => !i.category || !known.has(i.category);
+  if ([...budget.fixed, ...budget.variable].some(uncategorized)) rows.push(total(uncategorized));
+  return rows;
+}
+
+const MAX_ITEMS = 200;
+const MAX_CATEGORIES = 50;
+
+function normalizeCategories(value: unknown): Category[] {
+  // Budgets saved before there were categories start with the defaults.
+  if (value === undefined) return DEFAULT_CATEGORIES;
   if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  return value.slice(0, MAX_CATEGORIES).flatMap((raw, i): Category[] => {
+    if (!raw || typeof raw !== "object") return [];
+    const c = raw as Partial<Category>;
+    const id = typeof c.id === "string" && c.id ? c.id.slice(0, 100) : `cat-${i}`;
+    if (seen.has(id)) return [];
+    seen.add(id);
+    return [{ id, name: typeof c.name === "string" ? c.name.slice(0, 100) : "" }];
+  });
+}
+
+function normalizeItems(value: unknown, section: Section, categories: Set<string>): BudgetItem[] {
+  if (!Array.isArray(value)) return [];
+  const expense = (EXPENSE_SECTIONS as readonly Section[]).includes(section);
   return value.slice(0, MAX_ITEMS).flatMap((raw, i): BudgetItem[] => {
     if (!raw || typeof raw !== "object") return [];
     const item = raw as Partial<BudgetItem>;
     const amount = Number(item.amount);
-    return [
-      {
-        id: typeof item.id === "string" && item.id ? item.id.slice(0, 100) : `${section}-${i}`,
-        name: typeof item.name === "string" ? item.name.slice(0, 200) : "",
-        amount: Number.isFinite(amount) ? amount : 0,
-        interval: INTERVALS.some((x) => x.value === item.interval) ? (item.interval as Interval) : "month",
-      },
-    ];
+    const normalized: BudgetItem = {
+      id: typeof item.id === "string" && item.id ? item.id.slice(0, 100) : `${section}-${i}`,
+      name: typeof item.name === "string" ? item.name.slice(0, 200) : "",
+      amount: Number.isFinite(amount) ? amount : 0,
+      interval: INTERVALS.some((x) => x.value === item.interval) ? (item.interval as Interval) : "month",
+    };
+    if (expense && typeof item.category === "string" && categories.has(item.category)) normalized.category = item.category;
+    return [normalized];
   });
 }
 
@@ -103,12 +186,16 @@ function normalizeItems(value: unknown, section: Section): BudgetItem[] {
 export function normalizeBudget(data: unknown): Budget {
   if (!data || typeof data !== "object") return EMPTY_BUDGET;
   const d = data as Partial<Record<keyof Budget, unknown>>;
+  const categories = normalizeCategories(d.categories);
+  const ids = new Set(categories.map((c) => c.id));
   return {
     version: 1,
     currency: typeof d.currency === "string" && /^[A-Z]{3}$/.test(d.currency) ? d.currency : "CHF",
-    income: normalizeItems(d.income, "income"),
-    fixed: normalizeItems(d.fixed, "fixed"),
-    invest: normalizeItems(d.invest, "invest"),
+    categories,
+    income: normalizeItems(d.income, "income", ids),
+    fixed: normalizeItems(d.fixed, "fixed", ids),
+    variable: normalizeItems(d.variable, "variable", ids),
+    invest: normalizeItems(d.invest, "invest", ids),
     note: typeof d.note === "string" ? d.note.slice(0, 5000) : "",
   };
 }
