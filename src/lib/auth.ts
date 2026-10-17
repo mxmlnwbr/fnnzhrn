@@ -25,6 +25,12 @@ function createAuth() {
       expiresIn: 60 * 60 * 24 * 365,
       updateAge: 60 * 60 * 24,
     },
+    user: {
+      additionalFields: {
+        // Set by hand in the database for members; everyone else can sign in but not use the tools.
+        authorized: { type: "boolean", required: false, defaultValue: false, input: false },
+      },
+    },
     emailAndPassword: {
       enabled: true,
       // New accounts confirm their address first, so nobody can sign up with someone else's email.
@@ -66,10 +72,14 @@ export function getAuth() {
   return instance;
 }
 
-/** The signed-in user's id, or the response to send instead: 503 without sign-in configured, 401 when signed out. */
+/**
+ * The signed-in user's id, or the response to send instead: 503 without sign-in configured,
+ * 401 when signed out, 403 when the account isn't authorized for the tools.
+ */
 export async function requireUser(request: Request): Promise<string | Response> {
   const auth = getAuth();
   if (!auth) return Response.json({ error: "Sign-in isn't configured" }, { status: 503 });
   const session = await auth.api.getSession({ headers: request.headers });
-  return session?.user.id ?? Response.json({ error: "Not signed in" }, { status: 401 });
+  if (!session) return Response.json({ error: "Not signed in" }, { status: 401 });
+  return session.user.authorized ? session.user.id : Response.json({ error: "Not authorized" }, { status: 403 });
 }

@@ -6,9 +6,9 @@
 | --- | --- | --- |
 | `/` | Landing page (Swiss German copy) | public |
 | `/login` | One sign-in for all tools (email and password) | public |
-| `/depot` | Depot: portfolio tracker for shares and cash | signed in |
-| `/cockpit` | Cockpit: market dashboard (depot, markets, news, opportunities) | signed in |
-| `/budget` | Finanzen: income, fixed costs and how much of it to invest | signed in |
+| `/depot` | Depot: portfolio tracker for shares and cash | members |
+| `/cockpit` | Cockpit: market dashboard (depot, markets, news, opportunities) | members |
+| `/budget` | Finanzen: income, fixed costs and how much of it to invest | members |
 
 The Depot used to be a separate repository on `depot.fnnzhrn.ch`. Its full history is merged into this one, and the old subdomain redirects to `/depot`.
 
@@ -58,7 +58,7 @@ src/
 db/schema.sql              Database tables for sign-in, depots and budgets
 ```
 
-Every tool route checks the session on the server: the proxy only does a fast cookie check and redirects, while `/cockpit`, all `/api/*` routes except sign-in, and the depot sync verify the session themselves and answer 401 (or redirect) otherwise.
+Every tool route checks the session on the server: the proxy only does a fast cookie check and redirects, while `/cockpit`, all `/api/*` routes except sign-in, and the depot sync verify the session themselves and answer 401 (or redirect) otherwise. They also require the account to be authorized (see below) and answer 403 (or redirect to `/login`, which says the account isn't approved yet) otherwise.
 
 ## Sign-in
 
@@ -70,6 +70,14 @@ Sign-in needs three services, all with free tiers: [Neon](https://neon.tech) (Po
 4. **Redeploy**, so the variables are built in. The tools only open when `DATABASE_URL`, `BETTER_AUTH_SECRET` and `RESEND_API_KEY` are all set; otherwise `/login` says sign-in isn't set up.
 
 Members sign in with email and password. A new account confirms its email address with a link before it can sign in. **Passwort vergessen** emails a reset link that works once and expires after an hour; setting a new password signs out every other session. Members from the email-link days have no password yet and set one through **Passwort vergessen**; their depots and budgets stay with their account. Sessions last a year and renew while the tools are used.
+
+**Who gets in.** Anyone can create an account, but only accounts marked `authorized` in the database can use the tools. Mark members in Neon's SQL editor:
+
+```sql
+update "user" set "authorized" = true where "email" in ('a@example.ch', 'b@example.ch');
+```
+
+Setting it back to `false` locks the account out on its next request. The column comes from [`db/schema.sql`](db/schema.sql); on an existing database, run the file again before deploying, then mark the existing members, or they're locked out too.
 
 ## Depot
 

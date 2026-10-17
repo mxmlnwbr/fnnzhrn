@@ -60,7 +60,7 @@ export function failed(x: unknown): x is Failed {
 export class BadRequest extends Error {}
 
 /**
- * GET handler for a cockpit endpoint: signed-in users only, errors as JSON.
+ * GET handler for a cockpit endpoint: authorized members only, errors as JSON.
  * Responses are cached in the browser only; upstream data is cached server-side via `revalidate`.
  */
 export function cockpitRoute(fn: (params: URLSearchParams) => Promise<unknown>, browserMaxAge = 60) {

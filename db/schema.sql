@@ -49,6 +49,10 @@ create table if not exists "verification" (
   "updatedAt" timestamptz default CURRENT_TIMESTAMP not null
 );
 
+-- Only users marked here may use the tools; mark members by hand:
+--   update "user" set "authorized" = true where "email" in ('a@example.ch', 'b@example.ch');
+alter table "user" add column if not exists "authorized" boolean not null default false;
+
 create index if not exists "session_userId_idx" on "session" ("userId");
 create index if not exists "account_userId_idx" on "account" ("userId");
 create index if not exists "verification_identifier_idx" on "verification" ("identifier");

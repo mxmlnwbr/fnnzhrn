@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { reveal } from "@/components/site/reveal";
 import { LoginForm } from "@/components/site/LoginForm";
+import { PendingAccess } from "@/components/site/PendingAccess";
 import { TickerBackground } from "@/components/site/TickerBackground";
 import { syncConfigured } from "@/lib/env";
 import { safeNext } from "@/lib/next-path";
@@ -15,7 +16,8 @@ export const metadata: Metadata = { title: "Anmelden · fnnzhrn" };
 export default async function Login({ searchParams }: PageProps<"/login">) {
   const params = await searchParams;
   const next = safeNext(params.next);
-  if (await currentUser()) redirect(next);
+  const user = await currentUser();
+  if (user?.authorized) redirect(next);
   return (
     <div className="site">
       <TickerBackground />
@@ -30,7 +32,11 @@ export default async function Login({ searchParams }: PageProps<"/login">) {
           Ein Login für alle Tools: Depot, Finanzen und Cockpit.
         </p>
         <div className="site-reveal" style={reveal(0.3)}>
-          <LoginForm next={next} configured={syncConfigured()} linkError={Boolean(params.error)} />
+          {user ? (
+            <PendingAccess email={user.email} />
+          ) : (
+            <LoginForm next={next} configured={syncConfigured()} linkError={Boolean(params.error)} />
+          )}
         </div>
       </main>
       <footer>© fnnzhrn · Keine Anlageberatung</footer>
