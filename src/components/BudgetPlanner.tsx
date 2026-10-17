@@ -7,6 +7,7 @@ import {
   amounts,
   type Budget,
   type BudgetItem,
+  type BudgetSnapshot,
   type Category,
   type CategoryTotal,
   categoryTotals,
@@ -15,11 +16,14 @@ import {
   type Interval,
   type Section,
   SECTIONS,
+  snapshotBudget,
+  snapshotFree,
   sum,
   summarizeBudget,
+  withSnapshot,
 } from "@/lib/budget";
 import { formatMoney } from "@/lib/currency";
-import { buttonClass, Card, inputClass } from "./ui";
+import { buttonClass, Card, inputClass, pnlClass } from "./ui";
 
 type Period = keyof Amounts;
 type SaveState = "saved" | "saving" | "error";
@@ -150,6 +154,13 @@ export function BudgetPlanner({ initial }: { initial: Budget }) {
       <Split summary={summary} period={period} format={m} />
 
       <CategoriesCard budget={budget} period={period} format={m} currency={budget.currency} onChange={updateCategories} />
+
+      <HistoryCard
+        budget={budget}
+        period={period}
+        format={m}
+        onChange={(history) => setBudget((b) => ({ ...b, history }))}
+      />
 
       {SECTIONS.map((section) => (
         <ItemsCard
@@ -403,6 +414,155 @@ function CategoriesCard({
           + Kategorie
         </button>
       </form>
+    </Card>
+  );
+}
+
+const HISTORY_COLUMNS = [
+  { key: "income", label: "Einkommen", value: (s: BudgetSnapshot) => s.income, more: "better" },
+  { key: "expenses", label: "Ausgaben", value: (s: BudgetSnapshot) => s.fixed + s.variable, more: "worse" },
+  { key: "invest", label: "Investieren", value: (s: BudgetSnapshot) => s.invest, more: "better" },
+  { key: "free", label: "Frei", value: snapshotFree, more: "better" },
+] as const;
+
+/** A change against the year before, green when it is good for the budget and red when it is not. */
+function Change({ value, worse, format }: { value: number; worse?: boolean; format: (v: number) => string }) {
+  if (Math.abs(value) < 0.005) return <span className="text-zinc-500">±0</span>;
+  return (
+    <span className={pnlClass(worse ? -value : value)}>
+      {value > 0 ? "+" : "−"}
+      {format(Math.abs(value))}
+    </span>
+  );
+}
+
+/** Each category's total now next to the one in `previous`, matched by id so renamed categories still line up. */
+function categoryChanges(current: BudgetSnapshot, previous: BudgetSnapshot) {
+  const key = (c: BudgetSnapshot["categories"][number]) => c.id ?? `name:${c.name}`;
+  const before = new Map(previous.categories.map((c) => [key(c), c]));
+  const rows = current.categories.map((c) => ({ name: c.name, now: c.total, before: before.get(key(c))?.total ?? 0 }));
+  const seen = new Set(current.categories.map(key));
+  for (const c of previous.categories) if (!seen.has(key(c))) rows.push({ name: c.name, now: 0, before: c.total });
+  return rows.filter((r) => r.now !== 0 || r.before !== 0);
+}
+
+/**
+ * The budget's totals as saved at the end of earlier years, next to the current ones, so you can see
+ * what has gone up or down. Saving again in the same year replaces that year's state.
+ */
+function HistoryCard({
+  budget,
+  period,
+  format,
+  onChange,
+}: {
+  budget: Budget;
+  period: Period;
+  format: (v: number) => string;
+  onChange: (history: BudgetSnapshot[]) => void;
+}) {
+  const thisYear = new Date().getFullYear();
+  const [year, setYear] = useState(thisYear);
+  const history = budget.history;
+  const current = snapshotBudget(budget, thisYear, "");
+  const per = (v: number) => (period === "month" ? v / 12 : v);
+  const exists = history.some((h) => h.year === year);
+  const save = () => {
+    if (exists && !confirm(`Den gespeicherten Stand ${year} mit den aktuellen Zahlen ersetzen?`)) return;
+    onChange(withSnapshot(history, snapshotBudget(budget, year, new Date().toISOString().slice(0, 10))));
+  };
+  const rows = [...history.map((h) => ({ label: String(h.year), snapshot: h })), { label: "Aktuell", snapshot: current }];
+  const last = history.at(-1);
+  const changes = last ? categoryChanges(current, last) : [];
+
+  return (
+    <Card title="Verlauf">
+      <p className="-mt-2 mb-3 text-xs text-zinc-500">
+        Speichere jedes Jahr den Stand, um zu sehen, wie sich Einkommen, Ausgaben und Kategorien verändern.
+      </p>
+      {history.length > 0 && (
+        <div className="-mx-1 overflow-x-auto">
+          <table className="w-full min-w-md text-sm tabular-nums">
+            <thead>
+              <tr className="text-xs text-zinc-500">
+                <th className="px-1 py-1 text-left font-normal">Jahr</th>
+                {HISTORY_COLUMNS.map((c) => (
+                  <th key={c.key} className="px-1 py-1 text-right font-normal">
+                    {c.label}
+                  </th>
+                ))}
+                <th className="w-8" aria-hidden />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {rows.map((r, i) => {
+                const prev = rows[i - 1]?.snapshot;
+                const live = r.snapshot === current;
+                return (
+                  <tr key={r.label} className={live ? "font-medium" : ""}>
+                    <td className="px-1 py-1.5 align-top" title={live ? undefined : `Gespeichert am ${r.snapshot.savedAt}`}>
+                      {r.label}
+                    </td>
+                    {HISTORY_COLUMNS.map((c) => (
+                      <td key={c.key} className="px-1 py-1.5 text-right align-top">
+                        <div>{format(per(c.value(r.snapshot)))}</div>
+                        {prev && (
+                          <div className="text-xs font-normal">
+                            <Change value={per(c.value(r.snapshot) - c.value(prev))} worse={c.more === "worse"} format={format} />
+                          </div>
+                        )}
+                      </td>
+                    ))}
+                    <td className="px-1 py-1.5 text-right align-top">
+                      {!live && (
+                        <button
+                          className="rounded-md px-2 py-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800"
+                          aria-label={`Stand ${r.label} löschen`}
+                          onClick={() =>
+                            confirm(`Den gespeicherten Stand ${r.label} löschen?`) && onChange(history.filter((h) => h !== r.snapshot))
+                          }
+                        >
+                          ×
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {last && changes.length > 0 && (
+        <div className="mt-4">
+          <h3 className="mb-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400">Kategorien gegenüber {last.year}</h3>
+          <ul className="divide-y divide-zinc-100 text-sm tabular-nums dark:divide-zinc-800">
+            {changes.map((c, i) => (
+              <li key={i} className="flex items-center gap-2 py-1">
+                <span className="min-w-0 flex-1 truncate">{c.name || "Kategorie"}</span>
+                <span className="hidden text-xs text-zinc-500 sm:inline">{format(per(c.before))} →</span>
+                <span>{format(per(c.now))}</span>
+                <span className="w-24 text-right text-xs">
+                  <Change value={per(c.now - c.before)} worse format={format} />
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div className={`flex flex-wrap items-center gap-2 ${history.length > 0 ? "mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-800" : ""}`}>
+        <select className={`${inputClass} w-auto`} aria-label="Jahr" value={year} onChange={(e) => setYear(Number(e.target.value))}>
+          {[thisYear, thisYear - 1].map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
+        <button className={buttonClass} onClick={save}>
+          {exists ? `Stand ${year} aktualisieren` : `Stand ${year} speichern`}
+        </button>
+        {history.length === 0 && <span className="text-xs text-zinc-500">Noch kein Jahr gespeichert.</span>}
+      </div>
     </Card>
   );
 }
