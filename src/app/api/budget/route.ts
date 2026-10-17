@@ -2,7 +2,8 @@ import { requireUser } from "@/lib/auth";
 import { normalizeBudget } from "@/lib/budget";
 import { saveBudget } from "@/lib/budget-store";
 
-const MAX_BYTES = 500_000;
+// Room for years of months with their expenses.
+const MAX_BYTES = 2_000_000;
 
 /** Replaces the signed-in user's financial overview. Body: `{ data: Budget }`. */
 export async function PUT(request: Request) {

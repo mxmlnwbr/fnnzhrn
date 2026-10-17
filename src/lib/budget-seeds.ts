@@ -42,5 +42,6 @@ export const BUDGET_SEEDS: Record<string, Budget> = {
     ],
     note: "Wichtig: Steuern & 13. Monatslohn sollten sich aufheben!",
     history: [],
+    months: [],
   },
 };

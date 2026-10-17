@@ -2,14 +2,20 @@ import { describe, expect, it } from "vitest";
 import {
   amounts,
   budgetDate,
+  budgetMonth,
   categoryTotals,
   DEFAULT_CATEGORIES,
   EMPTY_BUDGET,
+  monthCategoryTotals,
   normalizeBudget,
+  planMonth,
   snapshotBudget,
   snapshotFree,
   summarizeBudget,
+  summarizeMonth,
+  withCurrentMonth,
   withSnapshot,
+  withSnapshots,
   withYearSnapshot,
 } from "./budget";
 import { BUDGET_SEEDS } from "./budget-seeds";
@@ -183,5 +189,65 @@ describe("withYearSnapshot", () => {
       [2026, 66000],
       [2027, 72000],
     ]);
+  });
+});
+
+describe("months", () => {
+  const plan = {
+    ...EMPTY_BUDGET,
+    categories: [{ id: "w", name: "Wohnen" }],
+    income: [{ id: "a", name: "Lohn", amount: 6000, interval: "month13" as const }],
+    fixed: [
+      { id: "b", name: "Miete", amount: 1500, interval: "month" as const, category: "w" },
+      { id: "c", name: "Halbtax", amount: 1200, interval: "year" as const },
+    ],
+    variable: [{ id: "d", name: "Lebensmittel", amount: 600, interval: "month" as const }],
+    invest: [{ id: "e", name: "Aktien", amount: 500, interval: "month" as const }],
+  };
+
+  it("takes the fixed costs over from the plan, per month", () => {
+    const m = planMonth(plan, "2026-10");
+    expect(m).toEqual({
+      month: "2026-10",
+      income: 6500,
+      invest: 500,
+      planned: 600,
+      fixed: [
+        { name: "Miete", amount: 1500, category: "w" },
+        { name: "Halbtax", amount: 100 },
+      ],
+      expenses: [],
+    });
+  });
+
+  it("follows the plan in the current month and keeps past months and their expenses", () => {
+    const coop = { id: "x", name: "Coop", amount: 80, category: "w" };
+    let b = withCurrentMonth(plan, new Date("2026-10-05T12:00:00Z"));
+    b = { ...b, months: b.months.map((m) => ({ ...m, expenses: [coop] })) };
+    b = withCurrentMonth({ ...b, fixed: [plan.fixed[0]] }, new Date("2026-10-31T12:00:00Z"));
+    expect(b.months.map((m) => [m.month, m.fixed.length, m.expenses.length])).toEqual([["2026-10", 1, 1]]);
+    b = withCurrentMonth({ ...b, fixed: [] }, new Date("2026-10-31T23:30:00Z"));
+    expect(b.months.map((m) => [m.month, m.fixed.length, m.expenses.length])).toEqual([
+      ["2026-10", 1, 1],
+      ["2026-11", 0, 0],
+    ]);
+    expect(budgetMonth(new Date("2026-10-31T23:30:00Z"))).toBe("2026-11");
+  });
+
+  it("adds up what is left after the fixed costs and the expenses", () => {
+    const m = { ...planMonth(plan, "2026-10"), expenses: [{ id: "x", name: "Coop", amount: 450, category: "w" }, { id: "y", name: "Kino", amount: 30 }] };
+    expect(summarizeMonth(m)).toEqual({ income: 6500, fixed: 1600, invest: 500, spent: 480, left: 120, free: 3920 });
+    expect(monthCategoryTotals(m, plan.categories)).toEqual([
+      { category: { id: "w", name: "Wohnen" }, fixed: 1500, spent: 450 },
+      { fixed: 100, spent: 30 },
+    ]);
+  });
+
+  it("survives saving and loading, and drops malformed months", () => {
+    const b = withSnapshots(plan, new Date("2026-10-05T12:00:00Z"));
+    expect(normalizeBudget(b)).toEqual(b);
+    expect(
+      normalizeBudget({ months: [{ month: "2026-13" }, 4, { month: "2026-09", income: "100", expenses: [{ name: 3, amount: "12" }, null] }] }).months,
+    ).toEqual([{ month: "2026-09", income: 100, invest: 0, planned: 0, fixed: [], expenses: [{ id: "2026-09-0", name: "", amount: 12 }] }]);
   });
 });
