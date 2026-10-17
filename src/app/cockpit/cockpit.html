@@ -823,6 +823,8 @@
       try { localStorage.setItem(STORE + ':depot', ui.depot); } catch (err) { /* ignore */ }
       depotRequest = null;
       tiles['t-depot'].load();
+      // The news follow the chosen depot's stocks; both share the one depot request.
+      tiles['t-news'].load();
     });
     try { ui.depot = localStorage.getItem(STORE + ':depot'); } catch (err) { /* ignore */ }
 
