@@ -5,10 +5,10 @@
 | Path | What | Access |
 | --- | --- | --- |
 | `/` | Landing page (Swiss German copy) | public |
-| `/login` | One sign-in for all tools (email link, no password) | public |
-| `/depot` | Depot: portfolio tracker for shares and cash | signed in |
-| `/cockpit` | Cockpit: market dashboard (depot, markets, news, opportunities) | signed in |
-| `/budget` | Finanzen: income, fixed costs and how much of it to invest | signed in |
+| `/login` | One sign-in for all tools (email and password) | public |
+| `/depot` | Depot: portfolio tracker for shares and cash | members |
+| `/cockpit` | Cockpit: market dashboard (depot, markets, news, opportunities) | members |
+| `/budget` | Finanzen: income, fixed costs and how much of it to invest | members |
 
 The Depot used to be a separate repository on `depot.fnnzhrn.ch`. Its full history is merged into this one, and the old subdomain redirects to `/depot`.
 
@@ -36,12 +36,13 @@ src/
   proxy.ts                 Sends signed-out visitors of /depot, /budget and /cockpit to /login
   app/
     page.tsx, site.css     Landing page (styles scoped to .site)
-    login/page.tsx         Sign-in page; ?next= is where to go afterwards
+    login/page.tsx         Sign-in, sign-up and "forgot password"; ?next= is where to go afterwards
+    login/reset/page.tsx   Sets a new password from the emailed reset link
     depot/                 Depot dashboard (client component)
     cockpit/route.ts       Serves cockpit.html to signed-in users
     cockpit/cockpit.html   Cockpit page (plain HTML/JS, data from /api/cockpit/*)
     budget/                Finanzen page (loads the budget on the server)
-    api/auth/[...all]/     Sign-in with email links (Better Auth)
+    api/auth/[...all]/     Sign-in with email and password (Better Auth)
     api/portfolio, api/profile          The signed-in user's depots and profile
     api/quotes, history, search, resolve Depot market data (yahoo-finance2)
     api/cockpit/*          Cockpit data (see below)
@@ -57,18 +58,26 @@ src/
 db/schema.sql              Database tables for sign-in, depots and budgets
 ```
 
-Every tool route checks the session on the server: the proxy only does a fast cookie check and redirects, while `/cockpit`, all `/api/*` routes except sign-in, and the depot sync verify the session themselves and answer 401 (or redirect) otherwise.
+Every tool route checks the session on the server: the proxy only does a fast cookie check and redirects, while `/cockpit`, all `/api/*` routes except sign-in, and the depot sync verify the session themselves and answer 401 (or redirect) otherwise. They also require the account to be authorized (see below) and answer 403 (or redirect to `/login`, which says the account isn't approved yet) otherwise.
 
 ## Sign-in
 
-Sign-in needs three services, all with free tiers: [Neon](https://neon.tech) (Postgres) stores accounts and depots, [Better Auth](https://better-auth.com) handles sign-in inside the app, and [Resend](https://resend.com) sends the sign-in emails.
+Sign-in needs three services, all with free tiers: [Neon](https://neon.tech) (Postgres) stores accounts and depots, [Better Auth](https://better-auth.com) handles sign-in inside the app, and [Resend](https://resend.com) sends the confirmation and password-reset emails.
 
 1. **Database.** In Vercel, open the project → **Storage** → connect the Neon database. This sets `DATABASE_URL`. For a new database, run [`db/schema.sql`](db/schema.sql) in Neon's SQL editor (safe to run again).
 2. **Email.** Add a Resend API key as `RESEND_API_KEY`. To send from your own address, verify `fnnzhrn.ch` in Resend and set `EMAIL_FROM`, e.g. `fnnzhrn <login@fnnzhrn.ch>`.
 3. **Auth settings.** Set `BETTER_AUTH_SECRET` to a random value (`openssl rand -base64 32`) and `BETTER_AUTH_URL` to `https://fnnzhrn.ch`.
 4. **Redeploy**, so the variables are built in. The tools only open when `DATABASE_URL`, `BETTER_AUTH_SECRET` and `RESEND_API_KEY` are all set; otherwise `/login` says sign-in isn't set up.
 
-Sign-in links work once and expire after 15 minutes. Sessions last a year and renew while the tools are used.
+Members sign in with email and password. A new account confirms its email address with a link before it can sign in. **Passwort vergessen** emails a reset link that works once and expires after an hour; setting a new password signs out every other session. Members from the email-link days have no password yet and set one through **Passwort vergessen**; their depots and budgets stay with their account. Sessions last a year and renew while the tools are used.
+
+**Who gets in.** Anyone can create an account, but only accounts marked `authorized` in the database can use the tools. Mark members in Neon's SQL editor:
+
+```sql
+update "user" set "authorized" = true where "email" in ('a@example.ch', 'b@example.ch');
+```
+
+Setting it back to `false` locks the account out on its next request. The column comes from [`db/schema.sql`](db/schema.sql); on an existing database, run the file again before deploying, then mark the existing members, or they're locked out too.
 
 ## Depot
 
@@ -91,7 +100,6 @@ How sync behaves:
 - Every change uploads right away. When you come back to the tab, it pulls the latest version, so edits from your phone show up on your computer.
 - If both devices change the portfolio while one is offline, the last one to upload wins.
 - Signing out removes the portfolio from that browser. It stays in your account. Sessions last a year and renew while you use the app.
-- Sign-in links work once and expire after 15 minutes.
 
 ### Notes and limitations
 

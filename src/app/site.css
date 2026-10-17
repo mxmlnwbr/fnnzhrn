@@ -381,4 +381,7 @@
 .site .primary[disabled] { opacity: 0.6; cursor: default; }
 .site .secondary { width: 100%; justify-content: center; }
 .site .card .error { color: #e5484d; font-size: 0.875rem; margin: -4px 0 12px; }
+.site .card .switch { display: flex; justify-content: space-between; gap: 12px; margin: 14px 0 0; }
+.site .link-btn { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 0.875rem; cursor: pointer; }
+.site .link-btn:hover, .site .link-btn:focus-visible { text-decoration: underline; outline: none; }
 .site .card code { font-family: ui-monospace, monospace; font-size: 0.85em; }

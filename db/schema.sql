@@ -2,7 +2,7 @@
 --   psql "$DATABASE_URL" -f db/schema.sql
 -- Safe to run again: everything is created only if it's missing.
 
--- Sign-in (Better Auth with magic links): users, sessions, linked accounts and pending sign-in links.
+-- Sign-in (Better Auth with email and password): users, sessions, accounts (holding the password hash) and pending email links.
 create table if not exists "user" (
   "id" text not null primary key,
   "name" text not null,
@@ -48,6 +48,10 @@ create table if not exists "verification" (
   "createdAt" timestamptz default CURRENT_TIMESTAMP not null,
   "updatedAt" timestamptz default CURRENT_TIMESTAMP not null
 );
+
+-- Only users marked here may use the tools; mark members by hand:
+--   update "user" set "authorized" = true where "email" in ('a@example.ch', 'b@example.ch');
+alter table "user" add column if not exists "authorized" boolean not null default false;
 
 create index if not exists "session_userId_idx" on "session" ("userId");
 create index if not exists "account_userId_idx" on "account" ("userId");
