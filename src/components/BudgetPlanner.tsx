@@ -7,6 +7,7 @@ import {
   amounts,
   type Budget,
   type BudgetItem,
+  budgetDate,
   type BudgetSnapshot,
   type Category,
   type CategoryTotal,
@@ -20,7 +21,7 @@ import {
   snapshotFree,
   sum,
   summarizeBudget,
-  withSnapshot,
+  withYearSnapshot,
 } from "@/lib/budget";
 import { formatMoney } from "@/lib/currency";
 import { buttonClass, Card, inputClass, pnlClass } from "./ui";
@@ -93,7 +94,9 @@ function useAutosave(budget: Budget): SaveState {
 }
 
 export function BudgetPlanner({ initial }: { initial: Budget }) {
-  const [budget, setBudget] = useState(initial);
+  const [budget, setBudgetState] = useState(initial);
+  // Every change also updates this year's snapshot, so the history needs no saving by hand.
+  const setBudget = (update: (b: Budget) => Budget) => setBudgetState((b) => withYearSnapshot(update(b), new Date()));
   const [period, setPeriod] = useState<Period>("month");
   const save = useAutosave(budget);
   const summary = summarizeBudget(budget);
@@ -447,8 +450,8 @@ function categoryChanges(current: BudgetSnapshot, previous: BudgetSnapshot) {
 }
 
 /**
- * The budget's totals as saved at the end of earlier years, next to the current ones, so you can see
- * what has gone up or down. Saving again in the same year replaces that year's state.
+ * This year's totals next to those each earlier year had on its last day, so you can see what has gone
+ * up or down. Each year is kept automatically; see withYearSnapshot.
  */
 function HistoryCard({
   budget,
@@ -461,26 +464,22 @@ function HistoryCard({
   format: (v: number) => string;
   onChange: (history: BudgetSnapshot[]) => void;
 }) {
-  const thisYear = new Date().getFullYear();
-  const [year, setYear] = useState(thisYear);
-  const history = budget.history;
+  const thisYear = Number(budgetDate(new Date()).slice(0, 4));
+  const past = budget.history.filter((h) => h.year < thisYear);
   const current = snapshotBudget(budget, thisYear, "");
   const per = (v: number) => (period === "month" ? v / 12 : v);
-  const exists = history.some((h) => h.year === year);
-  const save = () => {
-    if (exists && !confirm(`Den gespeicherten Stand ${year} mit den aktuellen Zahlen ersetzen?`)) return;
-    onChange(withSnapshot(history, snapshotBudget(budget, year, new Date().toISOString().slice(0, 10))));
-  };
-  const rows = [...history.map((h) => ({ label: String(h.year), snapshot: h })), { label: "Aktuell", snapshot: current }];
-  const last = history.at(-1);
+  const rows = [...past, current];
+  const last = past.at(-1);
   const changes = last ? categoryChanges(current, last) : [];
 
   return (
     <Card title="Verlauf">
       <p className="-mt-2 mb-3 text-xs text-zinc-500">
-        Speichere jedes Jahr den Stand, um zu sehen, wie sich Einkommen, Ausgaben und Kategorien verändern.
+        Am Jahresende bleibt der Stand automatisch erhalten, so siehst du, wie sich Einkommen, Ausgaben und Kategorien verändern.
       </p>
-      {history.length > 0 && (
+      {past.length === 0 ? (
+        <p className="text-sm text-zinc-500">Der Stand {thisYear} wird laufend gespeichert. Ab {thisYear + 1} kannst du hier vergleichen.</p>
+      ) : (
         <div className="-mx-1 overflow-x-auto">
           <table className="w-full min-w-md text-sm tabular-nums">
             <thead>
@@ -496,19 +495,19 @@ function HistoryCard({
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {rows.map((r, i) => {
-                const prev = rows[i - 1]?.snapshot;
-                const live = r.snapshot === current;
+                const prev = rows[i - 1];
+                const live = r === current;
                 return (
-                  <tr key={r.label} className={live ? "font-medium" : ""}>
-                    <td className="px-1 py-1.5 align-top" title={live ? undefined : `Gespeichert am ${r.snapshot.savedAt}`}>
-                      {r.label}
+                  <tr key={r.year} className={live ? "font-medium" : ""}>
+                    <td className="px-1 py-1.5 align-top" title={live ? "laufend" : `Stand vom ${r.savedAt}`}>
+                      {r.year}
                     </td>
                     {HISTORY_COLUMNS.map((c) => (
                       <td key={c.key} className="px-1 py-1.5 text-right align-top">
-                        <div>{format(per(c.value(r.snapshot)))}</div>
+                        <div>{format(per(c.value(r)))}</div>
                         {prev && (
                           <div className="text-xs font-normal">
-                            <Change value={per(c.value(r.snapshot) - c.value(prev))} worse={c.more === "worse"} format={format} />
+                            <Change value={per(c.value(r) - c.value(prev))} worse={c.more === "worse"} format={format} />
                           </div>
                         )}
                       </td>
@@ -517,10 +516,8 @@ function HistoryCard({
                       {!live && (
                         <button
                           className="rounded-md px-2 py-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800"
-                          aria-label={`Stand ${r.label} löschen`}
-                          onClick={() =>
-                            confirm(`Den gespeicherten Stand ${r.label} löschen?`) && onChange(history.filter((h) => h !== r.snapshot))
-                          }
+                          aria-label={`Stand ${r.year} löschen`}
+                          onClick={() => confirm(`Den Stand ${r.year} löschen?`) && onChange(budget.history.filter((h) => h !== r))}
                         >
                           ×
                         </button>
@@ -550,19 +547,6 @@ function HistoryCard({
           </ul>
         </div>
       )}
-      <div className={`flex flex-wrap items-center gap-2 ${history.length > 0 ? "mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-800" : ""}`}>
-        <select className={`${inputClass} w-auto`} aria-label="Jahr" value={year} onChange={(e) => setYear(Number(e.target.value))}>
-          {[thisYear, thisYear - 1].map((y) => (
-            <option key={y} value={y}>
-              {y}
-            </option>
-          ))}
-        </select>
-        <button className={buttonClass} onClick={save}>
-          {exists ? `Stand ${year} aktualisieren` : `Stand ${year} speichern`}
-        </button>
-        {history.length === 0 && <span className="text-xs text-zinc-500">Noch kein Jahr gespeichert.</span>}
-      </div>
     </Card>
   );
 }
