@@ -6,6 +6,9 @@ import {
   amounts,
   type Budget,
   type BudgetItem,
+  type Category,
+  categoryTotals,
+  EXPENSE_SECTIONS,
   INTERVALS,
   type Interval,
   type Section,
@@ -22,6 +25,12 @@ type SaveState = "saved" | "saving" | "error";
 const SECTION_INFO: Record<Section, { title: string; hint: string; color: string; placeholder: string }> = {
   income: { title: "Einnahmen", hint: "Netto, was aufs Konto kommt", color: "var(--series-3)", placeholder: "z. B. Netto Lohn" },
   fixed: { title: "Fixkosten", hint: "Was jeden Monat oder jedes Jahr sicher anfällt", color: "var(--series-2)", placeholder: "z. B. Miete" },
+  variable: {
+    title: "Flexible Ausgaben",
+    hint: "Was je nach Monat schwankt – trag ein, was du ungefähr ausgibst",
+    color: "var(--series-4)",
+    placeholder: "z. B. Lebensmittel",
+  },
   invest: { title: "Investieren", hint: "Was du regelmässig anlegen willst", color: "var(--series-1)", placeholder: "z. B. Säule 3a" },
 };
 
@@ -83,13 +92,21 @@ export function BudgetPlanner({ initial }: { initial: Budget }) {
   const share = (v: number) => (income > 0 ? percent(v / income) : "–");
 
   const updateSection = (section: Section, items: BudgetItem[]) => setBudget((b) => ({ ...b, [section]: items }));
+  const updateCategories = (categories: Category[]) =>
+    setBudget((b) => {
+      // Expenses of a removed category are kept, just without one.
+      const ids = new Set(categories.map((c) => c.id));
+      const keep = (items: BudgetItem[]) =>
+        items.map(({ category, ...item }) => (category && ids.has(category) ? { ...item, category } : item));
+      return { ...b, categories, fixed: keep(b.fixed), variable: keep(b.variable) };
+    });
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 space-y-4 px-4 py-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Finanzübersicht</h1>
-          <p className="text-sm text-zinc-500">Was reinkommt, was fix weggeht und wie viel davon du investierst.</p>
+          <p className="text-sm text-zinc-500">Was reinkommt, was du ausgibst und wie viel davon du investierst.</p>
         </div>
         <div className="flex items-center gap-3">
           <SaveStatus state={save} />
@@ -110,7 +127,11 @@ export function BudgetPlanner({ initial }: { initial: Budget }) {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Einkommen" value={m(summary.income[period])} sub={period === "month" ? "inkl. 13. Monatslohn (verteilt)" : "inkl. 13. Monatslohn"} />
-        <Stat label="Fixkosten" value={m(summary.fixed[period])} sub={`${share(summary.fixed[period])} vom Einkommen`} />
+        <Stat
+          label="Ausgaben"
+          value={m(summary.expenses[period])}
+          sub={`fix ${m(summary.fixed[period])} · flexibel ${m(summary.variable[period])}`}
+        />
         <Stat label="Investieren" value={m(summary.invest[period])} sub={`Sparquote ${share(summary.invest[period])}`} />
         <Stat
           label="Frei verfügbar"
@@ -122,11 +143,14 @@ export function BudgetPlanner({ initial }: { initial: Budget }) {
 
       <Split summary={summary} period={period} format={m} />
 
+      <CategoriesCard budget={budget} period={period} format={m} onChange={updateCategories} />
+
       {SECTIONS.map((section) => (
         <ItemsCard
           key={section}
           section={section}
           items={budget[section]}
+          categories={(EXPENSE_SECTIONS as readonly Section[]).includes(section) ? budget.categories : undefined}
           period={period}
           format={m}
           onChange={(items) => updateSection(section, items)}
@@ -165,15 +189,16 @@ function Stat({ label, value, sub, negative }: { label: string; value: string; s
   );
 }
 
-/** Where the income goes: one bar split into fixed costs, investments and what's left. */
+/** Where the income goes: one bar split into fixed costs, flexible expenses, investments and what's left. */
 function Split({ summary, period, format }: { summary: ReturnType<typeof summarizeBudget>; period: Period; format: (v: number) => string }) {
   const income = summary.income[period];
   const parts = [
     { label: "Fixkosten", value: summary.fixed[period], color: SECTION_INFO.fixed.color },
+    { label: "Flexibel", value: summary.variable[period], color: SECTION_INFO.variable.color },
     { label: "Investieren", value: summary.invest[period], color: SECTION_INFO.invest.color },
     { label: "Frei", value: Math.max(0, summary.free[period]), color: "var(--series-other)" },
   ];
-  const total = Math.max(income, parts[0].value + parts[1].value);
+  const total = Math.max(income, summary.expenses[period] + summary.invest[period]);
   return (
     <Card title="Wohin das Einkommen geht">
       {total > 0 ? (
@@ -197,7 +222,7 @@ function Split({ summary, period, format }: { summary: ReturnType<typeof summari
           </ul>
           {summary.free[period] < 0 && (
             <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-              Fixkosten und Investitionen sind {format(-summary.free[period])} höher als das Einkommen.
+              Ausgaben und Investitionen sind {format(-summary.free[period])} höher als das Einkommen.
             </p>
           )}
         </>
@@ -208,8 +233,104 @@ function Split({ summary, period, format }: { summary: ReturnType<typeof summari
   );
 }
 
-function newItem(): BudgetItem {
-  return { id: crypto.randomUUID(), name: "", amount: 0, interval: "month" };
+function newItem(category?: string): BudgetItem {
+  return { id: crypto.randomUUID(), name: "", amount: 0, interval: "month", ...(category ? { category } : {}) };
+}
+
+/**
+ * Fixed and flexible expenses per category, side by side in one bar each. Categories are renamed in
+ * place, removed with ×, and added at the bottom.
+ */
+function CategoriesCard({
+  budget,
+  period,
+  format,
+  onChange,
+}: {
+  budget: Budget;
+  period: Period;
+  format: (v: number) => string;
+  onChange: (categories: Category[]) => void;
+}) {
+  const [name, setName] = useState("");
+  const rows = categoryTotals(budget);
+  const max = Math.max(...rows.map((r) => r.total[period]), 0);
+  const expenses = rows.reduce((s, r) => s + r.total[period], 0);
+  const width = (v: number) => `${max > 0 ? (Math.max(0, v) / max) * 100 : 0}%`;
+  const add = () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    onChange([...budget.categories, { id: crypto.randomUUID(), name: trimmed }]);
+    setName("");
+  };
+  const rename = (id: string, value: string) => onChange(budget.categories.map((c) => (c.id === id ? { ...c, name: value } : c)));
+
+  return (
+    <Card title="Kategorien">
+      <p className="-mt-2 mb-3 text-xs text-zinc-500">
+        Fixe und flexible Ausgaben nach Kategorie. Namen kannst du direkt ändern; die Kategorie eines Eintrags wählst du unten.
+      </p>
+      <ul className="space-y-2.5">
+        {rows.map((r) => (
+          <li key={r.category?.id ?? "none"} className="text-sm">
+            <div className="flex items-center justify-between gap-2">
+              {r.category ? (
+                <input
+                  className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-zinc-300 focus:border-zinc-400 dark:hover:border-zinc-700"
+                  aria-label="Name der Kategorie"
+                  placeholder="Kategorie"
+                  value={r.category.name}
+                  onChange={(e) => rename(r.category!.id, e.target.value)}
+                />
+              ) : (
+                <span className="flex-1 px-1 text-zinc-500 italic">Ohne Kategorie</span>
+              )}
+              <span className="shrink-0 tabular-nums">{format(r.total[period])}</span>
+              {expenses > 0 && <span className="w-12 shrink-0 text-right text-xs text-zinc-500 tabular-nums">{percent(r.total[period] / expenses)}</span>}
+              {r.category ? (
+                <button
+                  className="rounded-md px-2 py-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800"
+                  aria-label={`Kategorie ${r.category.name || ""} entfernen`}
+                  title="Entfernen – die Einträge bleiben, nur ohne Kategorie"
+                  onClick={() => onChange(budget.categories.filter((c) => c.id !== r.category!.id))}
+                >
+                  ×
+                </button>
+              ) : (
+                <span className="w-[1.85rem] shrink-0" aria-hidden />
+              )}
+            </div>
+            <div
+              className="mx-1 mt-1 flex h-1.5 gap-px overflow-hidden rounded bg-zinc-100 dark:bg-zinc-800"
+              title={`fix ${format(r.fixed[period])} · flexibel ${format(r.variable[period])}`}
+            >
+              <div style={{ width: width(r.fixed[period]), background: SECTION_INFO.fixed.color }} />
+              <div style={{ width: width(r.variable[period]), background: SECTION_INFO.variable.color }} />
+            </div>
+          </li>
+        ))}
+      </ul>
+      <form
+        className="mt-3 flex gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-800"
+        onSubmit={(e) => {
+          e.preventDefault();
+          add();
+        }}
+      >
+        <input
+          className={inputClass}
+          aria-label="Neue Kategorie"
+          placeholder="Neue Kategorie, z. B. Hypothek"
+          value={name}
+          maxLength={100}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <button type="submit" className={`${buttonClass} shrink-0`} disabled={!name.trim()}>
+          + Kategorie
+        </button>
+      </form>
+    </Card>
+  );
 }
 
 function parseAmount(text: string): number {
@@ -217,15 +338,27 @@ function parseAmount(text: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** The items of an expense section in groups, one per category that has any, and those without a category last. */
+function groupByCategory(items: BudgetItem[], categories: Category[]) {
+  const known = new Set(categories.map((c) => c.id));
+  const groups = categories.map((category) => ({ category, items: items.filter((i) => i.category === category.id) }));
+  return [...groups, { category: undefined, items: items.filter((i) => !i.category || !known.has(i.category)) }].filter(
+    (g) => g.items.length > 0,
+  );
+}
+
 function ItemsCard({
   section,
   items,
+  categories,
   period,
   format,
   onChange,
 }: {
   section: Section;
   items: BudgetItem[];
+  /** Given for expense sections: each item can then be put into one of these. */
+  categories?: Category[];
   period: Period;
   format: (v: number) => string;
   onChange: (items: BudgetItem[]) => void;
@@ -234,6 +367,20 @@ function ItemsCard({
   const total = sum(items)[period];
   const update = (id: string, patch: Partial<BudgetItem>) => onChange(items.map((i) => (i.id === id ? { ...i, ...patch } : i)));
   const sortByAmount = () => onChange([...items].sort((a, b) => amounts(b).year - amounts(a).year));
+  const grouped = categories !== undefined && categories.length > 0;
+  const groups = grouped ? groupByCategory(items, categories) : [{ category: undefined, items }];
+  const row = (item: BudgetItem) => (
+    <ItemRow
+      key={item.id}
+      item={item}
+      section={section}
+      categories={grouped ? categories : undefined}
+      period={period}
+      format={format}
+      onChange={(patch) => update(item.id, patch)}
+      onRemove={() => onChange(items.filter((i) => i.id !== item.id))}
+    />
+  );
 
   return (
     <Card
@@ -247,52 +394,35 @@ function ItemsCard({
       }
     >
       <p className="-mt-2 mb-3 text-xs text-zinc-500">{info.hint}</p>
-      <ul className="space-y-2">
-        {items.map((item) => (
-          <li key={item.id} className="grid grid-cols-[1fr_6.5rem_auto] items-center gap-1.5 sm:grid-cols-[1fr_6.5rem_8rem_6rem_auto]">
-            <input
-              className={`${inputClass} col-span-3 sm:col-span-1`}
-              aria-label="Bezeichnung"
-              placeholder={info.placeholder}
-              value={item.name}
-              onChange={(e) => update(item.id, { name: e.target.value })}
-            />
-            <input
-              className={`${inputClass} text-right tabular-nums`}
-              aria-label={`Betrag ${item.name}`}
-              inputMode="decimal"
-              defaultValue={item.amount || ""}
-              placeholder="0"
-              onChange={(e) => update(item.id, { amount: parseAmount(e.target.value) })}
-            />
-            <select
-              className={inputClass}
-              aria-label={`Intervall ${item.name}`}
-              value={item.interval}
-              onChange={(e) => update(item.id, { interval: e.target.value as Interval })}
-            >
-              {INTERVALS.filter((x) => section === "income" || x.value !== "month13").map((x) => (
-                <option key={x.value} value={x.value}>
-                  {x.label}
-                </option>
-              ))}
-            </select>
-            <span
-              className="hidden text-right text-xs text-zinc-500 tabular-nums sm:block"
-              title={period === "month" ? "pro Monat" : "pro Jahr"}
-            >
-              {format(amounts(item)[period])}
-            </span>
-            <button
-              className="rounded-md px-2 py-1 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800"
-              aria-label={`${item.name || "Eintrag"} entfernen`}
-              onClick={() => onChange(items.filter((i) => i.id !== item.id))}
-            >
-              ×
-            </button>
-          </li>
-        ))}
-      </ul>
+      {grouped ? (
+        <div className="space-y-4">
+          {groups.map((g) => (
+            <div key={g.category?.id ?? "none"}>
+              <div className="mb-1.5 flex items-center justify-between gap-2 text-xs">
+                <span className={`font-medium ${g.category ? "text-zinc-600 dark:text-zinc-400" : "text-zinc-500 italic"}`}>
+                  {g.category ? g.category.name || "Unbenannte Kategorie" : "Ohne Kategorie"}
+                </span>
+                <span className="flex items-center gap-2 text-zinc-500 tabular-nums">
+                  {format(sum(g.items)[period])}
+                  {g.category && (
+                    <button
+                      className="rounded px-1.5 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                      aria-label={`Eintrag in ${g.category.name} hinzufügen`}
+                      title="Eintrag in dieser Kategorie hinzufügen"
+                      onClick={() => onChange([...items, newItem(g.category!.id)])}
+                    >
+                      +
+                    </button>
+                  )}
+                </span>
+              </div>
+              <ul className="space-y-2">{g.items.map(row)}</ul>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <ul className="space-y-2">{items.map(row)}</ul>
+      )}
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-800">
         <button className={buttonClass} onClick={() => onChange([...items, newItem()])}>
           + Hinzufügen
@@ -302,5 +432,84 @@ function ItemsCard({
         </span>
       </div>
     </Card>
+  );
+}
+
+function ItemRow({
+  item,
+  section,
+  categories,
+  period,
+  format,
+  onChange,
+  onRemove,
+}: {
+  item: BudgetItem;
+  section: Section;
+  categories?: Category[];
+  period: Period;
+  format: (v: number) => string;
+  onChange: (patch: Partial<BudgetItem>) => void;
+  onRemove: () => void;
+}) {
+  const info = SECTION_INFO[section];
+  return (
+    <li className={`grid grid-cols-[1fr_6.5rem_auto] items-center gap-1.5 ${categories ? "sm:grid-cols-[1fr_8rem_6.5rem_7rem_5.5rem_auto]" : "sm:grid-cols-[1fr_6.5rem_8rem_6rem_auto]"}`}>
+      <input
+        className={`${inputClass} ${categories ? "" : "col-span-3"} sm:col-span-1`}
+        aria-label="Bezeichnung"
+        placeholder={info.placeholder}
+        value={item.name}
+        onChange={(e) => onChange({ name: e.target.value })}
+      />
+      {categories && (
+        <select
+          className={`${inputClass} col-span-2 sm:col-span-1`}
+          aria-label={`Kategorie ${item.name}`}
+          value={item.category ?? ""}
+          onChange={(e) => onChange({ category: e.target.value || undefined })}
+        >
+          <option value="">Ohne Kategorie</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name || "Unbenannte Kategorie"}
+            </option>
+          ))}
+        </select>
+      )}
+      <input
+        className={`${inputClass} text-right tabular-nums`}
+        aria-label={`Betrag ${item.name}`}
+        inputMode="decimal"
+        defaultValue={item.amount || ""}
+        placeholder="0"
+        onChange={(e) => onChange({ amount: parseAmount(e.target.value) })}
+      />
+      <select
+        className={inputClass}
+        aria-label={`Intervall ${item.name}`}
+        value={item.interval}
+        onChange={(e) => onChange({ interval: e.target.value as Interval })}
+      >
+        {INTERVALS.filter((x) => section === "income" || x.value !== "month13").map((x) => (
+          <option key={x.value} value={x.value}>
+            {x.label}
+          </option>
+        ))}
+      </select>
+      <span
+        className="hidden text-right text-xs text-zinc-500 tabular-nums sm:block"
+        title={period === "month" ? "pro Monat" : "pro Jahr"}
+      >
+        {format(amounts(item)[period])}
+      </span>
+      <button
+        className="rounded-md px-2 py-1 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800"
+        aria-label={`${item.name || "Eintrag"} entfernen`}
+        onClick={onRemove}
+      >
+        ×
+      </button>
+    </li>
   );
 }
