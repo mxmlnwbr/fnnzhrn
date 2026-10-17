@@ -41,5 +41,6 @@ export const BUDGET_SEEDS: Record<string, Budget> = {
       { id: "seed-invest-2", name: "Aktien", amount: 683.35, interval: "month" },
     ],
     note: "Wichtig: Steuern & 13. Monatslohn sollten sich aufheben!",
+    history: [],
   },
 };

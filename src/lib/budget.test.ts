@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { amounts, categoryTotals, DEFAULT_CATEGORIES, EMPTY_BUDGET, normalizeBudget, summarizeBudget } from "./budget";
+import {
+  amounts,
+  categoryTotals,
+  DEFAULT_CATEGORIES,
+  EMPTY_BUDGET,
+  normalizeBudget,
+  snapshotBudget,
+  snapshotFree,
+  summarizeBudget,
+  withSnapshot,
+} from "./budget";
 import { BUDGET_SEEDS } from "./budget-seeds";
 
 describe("amounts", () => {
@@ -105,5 +115,51 @@ describe("normalizeBudget", () => {
     expect(b.currency).toBe("CHF");
     expect(b.income).toEqual([{ id: "income-0", name: "x", amount: 12.5, interval: "month" }]);
     expect(b.note).toBe("");
+  });
+});
+
+describe("snapshotBudget", () => {
+  const budget = {
+    ...EMPTY_BUDGET,
+    categories: [{ id: "w", name: "Wohnen" }],
+    income: [{ id: "a", name: "Lohn", amount: 6000, interval: "month13" as const }],
+    fixed: [
+      { id: "b", name: "Miete", amount: 1500, interval: "month" as const, category: "w" },
+      { id: "c", name: "Steuern", amount: 6000, interval: "year" as const },
+    ],
+    invest: [{ id: "d", name: "3a", amount: 7200, interval: "year" as const }],
+  };
+
+  it("keeps the yearly totals and the expenses per category", () => {
+    const s = snapshotBudget(budget, 2026, "2026-12-31");
+    expect(s).toEqual({
+      year: 2026,
+      savedAt: "2026-12-31",
+      income: 78000,
+      fixed: 24000,
+      variable: 0,
+      invest: 7200,
+      categories: [
+        { id: "w", name: "Wohnen", total: 18000 },
+        { name: "Ohne Kategorie", total: 6000 },
+      ],
+    });
+    expect(snapshotFree(s)).toBe(46800);
+  });
+
+  it("keeps one snapshot per year, sorted by year", () => {
+    const a = snapshotBudget(budget, 2026, "2026-01-05");
+    const b = snapshotBudget(EMPTY_BUDGET, 2025, "2025-12-31");
+    const c = snapshotBudget(EMPTY_BUDGET, 2026, "2026-12-31");
+    expect(withSnapshot(withSnapshot(withSnapshot([], a), b), c)).toEqual([b, c]);
+  });
+
+  it("survives saving and loading, and drops malformed snapshots", () => {
+    const s = snapshotBudget(budget, 2026, "2026-12-31");
+    expect(normalizeBudget({ ...budget, history: [s] }).history).toEqual([s]);
+    expect(normalizeBudget({}).history).toEqual([]);
+    expect(normalizeBudget({ history: [{ year: "x" }, 3, { year: 2024, income: "100", categories: [{ name: 5 }] }] }).history).toEqual([
+      { year: 2024, savedAt: "2024-12-31", income: 100, fixed: 0, variable: 0, invest: 0, categories: [{ name: "", total: 0 }] },
+    ]);
   });
 });

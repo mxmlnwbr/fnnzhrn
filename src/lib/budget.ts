@@ -53,6 +53,21 @@ export interface Budget {
   variable: BudgetItem[];
   invest: BudgetItem[];
   note: string;
+  /** Saved yearly states, oldest first, at most one per year. */
+  history: BudgetSnapshot[];
+}
+
+/** The yearly totals of a budget as they were when saved, to compare how they change from year to year. */
+export interface BudgetSnapshot {
+  year: number;
+  /** ISO date of the day it was saved. */
+  savedAt: string;
+  income: number;
+  fixed: number;
+  variable: number;
+  invest: number;
+  /** Expenses per category; `id` is undefined for those without a category. */
+  categories: { id?: string; name: string; total: number }[];
 }
 
 export const EMPTY_BUDGET: Budget = {
@@ -64,6 +79,7 @@ export const EMPTY_BUDGET: Budget = {
   variable: [],
   invest: [],
   note: "",
+  history: [],
 };
 
 export interface Amounts {
@@ -146,7 +162,34 @@ export function categoryTotals(budget: Budget): CategoryTotal[] {
   return rows;
 }
 
+/** What is left of the income in a snapshot after all expenses and investments, per year. */
+export const snapshotFree = (s: BudgetSnapshot) => s.income - s.fixed - s.variable - s.invest;
+
+/** The budget's current yearly totals, to be kept as the state of `year`. */
+export function snapshotBudget(budget: Budget, year: number, savedAt: string): BudgetSnapshot {
+  const s = summarizeBudget(budget);
+  return {
+    year,
+    savedAt,
+    income: s.income.year,
+    fixed: s.fixed.year,
+    variable: s.variable.year,
+    invest: s.invest.year,
+    categories: categoryTotals(budget).map((r) => ({
+      ...(r.category ? { id: r.category.id } : {}),
+      name: r.category ? r.category.name : "Ohne Kategorie",
+      total: r.total.year,
+    })),
+  };
+}
+
+/** The history with `snapshot` in it, replacing an earlier one of the same year, sorted by year. */
+export function withSnapshot(history: BudgetSnapshot[], snapshot: BudgetSnapshot): BudgetSnapshot[] {
+  return [...history.filter((h) => h.year !== snapshot.year), snapshot].sort((a, b) => a.year - b.year);
+}
+
 const MAX_ITEMS = 200;
+const MAX_SNAPSHOTS = 100;
 const MAX_CATEGORIES = 50;
 
 function normalizeCategories(value: unknown): Category[] {
@@ -182,6 +225,42 @@ function normalizeItems(value: unknown, section: Section, categories: Set<string
   });
 }
 
+const finite = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+
+function normalizeHistory(value: unknown): BudgetSnapshot[] {
+  if (!Array.isArray(value)) return [];
+  const byYear = new Map<number, BudgetSnapshot>();
+  for (const raw of value.slice(0, MAX_SNAPSHOTS)) {
+    if (!raw || typeof raw !== "object") continue;
+    const h = raw as Partial<Record<keyof BudgetSnapshot, unknown>>;
+    const year = Number(h.year);
+    if (!Number.isInteger(year) || year < 1900 || year > 3000) continue;
+    const categories = Array.isArray(h.categories)
+      ? h.categories.slice(0, MAX_CATEGORIES + 1).flatMap((c): BudgetSnapshot["categories"] => {
+          if (!c || typeof c !== "object") return [];
+          const { id, name, total } = c as Record<string, unknown>;
+          return [
+            {
+              ...(typeof id === "string" && id ? { id: id.slice(0, 100) } : {}),
+              name: typeof name === "string" ? name.slice(0, 100) : "",
+              total: finite(total),
+            },
+          ];
+        })
+      : [];
+    byYear.set(year, {
+      year,
+      savedAt: typeof h.savedAt === "string" && /^\d{4}-\d{2}-\d{2}$/.test(h.savedAt) ? h.savedAt : `${year}-12-31`,
+      income: finite(h.income),
+      fixed: finite(h.fixed),
+      variable: finite(h.variable),
+      invest: finite(h.invest),
+      categories,
+    });
+  }
+  return [...byYear.values()].sort((a, b) => a.year - b.year);
+}
+
 /** A valid budget from saved or uploaded JSON; anything missing or malformed falls back to empty. */
 export function normalizeBudget(data: unknown): Budget {
   if (!data || typeof data !== "object") return EMPTY_BUDGET;
@@ -197,5 +276,6 @@ export function normalizeBudget(data: unknown): Budget {
     variable: normalizeItems(d.variable, "variable", ids),
     invest: normalizeItems(d.invest, "invest", ids),
     note: typeof d.note === "string" ? d.note.slice(0, 5000) : "",
+    history: normalizeHistory(d.history),
   };
 }
