@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   amounts,
+  budgetDate,
   categoryTotals,
   DEFAULT_CATEGORIES,
   EMPTY_BUDGET,
@@ -9,6 +10,7 @@ import {
   snapshotFree,
   summarizeBudget,
   withSnapshot,
+  withYearSnapshot,
 } from "./budget";
 import { BUDGET_SEEDS } from "./budget-seeds";
 
@@ -160,6 +162,26 @@ describe("snapshotBudget", () => {
     expect(normalizeBudget({}).history).toEqual([]);
     expect(normalizeBudget({ history: [{ year: "x" }, 3, { year: 2024, income: "100", categories: [{ name: 5 }] }] }).history).toEqual([
       { year: 2024, savedAt: "2024-12-31", income: 100, fixed: 0, variable: 0, invest: 0, categories: [{ name: "", total: 0 }] },
+    ]);
+  });
+});
+
+describe("withYearSnapshot", () => {
+  const lohn = (amount: number) => ({ ...EMPTY_BUDGET, income: [{ id: "a", name: "Lohn", amount, interval: "month" as const }] });
+
+  it("turns the year at midnight in Switzerland", () => {
+    expect(budgetDate(new Date("2026-12-31T22:59:00Z"))).toBe("2026-12-31");
+    expect(budgetDate(new Date("2026-12-31T23:01:00Z"))).toBe("2027-01-01");
+  });
+
+  it("keeps updating this year and leaves last year as it was on its last day", () => {
+    let b = withYearSnapshot(lohn(5000), new Date("2026-03-01T12:00:00Z"));
+    b = withYearSnapshot({ ...lohn(5500), history: b.history }, new Date("2026-12-31T12:00:00Z"));
+    expect(b.history.map((h) => [h.year, h.savedAt, h.income])).toEqual([[2026, "2026-12-31", 66000]]);
+    b = withYearSnapshot({ ...lohn(6000), history: b.history }, new Date("2027-01-02T12:00:00Z"));
+    expect(b.history.map((h) => [h.year, h.income])).toEqual([
+      [2026, 66000],
+      [2027, 72000],
     ]);
   });
 });

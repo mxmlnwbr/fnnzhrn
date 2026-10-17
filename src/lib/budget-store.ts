@@ -1,6 +1,6 @@
 import "server-only";
 import type { Pool } from "pg";
-import { type Budget, EMPTY_BUDGET, normalizeBudget } from "./budget";
+import { type Budget, budgetDate, EMPTY_BUDGET, normalizeBudget, withYearSnapshot } from "./budget";
 import { BUDGET_SEEDS } from "./budget-seeds";
 import { getPool } from "./db";
 
@@ -23,16 +23,28 @@ function ensureTable(pool: Pool) {
   return tableReady;
 }
 
-/** The user's saved overview; on first visit their imported spreadsheet (see budget-seeds.ts), if there is one. */
+/**
+ * The user's saved overview; on first visit their imported spreadsheet (see budget-seeds.ts), if there
+ * is one. A year without a snapshot yet gets one, so the history goes on even in years nothing is changed.
+ */
 export async function loadBudget(userId: string, email: string): Promise<Budget> {
   const pool = getPool()!;
   await ensureTable(pool);
+  const now = new Date();
   const { rows } = await pool.query("select data from budgets where user_id = $1", [userId]);
-  if (rows[0]) return normalizeBudget(rows[0].data);
+  if (rows[0]) {
+    const budget = normalizeBudget(rows[0].data);
+    const year = Number(budgetDate(now).slice(0, 4));
+    if (budget.history.some((h) => h.year === year)) return budget;
+    const updated = withYearSnapshot(budget, now);
+    await saveBudget(userId, updated);
+    return updated;
+  }
   const seed = BUDGET_SEEDS[email.trim().toLowerCase()];
   if (!seed) return EMPTY_BUDGET;
-  await pool.query("insert into budgets (user_id, data) values ($1, $2) on conflict (user_id) do nothing", [userId, seed]);
-  return seed;
+  const budget = withYearSnapshot(seed, now);
+  await pool.query("insert into budgets (user_id, data) values ($1, $2) on conflict (user_id) do nothing", [userId, budget]);
+  return budget;
 }
 
 export async function saveBudget(userId: string, budget: Budget) {

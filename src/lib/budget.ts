@@ -188,6 +188,20 @@ export function withSnapshot(history: BudgetSnapshot[], snapshot: BudgetSnapshot
   return [...history.filter((h) => h.year !== snapshot.year), snapshot].sort((a, b) => a.year - b.year);
 }
 
+/** The day in Switzerland, as "YYYY-MM-DD", so the year turns at midnight there and not in UTC. */
+export function budgetDate(now: Date): string {
+  return now.toLocaleDateString("sv-SE", { timeZone: "Europe/Zurich" });
+}
+
+/**
+ * The budget with this year's snapshot set to its current totals. Run on every change, so each year
+ * keeps the state it had on its last day once the next one starts.
+ */
+export function withYearSnapshot(budget: Budget, now: Date): Budget {
+  const date = budgetDate(now);
+  return { ...budget, history: withSnapshot(budget.history, snapshotBudget(budget, Number(date.slice(0, 4)), date)) };
+}
+
 const MAX_ITEMS = 200;
 const MAX_SNAPSHOTS = 100;
 const MAX_CATEGORIES = 50;
