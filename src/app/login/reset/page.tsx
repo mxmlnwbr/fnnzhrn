@@ -3,6 +3,7 @@ import Link from "next/link";
 import { reveal } from "@/components/site/reveal";
 import { ResetPasswordForm } from "@/components/site/ResetPasswordForm";
 import { TickerBackground } from "@/components/site/TickerBackground";
+import { WeberStudioCredit } from "@/components/site/WeberStudioCredit";
 import { safeNext } from "@/lib/next-path";
 import "../../site.css";
 
@@ -30,7 +31,7 @@ export default async function ResetPassword({ searchParams }: PageProps<"/login/
         </div>
       </main>
       <footer>
-        © fnnzhrn · Keine Anlageberatung · Umsetzung: <a href="https://weberstudio.ch" target="_blank" rel="noopener noreferrer">weberstudio.ch</a>
+        © fnnzhrn · Keine Anlageberatung · <WeberStudioCredit />
       </footer>
     </div>
   );
