@@ -8,6 +8,8 @@ import {
   type Budget,
   type BudgetItem,
   budgetDate,
+  type BudgetMonth,
+  budgetMonth,
   type BudgetSnapshot,
   type Category,
   type CategoryTotal,
@@ -15,19 +17,23 @@ import {
   EXPENSE_SECTIONS,
   INTERVALS,
   type Interval,
+  type MonthExpense,
+  monthCategoryTotals,
+  planMonth,
   type Section,
   SECTIONS,
   snapshotBudget,
   snapshotFree,
   sum,
   summarizeBudget,
-  withYearSnapshot,
+  summarizeMonth,
+  withSnapshots,
 } from "@/lib/budget";
 import { formatMoney } from "@/lib/currency";
 import { buttonClass, Card, inputClass, pnlClass } from "./ui";
 
 type Period = keyof Amounts;
-type View = "overview" | "history";
+type View = "overview" | "months" | "history";
 type SaveState = "saved" | "saving" | "error";
 
 const SECTION_INFO: Record<Section, { title: string; hint: string; color: string; placeholder: string }> = {
@@ -96,8 +102,8 @@ function useAutosave(budget: Budget): SaveState {
 
 export function BudgetPlanner({ initial }: { initial: Budget }) {
   const [budget, setBudgetState] = useState(initial);
-  // Every change also updates this year's snapshot, so the history needs no saving by hand.
-  const setBudget = (update: (b: Budget) => Budget) => setBudgetState((b) => withYearSnapshot(update(b), new Date()));
+  // Every change also updates this year's snapshot and this month, so neither needs saving by hand.
+  const setBudget = (update: (b: Budget) => Budget) => setBudgetState((b) => withSnapshots(update(b), new Date()));
   const [period, setPeriod] = useState<Period>("month");
   const [view, setView] = useState<View>("overview");
   const save = useAutosave(budget);
@@ -111,9 +117,10 @@ export function BudgetPlanner({ initial }: { initial: Budget }) {
     setBudget((b) => {
       // Expenses of a removed category are kept, just without one.
       const ids = new Set(categories.map((c) => c.id));
-      const keep = (items: BudgetItem[]) =>
-        items.map(({ category, ...item }) => (category && ids.has(category) ? { ...item, category } : item));
-      return { ...b, categories, fixed: keep(b.fixed), variable: keep(b.variable) };
+      const keep = <T extends { category?: string }>(items: T[]) =>
+        items.map(({ category, ...item }) => (category && ids.has(category) ? { ...item, category } : item) as T);
+      const months = b.months.map((m) => ({ ...m, expenses: keep(m.expenses) }));
+      return { ...b, categories, fixed: keep(b.fixed), variable: keep(b.variable), months };
     });
 
   return (
@@ -130,23 +137,32 @@ export function BudgetPlanner({ initial }: { initial: Budget }) {
             value={view}
             options={[
               { value: "overview", label: "Übersicht" },
+              { value: "months", label: "Monate" },
               { value: "history", label: "Verlauf" },
             ]}
             onChange={setView}
           />
-          <Toggle
-            label="Zeitraum"
-            value={period}
-            options={[
-              { value: "month", label: "Monat" },
-              { value: "year", label: "Jahr" },
-            ]}
-            onChange={setPeriod}
-          />
+          {view !== "months" && (
+            <Toggle
+              label="Zeitraum"
+              value={period}
+              options={[
+                { value: "month", label: "Monat" },
+                { value: "year", label: "Jahr" },
+              ]}
+              onChange={setPeriod}
+            />
+          )}
         </div>
       </header>
 
-      {view === "history" ? (
+      {view === "months" ? (
+        <MonthsView
+          budget={budget}
+          format={m}
+          onChange={(month) => setBudget((b) => ({ ...b, months: [...b.months.filter((x) => x.month !== month.month), month] }))}
+        />
+      ) : view === "history" ? (
         <HistoryCard
           budget={budget}
           period={period}
@@ -586,6 +602,209 @@ function HistoryCard({
           </ul>
         </div>
       )}
+    </Card>
+  );
+}
+
+const MONTH_NAMES = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+const monthLabel = (key: string) => `${MONTH_NAMES[Number(key.slice(5)) - 1]} ${key.slice(0, 4)}`;
+
+/**
+ * One month at a time: income, fixed costs and investments come over from the plan by themselves, and
+ * what else was spent is entered by hand. The current month follows the plan until it ends; see withCurrentMonth.
+ */
+function MonthsView({ budget, format, onChange }: { budget: Budget; format: (v: number) => string; onChange: (month: BudgetMonth) => void }) {
+  const current = budgetMonth(new Date());
+  const [selected, setSelected] = useState(current);
+  const month = budget.months.find((x) => x.month === selected) ?? planMonth(budget, selected);
+  const keys = budget.months.some((x) => x.month === selected) ? budget.months.map((x) => x.month) : [...budget.months.map((x) => x.month), selected].sort();
+  const index = keys.indexOf(selected);
+  const s = summarizeMonth(month);
+  const live = month.month === current;
+  const setExpenses = (expenses: MonthExpense[]) => onChange({ ...month, expenses });
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <button className={buttonClass} disabled={index <= 0} onClick={() => setSelected(keys[index - 1])} aria-label="Monat davor">
+          ‹
+        </button>
+        <h2 className="text-lg font-semibold">
+          {monthLabel(month.month)}
+          {live && <span className="ml-2 text-xs font-normal text-zinc-500">laufend</span>}
+        </h2>
+        <button className={buttonClass} disabled={index >= keys.length - 1} onClick={() => setSelected(keys[index + 1])} aria-label="Monat danach">
+          ›
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat label="Einkommen" value={format(s.income)} sub="aus dem Plan" />
+        <Stat label="Fixkosten" value={format(s.fixed)} sub={`+ Investieren ${format(s.invest)}`} />
+        <Stat
+          label="Ausgaben"
+          value={format(s.spent)}
+          sub={month.planned > 0 ? `${s.left < 0 ? "über Budget" : "noch"} ${format(Math.abs(s.left))} von ${format(month.planned)}` : "von Hand erfasst"}
+          negative={month.planned > 0 && s.left < 0}
+        />
+        <Stat label="Frei verfügbar" value={format(s.free)} sub="nach allem" negative={s.free < 0} />
+      </div>
+
+      <ExpensesCard month={month} categories={budget.categories} format={format} onChange={setExpenses} />
+      <MonthCategoriesCard month={month} categories={budget.categories} format={format} />
+
+      <Card title="Fixkosten aus dem Plan">
+        <p className="-mt-2 mb-3 text-xs text-zinc-500">
+          {live
+            ? "Werden jeden Monat automatisch übernommen und folgen deinem Plan bis Ende Monat. Ändern kannst du sie in der Übersicht."
+            : "So, wie sie am Ende des Monats im Plan standen. Jährliche Beträge sind auf die Monate verteilt."}
+        </p>
+        {month.fixed.length === 0 ? (
+          <p className="text-sm text-zinc-500">Keine Fixkosten im Plan.</p>
+        ) : (
+          <ul className="divide-y divide-zinc-100 text-sm tabular-nums dark:divide-zinc-800">
+            {month.fixed.map((l, i) => (
+              <li key={i} className="flex items-center gap-2 py-1">
+                <span className="min-w-0 flex-1 truncate">{l.name || "Eintrag"}</span>
+                <span>{format(l.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </>
+  );
+}
+
+/** What was spent in a month: added with the form at the top, then editable in place. */
+function ExpensesCard({
+  month,
+  categories,
+  format,
+  onChange,
+}: {
+  month: BudgetMonth;
+  categories: Category[];
+  format: (v: number) => string;
+  onChange: (expenses: MonthExpense[]) => void;
+}) {
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("");
+  const [amount, setAmount] = useState("");
+  const value = parseAmount(amount);
+  const add = () => {
+    if (!value) return;
+    onChange([...month.expenses, { id: crypto.randomUUID(), name: name.trim(), amount: value, ...(category ? { category } : {}) }]);
+    setName("");
+    setAmount("");
+  };
+  const update = (id: string, patch: Partial<MonthExpense>) => onChange(month.expenses.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+  const select = (value: string, onSelect: (value: string) => void, label: string) => (
+    <select className={inputClass} aria-label={label} value={value} onChange={(e) => onSelect(e.target.value)}>
+      <option value="">Ohne Kategorie</option>
+      {categories.map((c) => (
+        <option key={c.id} value={c.id}>
+          {c.name || "Unbenannte Kategorie"}
+        </option>
+      ))}
+    </select>
+  );
+
+  return (
+    <Card title="Ausgaben">
+      <p className="-mt-2 mb-3 text-xs text-zinc-500">Alles, was diesen Monat ausser den Fixkosten anfällt, z. B. Einkäufe, Ausgang oder Ferien.</p>
+      <form
+        className="grid grid-cols-[1fr_6.5rem] gap-1.5 sm:grid-cols-[1fr_9rem_6.5rem_auto]"
+        onSubmit={(e) => {
+          e.preventDefault();
+          add();
+        }}
+      >
+        <input className={`${inputClass} col-span-2 sm:col-span-1`} aria-label="Neue Ausgabe" placeholder="z. B. Coop" value={name} maxLength={200} onChange={(e) => setName(e.target.value)} />
+        {select(category, setCategory, "Kategorie der neuen Ausgabe")}
+        <input
+          className={`${inputClass} text-right tabular-nums`}
+          aria-label="Betrag der neuen Ausgabe"
+          inputMode="decimal"
+          placeholder="0"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+        />
+        <button type="submit" className={`${buttonClass} col-span-2 sm:col-span-1`} disabled={!value}>
+          + Hinzufügen
+        </button>
+      </form>
+      {month.expenses.length > 0 && (
+        <ul className="mt-3 space-y-2 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+          {month.expenses.map((e) => (
+            <li key={e.id} className="grid grid-cols-[1fr_6.5rem_auto] items-center gap-1.5 sm:grid-cols-[1fr_9rem_6.5rem_auto]">
+              <input
+                className={`${inputClass} col-span-3 sm:col-span-1`}
+                aria-label="Bezeichnung"
+                placeholder="Ausgabe"
+                value={e.name}
+                onChange={(ev) => update(e.id, { name: ev.target.value })}
+              />
+              {select(e.category ?? "", (c) => update(e.id, { category: c || undefined }), `Kategorie ${e.name}`)}
+              <input
+                className={`${inputClass} text-right tabular-nums`}
+                aria-label={`Betrag ${e.name}`}
+                inputMode="decimal"
+                defaultValue={e.amount || ""}
+                placeholder="0"
+                onChange={(ev) => update(e.id, { amount: parseAmount(ev.target.value) })}
+              />
+              <button
+                className="rounded-md px-2 py-1 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800"
+                aria-label={`${e.name || "Ausgabe"} entfernen`}
+                onClick={() => onChange(month.expenses.filter((x) => x.id !== e.id))}
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mt-3 flex justify-end border-t border-zinc-200 pt-3 text-sm font-semibold tabular-nums dark:border-zinc-800">
+        {format(summarizeMonth(month).spent)}
+      </div>
+    </Card>
+  );
+}
+
+/** Fixed costs and expenses of the month per category, each with a bar of its share. */
+function MonthCategoriesCard({ month, categories, format }: { month: BudgetMonth; categories: Category[]; format: (v: number) => string }) {
+  const rows = monthCategoryTotals(month, categories).filter((r) => r.fixed !== 0 || r.spent !== 0);
+  const total = rows.reduce((s, r) => s + Math.max(0, r.fixed + r.spent), 0);
+  if (total <= 0) return null;
+  return (
+    <Card title="Nach Kategorie">
+      <ul className="space-y-2 text-sm tabular-nums">
+        {rows.map((r) => {
+          const index = r.category ? categories.indexOf(r.category) : -1;
+          return (
+            <li key={r.category?.id ?? "none"}>
+              <div className="flex items-center gap-2">
+                <span className={`min-w-0 flex-1 truncate ${r.category ? "" : "text-zinc-500 italic"}`}>
+                  {r.category ? r.category.name || "Kategorie" : "Ohne Kategorie"}
+                </span>
+                <span className="hidden text-xs text-zinc-500 sm:inline">
+                  {r.fixed !== 0 && `fix ${format(r.fixed)}`}
+                  {r.fixed !== 0 && r.spent !== 0 && " · "}
+                  {r.spent !== 0 && `ausgegeben ${format(r.spent)}`}
+                </span>
+                <span className="w-24 text-right">{format(r.fixed + r.spent)}</span>
+              </div>
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${(Math.max(0, r.fixed + r.spent) / total) * 100}%`, background: categoryColor(index) }}
+                />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </Card>
   );
 }

@@ -55,6 +55,38 @@ export interface Budget {
   note: string;
   /** Saved yearly states, oldest first, at most one per year. */
   history: BudgetSnapshot[];
+  /** What was actually spent, month by month, oldest first. */
+  months: BudgetMonth[];
+}
+
+/** A fixed cost as it was taken over into a month, per month. */
+export interface MonthLine {
+  name: string;
+  amount: number;
+  category?: string;
+}
+
+/** Something spent in a month, entered by hand. */
+export interface MonthExpense {
+  id: string;
+  name: string;
+  amount: number;
+  category?: string;
+}
+
+/**
+ * One month: income, fixed costs and investments come from the plan and follow it while the month is
+ * current, so a month keeps the plan it had on its last day. The other expenses are entered by hand.
+ */
+export interface BudgetMonth {
+  /** "YYYY-MM" */
+  month: string;
+  income: number;
+  invest: number;
+  /** What the plan sets aside for flexible expenses, to compare with what was spent. */
+  planned: number;
+  fixed: MonthLine[];
+  expenses: MonthExpense[];
 }
 
 /** The yearly totals of a budget as they were when saved, to compare how they change from year to year. */
@@ -80,6 +112,7 @@ export const EMPTY_BUDGET: Budget = {
   invest: [],
   note: "",
   history: [],
+  months: [],
 };
 
 export interface Amounts {
@@ -202,9 +235,78 @@ export function withYearSnapshot(budget: Budget, now: Date): Budget {
   return { ...budget, history: withSnapshot(budget.history, snapshotBudget(budget, Number(date.slice(0, 4)), date)) };
 }
 
+/** The month of `now` in Switzerland, as "YYYY-MM". */
+export const budgetMonth = (now: Date) => budgetDate(now).slice(0, 7);
+
+/** `month` with income, fixed costs and investments taken over from the plan; the expenses stay. */
+export function planMonth(budget: Budget, month: string, expenses: MonthExpense[] = []): BudgetMonth {
+  return {
+    month,
+    income: sum(budget.income).month,
+    invest: sum(budget.invest).month,
+    planned: sum(budget.variable).month,
+    fixed: budget.fixed.map((item) => ({
+      name: item.name,
+      amount: amounts(item).month,
+      ...(item.category ? { category: item.category } : {}),
+    })),
+    expenses,
+  };
+}
+
+/** The budget with the current month taken over from the plan, created if it doesn't exist yet. */
+export function withCurrentMonth(budget: Budget, now: Date): Budget {
+  const month = budgetMonth(now);
+  const current = planMonth(budget, month, budget.months.find((m) => m.month === month)?.expenses);
+  const months = [...budget.months.filter((m) => m.month !== month), current].sort((a, b) => a.month.localeCompare(b.month));
+  return { ...budget, months: months.slice(-MAX_MONTHS) };
+}
+
+/** Keeps this year's snapshot and this month in step with the plan; run on every change. */
+export const withSnapshots = (budget: Budget, now: Date) => withCurrentMonth(withYearSnapshot(budget, now), now);
+
+export interface MonthSummary {
+  income: number;
+  fixed: number;
+  invest: number;
+  /** Entered by hand. */
+  spent: number;
+  /** What's left of the flexible budget the plan sets aside; negative when more was spent. */
+  left: number;
+  /** Left after everything. */
+  free: number;
+}
+
+export function summarizeMonth(m: BudgetMonth): MonthSummary {
+  const fixed = m.fixed.reduce((s, l) => s + l.amount, 0);
+  const spent = m.expenses.reduce((s, e) => s + e.amount, 0);
+  return { income: m.income, fixed, invest: m.invest, spent, left: m.planned - spent, free: m.income - fixed - m.invest - spent };
+}
+
+export interface MonthCategoryTotal {
+  /** Undefined for what has no category. */
+  category?: Category;
+  fixed: number;
+  spent: number;
+}
+
+/** Fixed costs and expenses of a month per category, in the budget's order; those without one last, if any. */
+export function monthCategoryTotals(m: BudgetMonth, categories: Category[]): MonthCategoryTotal[] {
+  const known = new Set(categories.map((c) => c.id));
+  const total = (filter: (x: { category?: string }) => boolean) => ({
+    fixed: m.fixed.filter(filter).reduce((s, l) => s + l.amount, 0),
+    spent: m.expenses.filter(filter).reduce((s, e) => s + e.amount, 0),
+  });
+  const rows: MonthCategoryTotal[] = categories.map((category) => ({ category, ...total((x) => x.category === category.id) }));
+  const uncategorized = (x: { category?: string }) => !x.category || !known.has(x.category);
+  if ([...m.fixed, ...m.expenses].some(uncategorized)) rows.push(total(uncategorized));
+  return rows;
+}
+
 const MAX_ITEMS = 200;
 const MAX_SNAPSHOTS = 100;
 const MAX_CATEGORIES = 50;
+const MAX_MONTHS = 240;
 
 function normalizeCategories(value: unknown): Category[] {
   // Budgets saved before there were categories start with the defaults.
@@ -275,6 +377,33 @@ function normalizeHistory(value: unknown): BudgetSnapshot[] {
   return [...byYear.values()].sort((a, b) => a.year - b.year);
 }
 
+function normalizeMonths(value: unknown): BudgetMonth[] {
+  if (!Array.isArray(value)) return [];
+  const byMonth = new Map<string, BudgetMonth>();
+  const text = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : "");
+  const category = (v: unknown) => (typeof v === "string" && v ? { category: v.slice(0, 100) } : {});
+  for (const raw of value.slice(-MAX_MONTHS)) {
+    if (!raw || typeof raw !== "object") continue;
+    const m = raw as Partial<Record<keyof BudgetMonth, unknown>>;
+    if (typeof m.month !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(m.month)) continue;
+    const list = (v: unknown) => (Array.isArray(v) ? v.slice(0, MAX_ITEMS).filter((x) => x && typeof x === "object") : []);
+    byMonth.set(m.month, {
+      month: m.month,
+      income: finite(m.income),
+      invest: finite(m.invest),
+      planned: finite(m.planned),
+      fixed: list(m.fixed).map((l) => ({ name: text(l.name, 200), amount: finite(l.amount), ...category(l.category) })),
+      expenses: list(m.expenses).map((e, i) => ({
+        id: typeof e.id === "string" && e.id ? e.id.slice(0, 100) : `${m.month}-${i}`,
+        name: text(e.name, 200),
+        amount: finite(e.amount),
+        ...category(e.category),
+      })),
+    });
+  }
+  return [...byMonth.values()].sort((a, b) => a.month.localeCompare(b.month));
+}
+
 /** A valid budget from saved or uploaded JSON; anything missing or malformed falls back to empty. */
 export function normalizeBudget(data: unknown): Budget {
   if (!data || typeof data !== "object") return EMPTY_BUDGET;
@@ -291,5 +420,6 @@ export function normalizeBudget(data: unknown): Budget {
     invest: normalizeItems(d.invest, "invest", ids),
     note: typeof d.note === "string" ? d.note.slice(0, 5000) : "",
     history: normalizeHistory(d.history),
+    months: normalizeMonths(d.months),
   };
 }
