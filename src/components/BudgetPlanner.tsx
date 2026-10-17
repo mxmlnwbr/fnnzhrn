@@ -27,6 +27,7 @@ import { formatMoney } from "@/lib/currency";
 import { buttonClass, Card, inputClass, pnlClass } from "./ui";
 
 type Period = keyof Amounts;
+type View = "overview" | "history";
 type SaveState = "saved" | "saving" | "error";
 
 const SECTION_INFO: Record<Section, { title: string; hint: string; color: string; placeholder: string }> = {
@@ -98,6 +99,7 @@ export function BudgetPlanner({ initial }: { initial: Budget }) {
   // Every change also updates this year's snapshot, so the history needs no saving by hand.
   const setBudget = (update: (b: Budget) => Budget) => setBudgetState((b) => withYearSnapshot(update(b), new Date()));
   const [period, setPeriod] = useState<Period>("month");
+  const [view, setView] = useState<View>("overview");
   const save = useAutosave(budget);
   const summary = summarizeBudget(budget);
   const m = (v: number) => formatMoney(v, budget.currency);
@@ -121,70 +123,107 @@ export function BudgetPlanner({ initial }: { initial: Budget }) {
           <h1 className="text-2xl font-bold tracking-tight">Finanzübersicht</h1>
           <p className="text-sm text-zinc-500">Was reinkommt, was du ausgibst und wie viel davon du investierst.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <SaveStatus state={save} />
-          <div role="group" aria-label="Zeitraum" className="flex rounded-md border border-zinc-300 p-0.5 text-sm dark:border-zinc-700">
-            {(["month", "year"] as const).map((p) => (
-              <button
-                key={p}
-                aria-pressed={period === p}
-                onClick={() => setPeriod(p)}
-                className={`rounded px-3 py-1 ${period === p ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"}`}
-              >
-                {p === "month" ? "Monat" : "Jahr"}
-              </button>
-            ))}
-          </div>
+          <Toggle
+            label="Ansicht"
+            value={view}
+            options={[
+              { value: "overview", label: "Übersicht" },
+              { value: "history", label: "Verlauf" },
+            ]}
+            onChange={setView}
+          />
+          <Toggle
+            label="Zeitraum"
+            value={period}
+            options={[
+              { value: "month", label: "Monat" },
+              { value: "year", label: "Jahr" },
+            ]}
+            onChange={setPeriod}
+          />
         </div>
       </header>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Einkommen" value={m(summary.income[period])} sub={period === "month" ? "inkl. 13. Monatslohn (verteilt)" : "inkl. 13. Monatslohn"} />
-        <Stat
-          label="Ausgaben"
-          value={m(summary.expenses[period])}
-          sub={`fix ${m(summary.fixed[period])} · flexibel ${m(summary.variable[period])}`}
-        />
-        <Stat label="Investieren" value={m(summary.invest[period])} sub={`Sparquote ${share(summary.invest[period])}`} />
-        <Stat
-          label="Frei verfügbar"
-          value={m(summary.free[period])}
-          sub={`nach Fixkosten ${m(summary.available[period])}`}
-          negative={summary.free[period] < 0}
-        />
-      </div>
-
-      <Split summary={summary} period={period} format={m} />
-
-      <CategoriesCard budget={budget} period={period} format={m} currency={budget.currency} onChange={updateCategories} />
-
-      <HistoryCard
-        budget={budget}
-        period={period}
-        format={m}
-        onChange={(history) => setBudget((b) => ({ ...b, history }))}
-      />
-
-      {SECTIONS.map((section) => (
-        <ItemsCard
-          key={section}
-          section={section}
-          items={budget[section]}
-          categories={(EXPENSE_SECTIONS as readonly Section[]).includes(section) ? budget.categories : undefined}
+      {view === "history" ? (
+        <HistoryCard
+          budget={budget}
           period={period}
           format={m}
-          onChange={(items) => updateSection(section, items)}
+          onChange={(history) => setBudget((b) => ({ ...b, history }))}
         />
-      ))}
-      <Card title="Notiz">
-        <textarea
-          className={`${inputClass} min-h-20`}
-          value={budget.note}
-          placeholder="z. B. Steuern & 13. Monatslohn sollten sich aufheben"
-          onChange={(e) => setBudget((b) => ({ ...b, note: e.target.value }))}
-        />
-      </Card>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Stat label="Einkommen" value={m(summary.income[period])} sub={period === "month" ? "inkl. 13. Monatslohn (verteilt)" : "inkl. 13. Monatslohn"} />
+            <Stat
+              label="Ausgaben"
+              value={m(summary.expenses[period])}
+              sub={`fix ${m(summary.fixed[period])} · flexibel ${m(summary.variable[period])}`}
+            />
+            <Stat label="Investieren" value={m(summary.invest[period])} sub={`Sparquote ${share(summary.invest[period])}`} />
+            <Stat
+              label="Frei verfügbar"
+              value={m(summary.free[period])}
+              sub={`nach Fixkosten ${m(summary.available[period])}`}
+              negative={summary.free[period] < 0}
+            />
+          </div>
+
+          <Split summary={summary} period={period} format={m} />
+
+          <CategoriesCard budget={budget} period={period} format={m} currency={budget.currency} onChange={updateCategories} />
+
+          {SECTIONS.map((section) => (
+            <ItemsCard
+              key={section}
+              section={section}
+              items={budget[section]}
+              categories={(EXPENSE_SECTIONS as readonly Section[]).includes(section) ? budget.categories : undefined}
+              period={period}
+              format={m}
+              onChange={(items) => updateSection(section, items)}
+            />
+          ))}
+          <Card title="Notiz">
+            <textarea
+              className={`${inputClass} min-h-20`}
+              value={budget.note}
+              placeholder="z. B. Steuern & 13. Monatslohn sollten sich aufheben"
+              onChange={(e) => setBudget((b) => ({ ...b, note: e.target.value }))}
+            />
+          </Card>
+        </>
+      )}
     </main>
+  );
+}
+
+function Toggle<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div role="group" aria-label={label} className="flex rounded-md border border-zinc-300 p-0.5 text-sm dark:border-zinc-700">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          aria-pressed={value === o.value}
+          onClick={() => onChange(o.value)}
+          className={`rounded px-3 py-1 ${value === o.value ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
