@@ -294,6 +294,13 @@
       font-size: 0.8rem;
       color: var(--muted);
     }
+.site footer a {
+      color: inherit;
+      text-underline-offset: 2px;
+    }
+.site footer a:hover {
+      color: var(--fg);
+    }
 
 @media (prefers-reduced-motion: reduce) {
 .site *, .site *::before, .site *::after {

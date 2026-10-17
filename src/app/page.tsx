@@ -105,7 +105,7 @@ export default async function Home() {
         )}
       </main>
       <footer className="site-reveal" style={reveal(1.6)}>
-        © fnnzhrn · Keine Anlageberatung
+        © fnnzhrn · Keine Anlageberatung · Umsetzung: <a href="https://weberstudio.ch" target="_blank" rel="noopener noreferrer">weberstudio.ch</a>
       </footer>
     </div>
   );
