@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Pie, PieChart, ResponsiveContainer } from "recharts";
 import {
   type Amounts,
   amounts,
   type Budget,
   type BudgetItem,
   type Category,
+  type CategoryTotal,
   categoryTotals,
   EXPENSE_SECTIONS,
   INTERVALS,
@@ -35,6 +37,10 @@ const SECTION_INFO: Record<Section, { title: string; hint: string; color: string
 };
 
 const percent = (v: number) => `${(v * 100).toFixed(1)}%`;
+const whole = (v: number) => new Intl.NumberFormat("de-CH", { maximumFractionDigits: 0 }).format(v);
+
+/** The palette has eight hues; categories past that and expenses without a category stay grey. */
+const categoryColor = (index: number) => (index >= 0 && index < 8 ? `var(--series-${index + 1})` : "var(--series-other)");
 
 /** Saves after a short pause in typing, and once more when the page is left with changes pending. */
 function useAutosave(budget: Budget): SaveState {
@@ -143,7 +149,7 @@ export function BudgetPlanner({ initial }: { initial: Budget }) {
 
       <Split summary={summary} period={period} format={m} />
 
-      <CategoriesCard budget={budget} period={period} format={m} onChange={updateCategories} />
+      <CategoriesCard budget={budget} period={period} format={m} currency={budget.currency} onChange={updateCategories} />
 
       {SECTIONS.map((section) => (
         <ItemsCard
@@ -237,26 +243,77 @@ function newItem(category?: string): BudgetItem {
   return { id: crypto.randomUUID(), name: "", amount: 0, interval: "month", ...(category ? { category } : {}) };
 }
 
+/** Donut of the expenses per category; hovering a slice (or its row) shows its share in the middle. */
+function CategoryDonut({
+  rows,
+  period,
+  active,
+  onActive,
+  center,
+}: {
+  rows: CategoryTotal[];
+  period: Period;
+  active: number | null;
+  onActive: (i: number | null) => void;
+  center: { label: string; value: string };
+}) {
+  const total = rows.reduce((s, r) => s + Math.max(0, r.total[period]), 0);
+  const data = rows
+    .map((r, i) => ({ index: i, key: r.category?.id ?? "none", value: r.total[period], fill: categoryColor(r.category ? i : -1) }))
+    .filter((d) => d.value > 0);
+  const current = active !== null ? rows[active] : null;
+  return (
+    <div className="relative mx-auto h-44 w-44 shrink-0" onMouseLeave={() => onActive(null)}>
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie
+            data={data}
+            dataKey="value"
+            nameKey="key"
+            innerRadius="62%"
+            outerRadius="100%"
+            startAngle={90}
+            endAngle={-270}
+            stroke="var(--chart-surface)"
+            strokeWidth={2}
+            isAnimationActive={false}
+            onMouseEnter={(_, i) => onActive(data[i].index)}
+          />
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+        <span className="max-w-24 truncate text-xs text-zinc-500">
+          {current ? (current.category ? current.category.name || "Kategorie" : "Ohne Kategorie") : center.label}
+        </span>
+        <span className="text-lg font-semibold tabular-nums">
+          {current ? (total > 0 ? percent(Math.max(0, current.total[period]) / total) : "–") : center.value}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /**
- * Fixed and flexible expenses per category, side by side in one bar each. Categories are renamed in
- * place, removed with ×, and added at the bottom.
+ * Expenses per category as a donut, with each category's fixed and flexible part in the list next to
+ * it. Categories are renamed in place, removed with ×, and added at the bottom.
  */
 function CategoriesCard({
   budget,
   period,
   format,
+  currency,
   onChange,
 }: {
   budget: Budget;
   period: Period;
   format: (v: number) => string;
+  currency: string;
   onChange: (categories: Category[]) => void;
 }) {
   const [name, setName] = useState("");
+  const [active, setActive] = useState<number | null>(null);
   const rows = categoryTotals(budget);
-  const max = Math.max(...rows.map((r) => r.total[period]), 0);
-  const expenses = rows.reduce((s, r) => s + r.total[period], 0);
-  const width = (v: number) => `${max > 0 ? (Math.max(0, v) / max) * 100 : 0}%`;
+  const expenses = rows.reduce((s, r) => s + Math.max(0, r.total[period]), 0);
   const add = () => {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -270,46 +327,63 @@ function CategoriesCard({
       <p className="-mt-2 mb-3 text-xs text-zinc-500">
         Fixe und flexible Ausgaben nach Kategorie. Namen kannst du direkt ändern; die Kategorie eines Eintrags wählst du unten.
       </p>
-      <ul className="space-y-2.5">
-        {rows.map((r) => (
-          <li key={r.category?.id ?? "none"} className="text-sm">
-            <div className="flex items-center justify-between gap-2">
-              {r.category ? (
-                <input
-                  className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-zinc-300 focus:border-zinc-400 dark:hover:border-zinc-700"
-                  aria-label="Name der Kategorie"
-                  placeholder="Kategorie"
-                  value={r.category.name}
-                  onChange={(e) => rename(r.category!.id, e.target.value)}
-                />
-              ) : (
-                <span className="flex-1 px-1 text-zinc-500 italic">Ohne Kategorie</span>
-              )}
-              <span className="shrink-0 tabular-nums">{format(r.total[period])}</span>
-              {expenses > 0 && <span className="w-12 shrink-0 text-right text-xs text-zinc-500 tabular-nums">{percent(r.total[period] / expenses)}</span>}
-              {r.category ? (
-                <button
-                  className="rounded-md px-2 py-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800"
-                  aria-label={`Kategorie ${r.category.name || ""} entfernen`}
-                  title="Entfernen – die Einträge bleiben, nur ohne Kategorie"
-                  onClick={() => onChange(budget.categories.filter((c) => c.id !== r.category!.id))}
-                >
-                  ×
-                </button>
-              ) : (
-                <span className="w-[1.85rem] shrink-0" aria-hidden />
-              )}
-            </div>
-            <div
-              className="mx-1 mt-1 flex h-1.5 gap-px overflow-hidden rounded bg-zinc-100 dark:bg-zinc-800"
-              title={`fix ${format(r.fixed[period])} · flexibel ${format(r.variable[period])}`}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+        {expenses > 0 && (
+          <CategoryDonut
+            rows={rows}
+            period={period}
+            active={active}
+            onActive={setActive}
+            center={{ label: `Ausgaben ${currency}`, value: whole(expenses) }}
+          />
+        )}
+        <ul className="min-w-0 flex-1 divide-y divide-zinc-100 text-sm dark:divide-zinc-800">
+          {rows.map((r, i) => (
+            <li
+              key={r.category?.id ?? "none"}
+              className={`-mx-1.5 rounded px-1.5 py-1.5 ${active === i ? "bg-zinc-50 dark:bg-zinc-800/60" : ""}`}
+              onMouseEnter={() => setActive(i)}
+              onMouseLeave={() => setActive(null)}
             >
-              <div style={{ width: width(r.fixed[period]), background: SECTION_INFO.fixed.color }} />
-              <div style={{ width: width(r.variable[period]), background: SECTION_INFO.variable.color }} />
-            </div>
-          </li>
-        ))}
-      </ul>
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: categoryColor(r.category ? i : -1) }} aria-hidden />
+                {r.category ? (
+                  <input
+                    className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-zinc-300 focus:border-zinc-400 dark:hover:border-zinc-700"
+                    aria-label="Name der Kategorie"
+                    placeholder="Kategorie"
+                    value={r.category.name}
+                    onChange={(e) => rename(r.category!.id, e.target.value)}
+                  />
+                ) : (
+                  <span className="flex-1 px-1 py-0.5 text-zinc-500 italic">Ohne Kategorie</span>
+                )}
+                <span className="shrink-0 tabular-nums">{format(r.total[period])}</span>
+                <span className="w-12 shrink-0 text-right text-xs text-zinc-500 tabular-nums">
+                  {expenses > 0 ? percent(Math.max(0, r.total[period]) / expenses) : "–"}
+                </span>
+                {r.category ? (
+                  <button
+                    className="rounded-md px-2 py-0.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800"
+                    aria-label={`Kategorie ${r.category.name || ""} entfernen`}
+                    title="Entfernen – die Einträge bleiben, nur ohne Kategorie"
+                    onClick={() => onChange(budget.categories.filter((c) => c.id !== r.category!.id))}
+                  >
+                    ×
+                  </button>
+                ) : (
+                  <span className="w-[1.85rem] shrink-0" aria-hidden />
+                )}
+              </div>
+              {r.fixed[period] !== 0 && r.variable[period] !== 0 && (
+                <div className="pl-5.5 text-xs text-zinc-500 tabular-nums">
+                  fix {format(r.fixed[period])} · flexibel {format(r.variable[period])}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
       <form
         className="mt-3 flex gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-800"
         onSubmit={(e) => {
