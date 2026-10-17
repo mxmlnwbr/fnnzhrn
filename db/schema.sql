@@ -2,7 +2,7 @@
 --   psql "$DATABASE_URL" -f db/schema.sql
 -- Safe to run again: everything is created only if it's missing.
 
--- Sign-in (Better Auth with magic links): users, sessions, linked accounts and pending sign-in links.
+-- Sign-in (Better Auth with email and password): users, sessions, accounts (holding the password hash) and pending email links.
 create table if not exists "user" (
   "id" text not null primary key,
   "name" text not null,

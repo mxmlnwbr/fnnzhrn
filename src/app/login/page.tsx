@@ -13,7 +13,8 @@ export const metadata: Metadata = { title: "Anmelden · fnnzhrn" };
 
 /** One sign-in for all fnnzhrn tools; `next` is where to go afterwards. */
 export default async function Login({ searchParams }: PageProps<"/login">) {
-  const next = safeNext((await searchParams).next);
+  const params = await searchParams;
+  const next = safeNext(params.next);
   if (await currentUser()) redirect(next);
   return (
     <div className="site">
@@ -29,7 +30,7 @@ export default async function Login({ searchParams }: PageProps<"/login">) {
           Ein Login für alle Tools: Depot, Finanzen und Cockpit.
         </p>
         <div className="site-reveal" style={reveal(0.3)}>
-          <LoginForm next={next} configured={syncConfigured()} />
+          <LoginForm next={next} configured={syncConfigured()} linkError={Boolean(params.error)} />
         </div>
       </main>
       <footer>© fnnzhrn · Keine Anlageberatung</footer>

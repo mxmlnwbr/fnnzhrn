@@ -1,7 +1,6 @@
 import "server-only";
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
-import { magicLink } from "better-auth/plugins";
 import { Resend } from "resend";
 import { getPool } from "./db";
 import { cleanEnv, syncConfigured } from "./env";
@@ -10,6 +9,10 @@ function createAuth() {
   const resend = new Resend(cleanEnv(process.env.RESEND_API_KEY));
   // Resend's test sender only delivers to the Resend account's own address; set EMAIL_FROM to a verified domain for others.
   const from = cleanEnv(process.env.EMAIL_FROM) ?? "fnnzhrn <onboarding@resend.dev>";
+  async function send(to: string, subject: string, text: string) {
+    const { error } = await resend.emails.send({ from, to, subject, text });
+    if (error) throw new Error(`Couldn't send the email: ${error.message}`);
+  }
   return betterAuth({
     database: getPool()!,
     secret: cleanEnv(process.env.BETTER_AUTH_SECRET),
@@ -22,19 +25,34 @@ function createAuth() {
       expiresIn: 60 * 60 * 24 * 365,
       updateAge: 60 * 60 * 24,
     },
+    emailAndPassword: {
+      enabled: true,
+      // New accounts confirm their address first, so nobody can sign up with someone else's email.
+      requireEmailVerification: true,
+      resetPasswordTokenExpiresIn: 60 * 60,
+      revokeSessionsOnPasswordReset: true,
+      // Also how members from the email-link days get a password: resetting creates it.
+      async sendResetPassword({ user, url }) {
+        await send(
+          user.email,
+          "Passwort zurücksetzen bei fnnzhrn",
+          `Öffne diesen Link, um ein neues Passwort für fnnzhrn festzulegen:\n\n${url}\n\nEr läuft nach einer Stunde ab. Falls du das nicht angefordert hast, ignoriere diese E-Mail.`,
+        );
+      },
+    },
+    emailVerification: {
+      sendOnSignUp: true,
+      sendOnSignIn: true,
+      autoSignInAfterVerification: true,
+      async sendVerificationEmail({ user, url }) {
+        await send(
+          user.email,
+          "E-Mail bestätigen bei fnnzhrn",
+          `Öffne diesen Link, um deine E-Mail-Adresse zu bestätigen und dich bei fnnzhrn anzumelden:\n\n${url}\n\nFalls du dich nicht registriert hast, ignoriere diese E-Mail.`,
+        );
+      },
+    },
     plugins: [
-      magicLink({
-        expiresIn: 60 * 15,
-        async sendMagicLink({ email, url }) {
-          const { error } = await resend.emails.send({
-            from,
-            to: email,
-            subject: "Anmelden bei fnnzhrn",
-            text: `Öffne diesen Link, um dich bei fnnzhrn anzumelden:\n\n${url}\n\nEr funktioniert einmal und läuft nach 15 Minuten ab. Falls du ihn nicht angefordert hast, ignoriere diese E-Mail.`,
-          });
-          if (error) throw new Error(`Couldn't send the sign-in email: ${error.message}`);
-        },
-      }),
       nextCookies(),
     ],
   });
