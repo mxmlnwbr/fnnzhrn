@@ -39,7 +39,9 @@ export default async function Login({ searchParams }: PageProps<"/login">) {
           )}
         </div>
       </main>
-      <footer>© fnnzhrn · Keine Anlageberatung</footer>
+      <footer>
+        © fnnzhrn · Keine Anlageberatung · Umsetzung: <a href="https://weberstudio.ch" target="_blank" rel="noopener noreferrer">weberstudio.ch</a>
+      </footer>
     </div>
   );
 }

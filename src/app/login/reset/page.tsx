@@ -29,7 +29,9 @@ export default async function ResetPassword({ searchParams }: PageProps<"/login/
           <ResetPasswordForm token={token} next={safeNext(params.next)} />
         </div>
       </main>
-      <footer>© fnnzhrn · Keine Anlageberatung</footer>
+      <footer>
+        © fnnzhrn · Keine Anlageberatung · Umsetzung: <a href="https://weberstudio.ch" target="_blank" rel="noopener noreferrer">weberstudio.ch</a>
+      </footer>
     </div>
   );
 }
