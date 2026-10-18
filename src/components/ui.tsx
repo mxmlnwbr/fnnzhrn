@@ -20,8 +20,9 @@ export function pnlClass(value: number) {
   return "text-zinc-500";
 }
 
+// 16px on phones, as iOS zooms into any smaller field when it gets focus.
 export const inputClass =
-  "w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950";
+  "w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-base sm:text-sm dark:border-zinc-700 dark:bg-zinc-950";
 
 export const buttonClass =
   "rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800";

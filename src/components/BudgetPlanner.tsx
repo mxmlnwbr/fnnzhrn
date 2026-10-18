@@ -130,10 +130,10 @@ export function BudgetPlanner({ initial }: { initial: Budget }) {
           <h1 className="text-2xl font-bold tracking-tight">Finanzübersicht</h1>
           <p className="text-sm text-zinc-500">Was reinkommt, was du ausgibst und wie viel davon du investierst.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <SaveStatus state={save} />
+        <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-2 sm:w-auto">
           <Toggle
             label="Ansicht"
+            className="w-full sm:w-auto"
             value={view}
             options={[
               { value: "overview", label: "Übersicht" },
@@ -153,6 +153,7 @@ export function BudgetPlanner({ initial }: { initial: Budget }) {
               onChange={setPeriod}
             />
           )}
+          <SaveStatus state={save} />
         </div>
       </header>
 
@@ -221,20 +222,22 @@ function Toggle<T extends string>({
   value,
   options,
   onChange,
+  className = "",
 }: {
   label: string;
   value: T;
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
+  className?: string;
 }) {
   return (
-    <div role="group" aria-label={label} className="flex rounded-md border border-zinc-300 p-0.5 text-sm dark:border-zinc-700">
+    <div role="group" aria-label={label} className={`flex rounded-md border border-zinc-300 p-0.5 text-sm dark:border-zinc-700 ${className}`}>
       {options.map((o) => (
         <button
           key={o.value}
           aria-pressed={value === o.value}
           onClick={() => onChange(o.value)}
-          className={`rounded px-3 py-1 ${value === o.value ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"}`}
+          className={`flex-1 rounded px-3 py-1.5 sm:flex-none sm:py-1 ${value === o.value ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"}`}
         >
           {o.label}
         </button>
@@ -256,9 +259,9 @@ function SaveStatus({ state }: { state: SaveState }) {
 
 function Stat({ label, value, sub, negative }: { label: string; value: string; sub: string; negative?: boolean }) {
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="min-w-0 rounded-xl border border-zinc-200 bg-white p-3 sm:p-4 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="text-xs text-zinc-500">{label}</div>
-      <div className={`mt-1 text-xl font-semibold tabular-nums ${negative ? "text-red-600 dark:text-red-400" : ""}`}>{value}</div>
+      <div className={`mt-1 text-lg font-semibold sm:text-xl tabular-nums ${negative ? "text-red-600 dark:text-red-400" : ""}`}>{value}</div>
       <div className="text-xs text-zinc-500 tabular-nums">{sub}</div>
     </div>
   );
@@ -418,7 +421,7 @@ function CategoriesCard({
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: categoryColor(r.category ? i : -1) }} aria-hidden />
                 {r.category ? (
                   <input
-                    className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 hover:border-zinc-300 focus:border-zinc-400 dark:hover:border-zinc-700"
+                    className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-base sm:text-sm hover:border-zinc-300 focus:border-zinc-400 dark:hover:border-zinc-700"
                     aria-label="Name der Kategorie"
                     placeholder="Kategorie"
                     value={r.category.name}
@@ -700,7 +703,7 @@ function ExpensesCard({
   };
   const update = (id: string, patch: Partial<MonthExpense>) => onChange(month.expenses.map((e) => (e.id === id ? { ...e, ...patch } : e)));
   const select = (value: string, onSelect: (value: string) => void, label: string) => (
-    <select className={inputClass} aria-label={label} value={value} onChange={(e) => onSelect(e.target.value)}>
+    <select className={`${inputClass} col-start-1 row-start-2 sm:col-auto sm:row-auto`} aria-label={label} value={value} onChange={(e) => onSelect(e.target.value)}>
       <option value="">Ohne Kategorie</option>
       {categories.map((c) => (
         <option key={c.id} value={c.id}>
@@ -714,32 +717,32 @@ function ExpensesCard({
     <Card title="Ausgaben">
       <p className="-mt-2 mb-3 text-xs text-zinc-500">Alles, was diesen Monat ausser den Fixkosten anfällt, z. B. Einkäufe, Ausgang oder Ferien.</p>
       <form
-        className="grid grid-cols-[1fr_6.5rem] gap-1.5 sm:grid-cols-[1fr_9rem_6.5rem_auto]"
+        className="grid grid-cols-[1fr_7rem] gap-1.5 sm:grid-cols-[1fr_9rem_6.5rem_auto]"
         onSubmit={(e) => {
           e.preventDefault();
           add();
         }}
       >
-        <input className={`${inputClass} col-span-2 sm:col-span-1`} aria-label="Neue Ausgabe" placeholder="z. B. Coop" value={name} maxLength={200} onChange={(e) => setName(e.target.value)} />
+        <input className={`${inputClass} col-start-1 row-start-1 sm:col-auto sm:row-auto`} aria-label="Neue Ausgabe" placeholder="z. B. Coop" value={name} maxLength={200} onChange={(e) => setName(e.target.value)} />
         {select(category, setCategory, "Kategorie der neuen Ausgabe")}
         <input
-          className={`${inputClass} text-right tabular-nums`}
+          className={`${inputClass} col-start-2 row-start-1 text-right tabular-nums sm:col-auto sm:row-auto`}
           aria-label="Betrag der neuen Ausgabe"
           inputMode="decimal"
           placeholder="0"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
         />
-        <button type="submit" className={`${buttonClass} col-span-2 sm:col-span-1`} disabled={!value}>
+        <button type="submit" className={`${buttonClass} col-start-2 row-start-2 sm:col-auto sm:row-auto`} disabled={!value}>
           + Hinzufügen
         </button>
       </form>
       {month.expenses.length > 0 && (
-        <ul className="mt-3 space-y-2 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+        <ul className="mt-3 divide-y divide-zinc-100 border-t border-zinc-200 pt-3 sm:space-y-2 sm:divide-y-0 dark:divide-zinc-800 dark:border-zinc-800">
           {month.expenses.map((e) => (
-            <li key={e.id} className="grid grid-cols-[1fr_6.5rem_auto] items-center gap-1.5 sm:grid-cols-[1fr_9rem_6.5rem_auto]">
+            <li key={e.id} className="grid grid-cols-[1fr_7rem_auto] items-center gap-1.5 py-2.5 first:pt-0 last:pb-0 sm:grid-cols-[1fr_9rem_6.5rem_auto] sm:py-0">
               <input
-                className={`${inputClass} col-span-3 sm:col-span-1`}
+                className={`${inputClass} col-start-1 row-start-1 sm:col-auto sm:row-auto`}
                 aria-label="Bezeichnung"
                 placeholder="Ausgabe"
                 value={e.name}
@@ -747,7 +750,7 @@ function ExpensesCard({
               />
               {select(e.category ?? "", (c) => update(e.id, { category: c || undefined }), `Kategorie ${e.name}`)}
               <input
-                className={`${inputClass} text-right tabular-nums`}
+                className={`${inputClass} col-start-2 row-start-1 text-right tabular-nums sm:col-auto sm:row-auto`}
                 aria-label={`Betrag ${e.name}`}
                 inputMode="decimal"
                 defaultValue={e.amount || ""}
@@ -755,7 +758,7 @@ function ExpensesCard({
                 onChange={(ev) => update(e.id, { amount: parseAmount(ev.target.value) })}
               />
               <button
-                className="rounded-md px-2 py-1 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800"
+                className="col-start-3 row-start-1 rounded-md px-2.5 py-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 sm:col-auto sm:row-auto sm:px-2 sm:py-1 dark:hover:bg-zinc-800"
                 aria-label={`${e.name || "Ausgabe"} entfernen`}
                 onClick={() => onChange(month.expenses.filter((x) => x.id !== e.id))}
               >
@@ -814,13 +817,18 @@ function parseAmount(text: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-/** The items of an expense section in groups, one per category that has any, and those without a category last. */
-function groupByCategory(items: BudgetItem[], categories: Category[]) {
+/**
+ * The items of an expense section in groups, one per category that has any, and those without a category last.
+ * `categoryOf` says which group an item is shown in, which can lag behind its category; see ItemsCard.
+ */
+function groupByCategory(items: BudgetItem[], categories: Category[], categoryOf = (i: BudgetItem) => i.category) {
   const known = new Set(categories.map((c) => c.id));
-  const groups = categories.map((category) => ({ category, items: items.filter((i) => i.category === category.id) }));
-  return [...groups, { category: undefined, items: items.filter((i) => !i.category || !known.has(i.category)) }].filter(
-    (g) => g.items.length > 0,
-  );
+  const groups = categories.map((category) => ({ category, items: items.filter((i) => categoryOf(i) === category.id) }));
+  const rest = items.filter((i) => {
+    const c = categoryOf(i);
+    return !c || !known.has(c);
+  });
+  return [...groups, { category: undefined, items: rest }].filter((g) => g.items.length > 0);
 }
 
 function ItemsCard({
@@ -841,10 +849,27 @@ function ItemsCard({
 }) {
   const info = SECTION_INFO[section];
   const total = sum(items)[period];
+  // A row whose category is being picked stays in the group it was in until the picker is closed. Moving
+  // it right away would close the picker on phones (which report every option scrolled past) and take the
+  // row out of view. Once it has moved, it is scrolled into view and marked for a moment.
+  const [held, setHeld] = useState<Record<string, string | undefined>>({});
+  const [moved, setMoved] = useState<string | null>(null);
   const update = (id: string, patch: Partial<BudgetItem>) => onChange(items.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+  const setCategory = (item: BudgetItem, category: string | undefined) => {
+    if (!(item.id in held)) setHeld((h) => ({ ...h, [item.id]: item.category }));
+    update(item.id, { category });
+  };
+  const release = (item: BudgetItem) => {
+    if (!(item.id in held)) return;
+    const { [item.id]: shown, ...rest } = held;
+    setHeld(rest);
+    if (shown !== item.category) setMoved(item.id);
+  };
   const sortByAmount = () => onChange([...items].sort((a, b) => amounts(b).year - amounts(a).year));
   const grouped = categories !== undefined && categories.length > 0;
-  const groups = grouped ? groupByCategory(items, categories) : [{ category: undefined, items }];
+  const groups = grouped
+    ? groupByCategory(items, categories, (i) => (i.id in held ? held[i.id] : i.category))
+    : [{ category: undefined, items }];
   const row = (item: BudgetItem) => (
     <ItemRow
       key={item.id}
@@ -853,10 +878,15 @@ function ItemsCard({
       categories={grouped ? categories : undefined}
       period={period}
       format={format}
+      highlight={moved === item.id}
+      onHighlightEnd={() => setMoved((id) => (id === item.id ? null : id))}
       onChange={(patch) => update(item.id, patch)}
+      onCategory={(category) => setCategory(item, category)}
+      onCategoryDone={() => release(item)}
       onRemove={() => onChange(items.filter((i) => i.id !== item.id))}
     />
   );
+  const list = "divide-y divide-zinc-100 sm:space-y-2 sm:divide-y-0 dark:divide-zinc-800";
 
   return (
     <Card
@@ -882,7 +912,7 @@ function ItemsCard({
                   {format(sum(g.items)[period])}
                   {g.category && (
                     <button
-                      className="rounded px-1.5 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                      className="rounded px-2 py-0.5 text-sm leading-none hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
                       aria-label={`Eintrag in ${g.category.name} hinzufügen`}
                       title="Eintrag in dieser Kategorie hinzufügen"
                       onClick={() => onChange([...items, newItem(g.category!.id)])}
@@ -892,12 +922,12 @@ function ItemsCard({
                   )}
                 </span>
               </div>
-              <ul className="space-y-2">{g.items.map(row)}</ul>
+              <ul className={list}>{g.items.map(row)}</ul>
             </div>
           ))}
         </div>
       ) : (
-        <ul className="space-y-2">{items.map(row)}</ul>
+        <ul className={list}>{items.map(row)}</ul>
       )}
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-800">
         <button className={buttonClass} onClick={() => onChange([...items, newItem()])}>
@@ -911,13 +941,21 @@ function ItemsCard({
   );
 }
 
+/**
+ * One item. On phones it takes two lines, name and amount on the first, category and interval on the
+ * second; from `sm` up all fields sit on one line.
+ */
 function ItemRow({
   item,
   section,
   categories,
   period,
   format,
+  highlight,
+  onHighlightEnd,
   onChange,
+  onCategory,
+  onCategoryDone,
   onRemove,
 }: {
   item: BudgetItem;
@@ -925,25 +963,45 @@ function ItemRow({
   categories?: Category[];
   period: Period;
   format: (v: number) => string;
+  /** Set right after the row moved to another category's group. */
+  highlight: boolean;
+  onHighlightEnd: () => void;
   onChange: (patch: Partial<BudgetItem>) => void;
+  onCategory: (category: string | undefined) => void;
+  onCategoryDone: () => void;
   onRemove: () => void;
 }) {
   const info = SECTION_INFO[section];
+  const ref = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (!highlight) return;
+    const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    ref.current?.scrollIntoView({ block: "nearest", behavior: smooth ? "smooth" : "auto" });
+    const timer = setTimeout(onHighlightEnd, 1500);
+    return () => clearTimeout(timer);
+    // Runs once per move; onHighlightEnd is a new function on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlight]);
+  const perPeriod = amounts(item)[period];
   return (
-    <li className={`grid grid-cols-[1fr_6.5rem_auto] items-center gap-1.5 ${categories ? "sm:grid-cols-[1fr_8rem_6.5rem_7rem_5.5rem_auto]" : "sm:grid-cols-[1fr_6.5rem_8rem_6rem_auto]"}`}>
+    <li
+      ref={ref}
+      className={`grid scroll-my-24 grid-cols-[1fr_7rem_auto] items-center gap-1.5 py-2.5 transition-colors duration-700 first:pt-0 last:pb-0 sm:py-0 ${categories ? "sm:grid-cols-[1fr_8rem_6.5rem_7rem_5.5rem_auto]" : "sm:grid-cols-[1fr_6.5rem_8rem_6rem_auto]"} ${highlight ? "rounded-md bg-sky-100 ring-4 ring-sky-100 dark:bg-sky-950 dark:ring-sky-950" : ""}`}
+    >
       <input
-        className={`${inputClass} ${categories ? "" : "col-span-3"} sm:col-span-1`}
+        className={`${inputClass} col-start-1 row-start-1 sm:col-auto sm:row-auto`}
         aria-label="Bezeichnung"
         placeholder={info.placeholder}
         value={item.name}
         onChange={(e) => onChange({ name: e.target.value })}
       />
-      {categories && (
+      {categories ? (
         <select
-          className={`${inputClass} col-span-2 sm:col-span-1`}
+          className={`${inputClass} col-start-1 row-start-2 text-zinc-600 sm:col-auto sm:row-auto sm:text-zinc-900 dark:text-zinc-400 sm:dark:text-zinc-100`}
           aria-label={`Kategorie ${item.name}`}
           value={item.category ?? ""}
-          onChange={(e) => onChange({ category: e.target.value || undefined })}
+          onChange={(e) => onCategory(e.target.value || undefined)}
+          onBlur={onCategoryDone}
         >
           <option value="">Ohne Kategorie</option>
           {categories.map((c) => (
@@ -952,9 +1010,15 @@ function ItemRow({
             </option>
           ))}
         </select>
+      ) : (
+        perPeriod !== item.amount && (
+          <span className="col-start-1 row-start-2 text-xs text-zinc-500 tabular-nums sm:hidden">
+            {format(perPeriod)} {period === "month" ? "pro Monat" : "pro Jahr"}
+          </span>
+        )
       )}
       <input
-        className={`${inputClass} text-right tabular-nums`}
+        className={`${inputClass} col-start-2 row-start-1 text-right tabular-nums sm:col-auto sm:row-auto`}
         aria-label={`Betrag ${item.name}`}
         inputMode="decimal"
         defaultValue={item.amount || ""}
@@ -962,7 +1026,7 @@ function ItemRow({
         onChange={(e) => onChange({ amount: parseAmount(e.target.value) })}
       />
       <select
-        className={inputClass}
+        className={`${inputClass} col-start-2 row-start-2 sm:col-auto sm:row-auto`}
         aria-label={`Intervall ${item.name}`}
         value={item.interval}
         onChange={(e) => onChange({ interval: e.target.value as Interval })}
@@ -977,10 +1041,10 @@ function ItemRow({
         className="hidden text-right text-xs text-zinc-500 tabular-nums sm:block"
         title={period === "month" ? "pro Monat" : "pro Jahr"}
       >
-        {format(amounts(item)[period])}
+        {format(perPeriod)}
       </span>
       <button
-        className="rounded-md px-2 py-1 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800"
+        className="col-start-3 row-start-1 rounded-md px-2.5 py-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 sm:col-auto sm:row-auto sm:px-2 sm:py-1 dark:hover:bg-zinc-800"
         aria-label={`${item.name || "Eintrag"} entfernen`}
         onClick={onRemove}
       >
