@@ -1,3 +1,4 @@
+import { AssistantDock } from "@/components/Assistant";
 import { ProjectCard } from "@/components/site/ProjectCard";
 import { reveal } from "@/components/site/reveal";
 import { SiteHeader } from "@/components/site/SiteHeader";
@@ -49,77 +50,68 @@ const TOOLS = [
       </svg>
     ),
   },
-  {
-    href: "/assistant",
-    title: "Assistent",
-    text: "Frag Claude zu deinem Depot, deinen Finanzen und den Märkten",
-    icon: (
-      <svg {...iconProps}>
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        <path d="M8 9h8" />
-        <path d="M8 13h5" />
-      </svg>
-    ),
-  },
 ];
 
 export default async function Home() {
   const user = await currentUser();
   return (
-    <div className="site">
-      <TickerBackground />
-      <SiteHeader email={user?.email ?? null} />
-      <main>
-        <span className="badge site-reveal" style={reveal(0.05)}>
-          We talk about money
-        </span>
-        <h1 aria-label="fnnzhrn.">
-          <span aria-hidden>
-            {LETTERS.map((c, i) => (
-              <span key={i} className="ch" style={{ "--i": i } as React.CSSProperties}>
-                {c}
-              </span>
-            ))}
-            <span className="ch dot" style={{ "--i": LETTERS.length } as React.CSSProperties}>
-              .
-            </span>
+    <>
+      <div className="site">
+        <TickerBackground />
+        <SiteHeader email={user?.email ?? null} />
+        <main>
+          <span className="badge site-reveal" style={reveal(0.05)}>
+            We talk about money
           </span>
-        </h1>
+          <h1 aria-label="fnnzhrn.">
+            <span aria-hidden>
+              {LETTERS.map((c, i) => (
+                <span key={i} className="ch" style={{ "--i": i } as React.CSSProperties}>
+                  {c}
+                </span>
+              ))}
+              <span className="ch dot" style={{ "--i": LETTERS.length } as React.CSSProperties}>
+                .
+              </span>
+            </span>
+          </h1>
 
-        <div className="chart-wrap">
-          <svg className="chart" viewBox="0 0 600 72" preserveAspectRatio="none" aria-hidden>
-            <defs>
-              <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="currentColor" stopOpacity="0.18" />
-                <stop offset="1" stopColor="currentColor" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            <path className="area" fill="url(#fill)" d={`${CHART} L600 72 L0 72 Z`} />
-            <path className="line site-draw" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" d={CHART} />
-            <path className="site-shimmer" fill="none" stroke="#fff" strokeOpacity="0.7" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" d={CHART} />
-          </svg>
-          <span className="chart-dot" aria-hidden />
-        </div>
+          <div className="chart-wrap">
+            <svg className="chart" viewBox="0 0 600 72" preserveAspectRatio="none" aria-hidden>
+              <defs>
+                <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor="currentColor" stopOpacity="0.18" />
+                  <stop offset="1" stopColor="currentColor" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <path className="area" fill="url(#fill)" d={`${CHART} L600 72 L0 72 Z`} />
+              <path className="line site-draw" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" d={CHART} />
+              <path className="site-shimmer" fill="none" stroke="#fff" strokeOpacity="0.7" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" d={CHART} />
+            </svg>
+            <span className="chart-dot" aria-hidden />
+          </div>
 
-        <h2 className="site-reveal" style={reveal(1.1)}>
-          Tools
-        </h2>
-        <ul>
-          {TOOLS.map((t, i) => (
-            <li key={t.href} className="site-reveal" style={reveal(1.25 + i * 0.1)}>
-              <ProjectCard {...t} locked={!user} />
-            </li>
-          ))}
-        </ul>
-        {!user && (
-          <p className="hint site-reveal" style={reveal(1.5)}>
-            Die Tools sind für Mitglieder. <a href="/login">Anmelden</a>, um sie zu öffnen.
-          </p>
-        )}
-      </main>
-      <footer className="site-reveal" style={reveal(1.6)}>
-        © fnnzhrn · Keine Anlageberatung · <WeberStudioCredit />
-      </footer>
-    </div>
+          <h2 className="site-reveal" style={reveal(1.1)}>
+            Tools
+          </h2>
+          <ul>
+            {TOOLS.map((t, i) => (
+              <li key={t.href} className="site-reveal" style={reveal(1.25 + i * 0.1)}>
+                <ProjectCard {...t} locked={!user} />
+              </li>
+            ))}
+          </ul>
+          {!user && (
+            <p className="hint site-reveal" style={reveal(1.5)}>
+              Die Tools sind für Mitglieder. <a href="/login">Anmelden</a>, um sie zu öffnen.
+            </p>
+          )}
+        </main>
+        <footer className="site-reveal" style={reveal(1.6)}>
+          © fnnzhrn · Keine Anlageberatung · <WeberStudioCredit />
+        </footer>
+      </div>
+      {user?.authorized && <AssistantDock />}
+    </>
   );
 }

@@ -97,3 +97,15 @@ create table if not exists assistant_usage (
 );
 
 create index if not exists assistant_usage_user_idx on assistant_usage (user_id, created_at);
+
+-- Past conversations with the assistant (the chat's history); the browser picks the id.
+create table if not exists assistant_conversations (
+  id uuid primary key,
+  user_id text not null references "user" ("id") on delete cascade,
+  title text not null,
+  messages jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists assistant_conversations_user_idx on assistant_conversations (user_id, updated_at desc);

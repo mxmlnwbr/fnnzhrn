@@ -1,9 +1,6 @@
-import { Assistant } from "@/components/Assistant";
-import { assistantStatus } from "@/lib/assistant/store";
-import { requireMember } from "@/lib/session";
+import { redirect } from "next/navigation";
 
-/** The assistant, with the user's key status and spend loaded on the server. */
-export default async function AssistantPage() {
-  const user = await requireMember("/assistant");
-  return <Assistant initial={await assistantStatus(user.id)} />;
+/** The assistant is a chat on every tool now, so its old address opens the depot. */
+export default function AssistantPage() {
+  redirect("/depot");
 }

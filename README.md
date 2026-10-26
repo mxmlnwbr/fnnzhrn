@@ -9,7 +9,6 @@
 | `/depot` | Depot: portfolio tracker for shares and cash | members |
 | `/cockpit` | Cockpit: market dashboard (depot, markets, news, opportunities) | members |
 | `/budget` | Finanzen: income, fixed costs and how much of it to invest | members |
-| `/assistant` | Assistent: ask Claude about your depots, finances and the markets | members |
 
 The Depot used to be a separate repository on `depot.fnnzhrn.ch`. Its full history is merged into this one, and the old subdomain redirects to `/depot`.
 
@@ -34,7 +33,7 @@ npm run dev                  # http://localhost:3000
 
 ```
 src/
-  proxy.ts                 Sends signed-out visitors of /depot, /budget, /cockpit and /assistant to /login
+  proxy.ts                 Sends signed-out visitors of /depot, /budget, /cockpit and /assistant/embed to /login
   app/
     page.tsx, site.css     Landing page (styles scoped to .site)
     login/page.tsx         Sign-in, sign-up and "forgot password"; ?next= is where to go afterwards
@@ -48,9 +47,10 @@ src/
     api/quotes, history, search, resolve Depot market data (yahoo-finance2)
     api/cockpit/*          Cockpit data (see below)
     api/budget             The signed-in user's financial overview
-    assistant/             Assistent page (chat, spend, API key)
+    assistant/embed        The assistant chat alone, for the Cockpit's iframe (/assistant redirects to /depot)
     api/assistant/chat     Answers a question with the user's own Claude API key, streamed
     api/assistant/key      Connects or removes the key; reports what the assistant has cost
+    api/assistant/conversations  The chat history: lists, loads, saves and deletes past conversations
   lib/
     auth.ts, db.ts, session.ts  Server-only Better Auth setup, Neon pool, session helpers
     auth-client.ts         Browser side of sign-in
@@ -141,13 +141,15 @@ The `budgets` table is created on first use. To bring in an existing overview, a
 
 ## Assistent
 
-A chat with Claude about the signed-in member's own data. Claude reads it through tools (`src/lib/assistant/tools.ts`) that call the same code as the tools: the depots with current prices (as in the Cockpit's "Mein Depot"), every transaction and cash account, the Finanzen overview with its months and snapshots, and the Cockpit's sources (quotes, news, gainers and losers, Value-Chancen, Schnäppchen-Radar, earnings, sentiment, 13F changes). It only ever sees the data of the member asking.
+A chat with Claude about the signed-in member's own data, in the corner of every tool (and of the start page for members): a button opens it as a small window, which can be made full screen; on phones it always takes the whole screen. It stays open, in the same conversation, when moving between the tools. The Cockpit isn't React, so it shows the chat in an iframe (`/assistant/embed`) that the chat sizes itself. Claude reads it through tools (`src/lib/assistant/tools.ts`) that call the same code as the tools: the depots with current prices (as in the Cockpit's "Mein Depot"), every transaction and cash account, the Finanzen overview with its months and snapshots, and the Cockpit's sources (quotes, news, gainers and losers, Value-Chancen, Schnäppchen-Radar, earnings, sentiment, 13F changes). It only ever sees the data of the member asking.
 
-**Each member uses their own Claude API key**, so everyone pays for their own questions directly at Anthropic and there's nothing to set up on the server. The page walks through it: create an account in the [Claude Console](https://platform.claude.com), buy credits under **Billing** (optionally with auto reload), optionally set a monthly spend limit under **Limits**, create a key under **API Keys** and paste it in. The key is checked with Anthropic, then stored AES-encrypted with a key derived from `BETTER_AUTH_SECRET` (changing the secret means reconnecting keys). **Entfernen** deletes it.
+**Each member uses their own Claude API key**, so everyone pays for their own questions directly at Anthropic and there's nothing to set up on the server. The chat's settings (the slider icon) walk through it: create an account in the [Claude Console](https://platform.claude.com), buy credits under **Billing** (optionally with auto reload), optionally set a monthly spend limit under **Limits**, create a key under **API Keys** and paste it in. The key is checked with Anthropic, then stored AES-encrypted with a key derived from `BETTER_AUTH_SECRET` (changing the secret means reconnecting keys). **Entfernen** deletes it.
 
-**Spend.** Every answer records its token counts and estimated cost (Anthropic's list prices, in `src/lib/assistant/pricing.ts`; update them when prices change) in `assistant_usage`. The page shows the cost per answer and the member's spend today, this month and in total, with links to top up and to set a limit. The Console stays the authority for the actual balance and bill. When the credit runs out, the answer says so and links to Billing.
+**Spend.** Every answer records its token counts and estimated cost (Anthropic's list prices, in `src/lib/assistant/pricing.ts`; update them when prices change) in `assistant_usage`. The chat shows the cost per answer and the member's spend today, this month and in total, with links to top up and to set a limit. The Console stays the authority for the actual balance and bill. When the credit runs out, the answer says so and links to Billing.
 
-**Model.** Each member picks the model for their answers, saved with their key: **Haiku 5.5** (the default, by far the cheapest), **Sonnet 5.5** (about 20× Haiku, better at calculations across depots) or **Opus 5.5** (about twice Sonnet, for the hardest questions). Answers stream at medium effort. On Sonnet and Opus a refused request falls back to another model on Anthropic's side (`fallbacks: "default"`); Haiku has no such fallback, so the answer says it was declined. The conversation is kept in the browser only. The tables are created on first use.
+**Model.** Each member picks the model for their answers, saved with their key: **Haiku 5.5** (the default, by far the cheapest), **Sonnet 5.5** (about 20× Haiku, better at calculations across depots) or **Opus 5.5** (about twice Sonnet, for the hardest questions). Answers stream at medium effort. On Sonnet and Opus a refused request falls back to another model on Anthropic's side (`fallbacks: "default"`); Haiku has no such fallback, so the answer says it was declined. 
+
+**History.** Every conversation is saved in `assistant_conversations` after each answer (the last 100 per member) and listed under the clock icon, or beside the chat in full screen, to pick up again or delete. The tables are created on first use.
 
 ## Deploying
 
