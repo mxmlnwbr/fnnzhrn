@@ -309,7 +309,6 @@
         <a href="/depot">Depot</a>
         <a href="/budget">Finanzen</a>
         <a href="/cockpit" aria-current="page">Cockpit</a>
-        <a href="/assistant">Assistent</a>
       </nav>
       <div class="top-actions">
         <span class="stamp" id="stamp"></span>
@@ -1321,5 +1320,7 @@
     });
   })();
   </script>
+  <!-- The assistant chat, as on the other tools; it sizes this iframe itself (src/components/Assistant.tsx). -->
+  <iframe src="/assistant/embed" title="Assistent" style="position:fixed;right:16px;bottom:16px;width:56px;height:56px;border:0;border-radius:50%;z-index:1000;box-shadow:0 10px 25px -5px rgb(0 0 0 / .25);color-scheme:normal"></iframe>
 </body>
 </html>

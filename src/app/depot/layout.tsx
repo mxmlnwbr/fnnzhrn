@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AssistantDock } from "@/components/Assistant";
 import { ToolNav } from "@/components/ToolNav";
 import { requireMember } from "@/lib/session";
 
@@ -15,6 +16,7 @@ export default async function DepotLayout({ children }: LayoutProps<"/depot">) {
     <div lang="en" className="flex min-h-dvh flex-1 flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
       <ToolNav current="depot" />
       {children}
+      <AssistantDock />
     </div>
   );
 }

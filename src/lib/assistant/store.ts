@@ -29,7 +29,16 @@ function ensureTables(pool: Pool) {
          cache_write_tokens integer not null,
          cost_usd numeric(12, 6) not null
        );
-       create index if not exists assistant_usage_user_idx on assistant_usage (user_id, created_at)`,
+       create index if not exists assistant_usage_user_idx on assistant_usage (user_id, created_at);
+       create table if not exists assistant_conversations (
+         id uuid primary key,
+         user_id text not null references "user" ("id") on delete cascade,
+         title text not null,
+         messages jsonb not null,
+         created_at timestamptz not null default now(),
+         updated_at timestamptz not null default now()
+       );
+       create index if not exists assistant_conversations_user_idx on assistant_conversations (user_id, updated_at desc)`,
     )
     .catch((e) => {
       tablesReady = undefined;
@@ -147,4 +156,52 @@ export async function assistantStatus(userId: string): Promise<AssistantStatus> 
     spent: { today: Number(u.today), month: Number(u.month), total: Number(u.total) },
     requests: { month: Number(u.month_requests), total: Number(u.total_requests) },
   };
+}
+
+/** How many past conversations the history keeps per user; older ones are dropped when a new one is saved. */
+const MAX_CONVERSATIONS = 100;
+
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
+
+/** The user's past conversations, most recent first. */
+export async function listConversations(userId: string): Promise<ConversationSummary[]> {
+  const { rows } = await (await pool()).query(
+    "select id, title, updated_at from assistant_conversations where user_id = $1 order by updated_at desc limit $2",
+    [userId, MAX_CONVERSATIONS],
+  );
+  return rows.map((r) => ({ id: r.id, title: r.title, updatedAt: new Date(r.updated_at).toISOString() }));
+}
+
+/** The messages of one of the user's conversations, or null when it isn't theirs or doesn't exist. */
+export async function loadConversation(userId: string, id: string): Promise<unknown[] | null> {
+  const { rows } = await (await pool()).query("select messages from assistant_conversations where id = $1 and user_id = $2", [id, userId]);
+  return rows[0]?.messages ?? null;
+}
+
+/**
+ * Saves a conversation under the id the browser gave it. Returns false when that id already belongs to
+ * someone else.
+ */
+export async function saveConversation(userId: string, id: string, title: string, messages: unknown[]) {
+  const p = await pool();
+  const { rowCount } = await p.query(
+    `insert into assistant_conversations (id, user_id, title, messages) values ($1, $2, $3, $4)
+     on conflict (id) do update set title = excluded.title, messages = excluded.messages, updated_at = now()
+     where assistant_conversations.user_id = excluded.user_id`,
+    [id, userId, title, JSON.stringify(messages)],
+  );
+  await p.query(
+    `delete from assistant_conversations where user_id = $1 and id not in
+       (select id from assistant_conversations where user_id = $1 order by updated_at desc limit $2)`,
+    [userId, MAX_CONVERSATIONS],
+  );
+  return rowCount === 1;
+}
+
+export async function deleteConversation(userId: string, id: string) {
+  await (await pool()).query("delete from assistant_conversations where id = $1 and user_id = $2", [id, userId]);
 }

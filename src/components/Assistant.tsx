@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ASSISTANT_MODELS, type AssistantModel } from "@/lib/assistant/pricing";
-import type { AssistantStatus } from "@/lib/assistant/store";
+import type { AssistantStatus, ConversationSummary } from "@/lib/assistant/store";
 import { Markdown } from "./Markdown";
 import { buttonClass, Card, inputClass, primaryButtonClass } from "./ui";
 
@@ -10,9 +10,6 @@ const CONSOLE = "https://platform.claude.com";
 const BILLING_URL = `${CONSOLE}/settings/billing`;
 const KEYS_URL = `${CONSOLE}/settings/keys`;
 const LIMITS_URL = `${CONSOLE}/settings/limits`;
-
-/** The conversation is kept on this device only, so a reload doesn't lose it. */
-const STORAGE_KEY = "fnnzhrn:assistant:v1";
 
 type Message = { role: "user" | "assistant"; content: string; cost?: number; error?: string; billing?: boolean };
 
@@ -94,55 +91,240 @@ function Waiting({ detail }: { detail: string }) {
 
 const usd = (v: number) => `$${v < 1 ? v.toFixed(v < 0.01 && v > 0 ? 4 : 2) : v.toFixed(2)}`;
 
-function loadConversation(): Message[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+/** The conversation of the old full-page assistant, kept on the device; moved into the history once. */
+const LEGACY_KEY = "fnnzhrn:assistant:v1";
+/** The conversation that's open, so it carries over to the next page and the next visit. */
+const CURRENT_KEY = "fnnzhrn:assistant:current";
+/** Whether the chat is open, per tab, so it stays open when moving between the tools. */
+const MODE_KEY = "fnnzhrn:assistant:mode";
+
+type Mode = "closed" | "open" | "full";
+type View = "chat" | "history" | "settings";
+
+const storage = {
+  get(store: () => Storage, key: string) {
+    try {
+      return store().getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  set(store: () => Storage, key: string, value: string | null) {
+    try {
+      if (value === null) store().removeItem(key);
+      else store().setItem(key, value);
+    } catch {
+      // Storage unavailable (private mode); the chat just starts afresh next time.
+    }
+  },
+};
+const local = () => localStorage;
+const session = () => sessionStorage;
+
+/** The history's title for a conversation, as the server derives it. */
+function titleOf(messages: Message[]) {
+  const first = messages.find((m) => m.role === "user")?.content.replace(/\s+/g, " ").trim() || "Gespräch";
+  return first.length > 80 ? `${first.slice(0, 79)}…` : first;
 }
 
-function saveConversation(messages: Message[]) {
-  try {
-    if (messages.length) localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
-    else localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // Storage unavailable (private mode); the conversation lives until the tab closes.
-  }
+async function saveConversation(id: string, messages: Message[]) {
+  if (!messages.some((m) => m.role === "user")) return;
+  await fetch(`/api/assistant/conversations/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messages }),
+  }).catch(() => {});
 }
 
-/** Chat with Claude about the signed-in user's depots, finances and the markets, on their own API key. */
-export function Assistant({ initial }: { initial: AssistantStatus }) {
-  const [status, setStatus] = useState(initial);
+/** The window the chat sits in: the page itself, or the page around it when it's embedded in an iframe. */
+const hostWindow = (embedded: boolean): Window => (embedded && window.frameElement ? window.parent : window);
+
+/** Whether the screen is phone-sized, where the open chat takes the whole screen. */
+function useSmallScreen(embedded: boolean) {
+  const [small, setSmall] = useState(false);
+  useEffect(() => {
+    const query = hostWindow(embedded).matchMedia("(max-width: 639px)");
+    const update = () => setSmall(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, [embedded]);
+  return small;
+}
+
+/**
+ * The assistant as a small chat in the corner of every tool, which can be made full screen (on phones it
+ * always is). Chats with Claude about the signed-in user's depots, finances and the markets, on their own
+ * API key; past conversations are kept on the server. `embedded` is for pages that aren't React (the
+ * Cockpit), which show it in an iframe: the chat then sizes that iframe itself.
+ */
+export function AssistantDock({ embedded = false }: { embedded?: boolean }) {
+  const [mode, setModeState] = useState<Mode>("closed");
+  const [view, setView] = useState<View>("chat");
+  const [status, setStatus] = useState<AssistantStatus | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [conversations, setConversations] = useState<ConversationSummary[] | null>(null);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [activity, setActivity] = useState<string | null>(null);
-  const [showKey, setShowKey] = useState(!initial.connected);
   const abort = useRef<AbortController | null>(null);
-  const end = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+  const textarea = useRef<HTMLTextAreaElement>(null);
+  const small = useSmallScreen(embedded);
+  /** Covers the whole screen: full screen, or any open chat on a phone. */
+  const covering = mode === "full" || (mode === "open" && small);
 
-  useEffect(() => setMessages(loadConversation()), []);
+  const setMode = (next: Mode) => {
+    setModeState(next);
+    storage.set(session, MODE_KEY, next === "closed" ? null : next);
+  };
+
+  // Picks up where the last page left off; the old on-device conversation moves into the history.
   useEffect(() => {
-    if (!busy) saveConversation(messages);
-    end.current?.scrollIntoView({ block: "end", behavior: "smooth" });
-  }, [messages, busy]);
+    const saved = storage.get(session, MODE_KEY);
+    if (saved === "open" || saved === "full") setModeState(saved);
+    const current = storage.get(local, CURRENT_KEY);
+    if (current) {
+      setConversationId(current);
+      fetch(`/api/assistant/conversations/${current}`)
+        .then((res) => (res.ok ? res.json() : Promise.reject()))
+        .then((body) => setMessages((m) => (m.length ? m : body.messages)))
+        .catch(() => {
+          setConversationId((id) => (id === current ? null : id));
+          storage.set(local, CURRENT_KEY, null);
+        });
+      return;
+    }
+    try {
+      const legacy: Message[] = JSON.parse(storage.get(local, LEGACY_KEY) ?? "[]");
+      if (legacy.length) {
+        const id = crypto.randomUUID();
+        setConversationId(id);
+        setMessages(legacy);
+        storage.set(local, CURRENT_KEY, id);
+        void saveConversation(id, legacy).then(() => storage.set(local, LEGACY_KEY, null));
+      }
+    } catch {
+      storage.set(local, LEGACY_KEY, null);
+    }
+  }, []);
+
+  // The key status and spend load the first time the chat opens.
+  const open = mode !== "closed";
+  useEffect(() => {
+    if (!open || status) return;
+    let cancelled = false;
+    fetch("/api/assistant/key")
+      .then(async (res) => {
+        const body = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) return setStatusError(body.error ?? `Fehler ${res.status}`);
+        setStatus(body);
+        if (!body.connected) setView("settings");
+      })
+      .catch(() => !cancelled && setStatusError("Keine Verbindung zum Server."));
+    return () => {
+      cancelled = true;
+    };
+  }, [open, status]);
+
+  // The history loads when it's first shown: as its own view, or beside the chat in full screen.
+  const historyShown = open && (view === "history" || mode === "full");
+  useEffect(() => {
+    if (!historyShown || conversations) return;
+    fetch("/api/assistant/conversations")
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then(setConversations)
+      .catch(() => setConversations([]));
+  }, [historyShown, conversations]);
+
+  useEffect(() => {
+    const el = scroller.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages, view, mode]);
+
+  useEffect(() => {
+    if (open && view === "chat") textarea.current?.focus({ preventScroll: true });
+  }, [open, view, conversationId]);
+
+  // Embedded, the chat sizes its iframe on the page around it.
+  useEffect(() => {
+    const frame = embedded ? (window.frameElement as HTMLElement | null) : null;
+    if (!frame) return;
+    const corner = { top: "auto", left: "auto", right: "16px", bottom: "16px" };
+    Object.assign(
+      frame.style,
+      mode === "closed"
+        ? { ...corner, width: "56px", height: "56px", borderRadius: "50%" }
+        : covering
+          ? { top: "0", left: "0", right: "0", bottom: "0", width: "100%", height: "100%", borderRadius: "0" }
+          : { ...corner, width: "400px", height: "min(640px, calc(100dvh - 32px))", borderRadius: "16px" },
+    );
+  }, [embedded, mode, covering]);
+
+  // The page behind a chat that covers it doesn't scroll along.
+  useEffect(() => {
+    if (!covering) return;
+    const root = hostWindow(embedded).document.documentElement;
+    const before = root.style.overflow;
+    root.style.overflow = "hidden";
+    return () => {
+      root.style.overflow = before;
+    };
+  }, [covering, embedded]);
+
+  function startNew() {
+    if (busy) return;
+    setConversationId(null);
+    setMessages([]);
+    setInput("");
+    setView("chat");
+    storage.set(local, CURRENT_KEY, null);
+  }
+
+  async function pick(id: string) {
+    if (busy) return;
+    setView("chat");
+    if (id === conversationId) return;
+    const res = await fetch(`/api/assistant/conversations/${id}`).catch(() => null);
+    if (!res?.ok) return setConversations((list) => list?.filter((c) => c.id !== id) ?? null);
+    const body = await res.json();
+    setConversationId(id);
+    setMessages(body.messages);
+    storage.set(local, CURRENT_KEY, id);
+  }
+
+  async function remove(id: string) {
+    setConversations((list) => list?.filter((c) => c.id !== id) ?? null);
+    if (id === conversationId) startNew();
+    await fetch(`/api/assistant/conversations/${id}`, { method: "DELETE" }).catch(() => {});
+  }
 
   async function ask(question: string) {
     const q = question.trim();
     if (!q || busy) return;
+    const id = conversationId ?? crypto.randomUUID();
+    if (!conversationId) {
+      setConversationId(id);
+      storage.set(local, CURRENT_KEY, id);
+    }
     // Failed answers aren't sent back; the question before one is replaced by the new one.
     const history = messages.filter((m) => !m.error);
     if (history.at(-1)?.role === "user") history.pop();
     const sent: Message[] = [...history, { role: "user", content: q }];
-    setMessages([...sent, { role: "assistant", content: "" }]);
+    let answer: Message = { role: "assistant", content: "" };
+    const update = (fn: (m: Message) => Message) => {
+      answer = fn(answer);
+      setMessages([...sent, answer]);
+    };
+    setMessages([...sent, answer]);
     setInput("");
     setBusy(true);
     setActivity("");
     const controller = new AbortController();
     abort.current = controller;
-    const update = (fn: (m: Message) => Message) => setMessages((all) => [...all.slice(0, -1), fn(all.at(-1)!)]);
     try {
       const res = await fetch("/api/assistant/chat", {
         method: "POST",
@@ -152,7 +334,7 @@ export function Assistant({ initial }: { initial: AssistantStatus }) {
       });
       if (!res.ok || !res.body) {
         const body = await res.json().catch(() => ({}));
-        if (body.needsKey) setShowKey(true);
+        if (body.needsKey) setView("settings");
         update((m) => ({ ...m, error: body.error ?? `Fehler ${res.status}` }));
         return;
       }
@@ -177,7 +359,7 @@ export function Assistant({ initial }: { initial: AssistantStatus }) {
             setStatus(ev.status);
           } else if (ev.type === "error") {
             if (ev.status) setStatus(ev.status);
-            if (ev.needsKey) setShowKey(true);
+            if (ev.needsKey) setView("settings");
             update((m) => ({ ...m, content: m.content.trim(), cost: ev.cost, error: ev.error, billing: ev.billing }));
           }
         }
@@ -188,110 +370,349 @@ export function Assistant({ initial }: { initial: AssistantStatus }) {
       setBusy(false);
       setActivity(null);
       abort.current = null;
+      const saved = [...sent, answer];
+      void saveConversation(id, saved);
+      setConversations((list) => list && [{ id, title: titleOf(saved), updatedAt: new Date().toISOString() }, ...list.filter((c) => c.id !== id)]);
     }
   }
 
+  if (!open) {
+    return (
+      <button
+        type="button"
+        lang="de-CH"
+        onClick={() => setMode("open")}
+        aria-label="Assistent öffnen"
+        title="Assistent"
+        className={`${embedded ? "fixed inset-0" : "fixed right-4 bottom-4 h-14 w-14 shadow-lg"} z-50 flex items-center justify-center rounded-full bg-emerald-600 text-white hover:bg-emerald-700 print:hidden`}
+      >
+        <ChatIcon />
+        {busy && <span className="absolute top-1 right-1 h-3 w-3 animate-pulse rounded-full border-2 border-white bg-amber-400" aria-label="Antwort wird geladen" />}
+      </button>
+    );
+  }
+
+  const iconButton = (label: string, onClick: () => void, icon: React.ReactNode, extra = "", pressed?: boolean) => (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={pressed}
+      title={label}
+      className={`rounded-md p-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 aria-pressed:bg-zinc-100 aria-pressed:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100 dark:aria-pressed:bg-zinc-800 dark:aria-pressed:text-zinc-100 ${extra}`}
+    >
+      {icon}
+    </button>
+  );
+  const historyList = (
+    <HistoryList conversations={conversations} currentId={conversationId} disabled={busy} onPick={(id) => void pick(id)} onDelete={(id) => void remove(id)} />
+  );
+  const narrow = mode === "full" ? "mx-auto w-full max-w-3xl" : "";
+
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Assistent</h1>
-          <p className="text-sm text-zinc-500">Fragen zu deinem Depot, deinen Finanzen und den Märkten. Keine Anlageberatung.</p>
+    <section
+      lang="de-CH"
+      role="dialog"
+      aria-label="Assistent"
+      aria-modal={covering || undefined}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") setMode(mode === "full" && !small ? "open" : "closed");
+      }}
+      className={`fixed z-50 flex flex-col overflow-hidden bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 print:hidden ${
+        embedded || covering
+          ? "inset-0"
+          : "right-4 bottom-4 h-[min(640px,calc(100dvh-2rem))] w-[400px] rounded-2xl border border-zinc-200 shadow-2xl dark:border-zinc-800"
+      } ${embedded && !covering ? "rounded-2xl border border-zinc-200 dark:border-zinc-800" : ""}`}
+    >
+      <header className="flex shrink-0 items-center gap-1 border-b border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="mr-auto min-w-0">
+          <h2 className="text-sm font-semibold">Assistent</h2>
+          <p className="truncate text-xs text-zinc-500">
+            {view === "settings" ? "Kosten, API-Key und Modell" : view === "history" ? "Verlauf" : status ? ASSISTANT_MODELS.find((m) => m.id === status.model)?.label : "Keine Anlageberatung"}
+          </p>
         </div>
-        {messages.length > 0 && (
-          <button className={buttonClass} disabled={busy} onClick={() => setMessages([])}>
-            Neues Gespräch
-          </button>
+        {iconButton("Verlauf", () => setView(view === "history" ? "chat" : "history"), <HistoryIcon />, mode === "full" ? "md:hidden" : "", view === "history")}
+        {iconButton("Neues Gespräch", startNew, <PlusIcon />)}
+        {iconButton("Kosten und Einstellungen", () => setView(view === "settings" ? "chat" : "settings"), <SettingsIcon />, "", view === "settings")}
+        {!small && iconButton(mode === "full" ? "Verkleinern" : "Vollbild", () => setMode(mode === "full" ? "open" : "full"), <ExpandIcon full={mode === "full"} />)}
+        {iconButton("Schliessen", () => setMode("closed"), <CloseIcon />)}
+      </header>
+
+      <div className="flex min-h-0 flex-1">
+        {mode === "full" && (
+          <aside className="hidden w-72 shrink-0 flex-col border-r border-zinc-200 md:flex dark:border-zinc-800">
+            <p className="px-4 pt-3 pb-1 text-xs font-medium text-zinc-500">Verlauf</p>
+            <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">{historyList}</div>
+          </aside>
         )}
-      </div>
 
-      <SpendCard status={status} onManageKey={() => setShowKey((s) => !s)} />
-      {showKey && <KeyCard status={status} onChange={(s) => { setStatus(s); if (s.connected) setShowKey(false); }} />}
-
-      {status.connected && (
-        <>
-          <ModelPicker status={status} disabled={busy} onChange={setStatus} />
-          <div className="flex-1 space-y-3">
-            {messages.length === 0 && (
-              <div className="space-y-2">
-                <p className="text-sm text-zinc-500">Zum Beispiel:</p>
-                <div className="flex flex-wrap gap-2">
-                  {SUGGESTIONS.map((s) => (
-                    <button key={s} className={`${buttonClass} text-left`} onClick={() => void ask(s)}>
-                      {s}
-                    </button>
-                  ))}
+        <div className="flex min-w-0 flex-1 flex-col">
+          {view === "history" ? (
+            <div className={`min-h-0 flex-1 overflow-y-auto p-2 ${mode === "full" ? "md:hidden" : ""}`}>{historyList}</div>
+          ) : null}
+          {view === "settings" ? (
+            <div className="@container min-h-0 flex-1 overflow-y-auto p-3">
+              <div className={`space-y-3 ${narrow}`}>
+                {status ? (
+                  <>
+                    <SpendCard status={status} />
+                    {status.connected && <ModelPicker status={status} disabled={busy} onChange={setStatus} />}
+                    <KeyCard
+                      status={status}
+                      onChange={(s) => {
+                        setStatus(s);
+                        if (s.connected && !status.connected) setView("chat");
+                      }}
+                    />
+                  </>
+                ) : (
+                  <StatusPending error={statusError} />
+                )}
+              </div>
+            </div>
+          ) : null}
+          {view === "chat" || (view === "history" && mode === "full") ? (
+            <div className={`flex min-h-0 flex-1 flex-col ${view === "history" ? "hidden md:flex" : ""}`}>
+              <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto p-3">
+                <div className={`space-y-3 ${narrow}`}>
+                  {!status ? (
+                    <StatusPending error={statusError} />
+                  ) : !status.connected ? (
+                    <div className="space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
+                      <p>Verbinde deinen eigenen Claude API-Key, um Fragen zu deinem Depot, deinen Finanzen und den Märkten zu stellen.</p>
+                      <button className={primaryButtonClass} onClick={() => setView("settings")}>
+                        API-Key verbinden
+                      </button>
+                    </div>
+                  ) : (
+                    messages.length === 0 && (
+                      <div className="space-y-2">
+                        <p className="text-sm text-zinc-500">Zum Beispiel:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {SUGGESTIONS.map((s) => (
+                            <button key={s} className={`${buttonClass} text-left`} onClick={() => void ask(s)}>
+                              {s}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  )}
+                  {messages.map((m, i) =>
+                    m.role === "user" ? (
+                      <div key={i} className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-sm bg-zinc-900 px-3 py-2 text-sm whitespace-pre-wrap text-white dark:bg-zinc-100 dark:text-zinc-900">
+                        {m.content}
+                      </div>
+                    ) : (
+                      <div key={i} className="max-w-full rounded-2xl rounded-bl-sm border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900">
+                        {m.content && <Markdown text={m.content} />}
+                        {busy && i === messages.length - 1 && activity !== null && <Waiting detail={activity} />}
+                        {m.error && (
+                          <p className="mt-1 text-red-600 dark:text-red-400">
+                            {m.error}
+                            {m.billing && (
+                              <>
+                                {" "}
+                                <a href={BILLING_URL} target="_blank" rel="noreferrer" className="underline">
+                                  Guthaben aufladen
+                                </a>
+                              </>
+                            )}
+                          </p>
+                        )}
+                        {m.cost != null && <p className="mt-1 text-xs text-zinc-400">Kosten dieser Antwort: ca. {usd(m.cost)}</p>}
+                      </div>
+                    ),
+                  )}
                 </div>
               </div>
-            )}
-            {messages.map((m, i) =>
-              m.role === "user" ? (
-                <div key={i} className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-sm bg-zinc-900 px-3 py-2 text-sm whitespace-pre-wrap text-white dark:bg-zinc-100 dark:text-zinc-900">
-                  {m.content}
-                </div>
-              ) : (
-                <div key={i} className="max-w-full rounded-2xl rounded-bl-sm border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900">
-                  {m.content && <Markdown text={m.content} />}
-                  {busy && i === messages.length - 1 && activity !== null && <Waiting detail={activity} />}
-                  {m.error && (
-                    <p className="mt-1 text-red-600 dark:text-red-400">
-                      {m.error}
-                      {m.billing && (
-                        <>
-                          {" "}
-                          <a href={BILLING_URL} target="_blank" rel="noreferrer" className="underline">
-                            Guthaben aufladen
-                          </a>
-                        </>
-                      )}
-                    </p>
-                  )}
-                  {m.cost != null && <p className="mt-1 text-xs text-zinc-400">Kosten dieser Antwort: ca. {usd(m.cost)}</p>}
-                </div>
-              ),
-            )}
-            <div ref={end} />
-          </div>
 
-          <form
-            className="sticky bottom-0 flex gap-2 border-t border-zinc-200 bg-zinc-50 py-3 dark:border-zinc-800 dark:bg-zinc-950"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void ask(input);
-            }}
+              {status?.connected && (
+                <form
+                  className="shrink-0 border-t border-zinc-200 bg-white p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] dark:border-zinc-800 dark:bg-zinc-900"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void ask(input);
+                  }}
+                >
+                  <div className={`flex gap-2 ${narrow}`}>
+                    <textarea
+                      ref={textarea}
+                      className={`${inputClass} min-h-10 resize-none`}
+                      rows={1}
+                      maxLength={8000}
+                      aria-label="Frage"
+                      placeholder="Deine Frage…"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                          e.preventDefault();
+                          void ask(input);
+                        }
+                      }}
+                    />
+                    {busy ? (
+                      <button type="button" className={buttonClass} onClick={() => abort.current?.abort()}>
+                        Stopp
+                      </button>
+                    ) : (
+                      <button type="submit" className={primaryButtonClass} disabled={!input.trim()}>
+                        Senden
+                      </button>
+                    )}
+                  </div>
+                </form>
+              )}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StatusPending({ error }: { error: string | null }) {
+  if (error) return <p className="text-sm text-red-600 dark:text-red-400">{error}</p>;
+  return (
+    <div role="status" className="flex items-center gap-2 py-1 text-sm text-zinc-500">
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500/30 border-t-emerald-500 motion-reduce:animate-none" aria-hidden />
+      Lädt…
+    </div>
+  );
+}
+
+const dateFormat = new Intl.DateTimeFormat("de-CH", { day: "numeric", month: "short", year: "numeric" });
+const timeFormat = new Intl.DateTimeFormat("de-CH", { hour: "2-digit", minute: "2-digit" });
+
+/** When a conversation was last continued: the time today, the date before. */
+function when(iso: string) {
+  const d = new Date(iso);
+  return d.toDateString() === new Date().toDateString() ? timeFormat.format(d) : dateFormat.format(d);
+}
+
+/** Past conversations to pick up again or delete. */
+function HistoryList({
+  conversations,
+  currentId,
+  disabled,
+  onPick,
+  onDelete,
+}: {
+  conversations: ConversationSummary[] | null;
+  currentId: string | null;
+  disabled: boolean;
+  onPick: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  if (!conversations) return <div className="p-2"><StatusPending error={null} /></div>;
+  if (!conversations.length) return <p className="p-2 text-sm text-zinc-500">Noch keine Gespräche.</p>;
+  return (
+    <ul className="space-y-0.5">
+      {conversations.map((c) => (
+        <li key={c.id} className="group flex items-center rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-900">
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onPick(c.id)}
+            aria-current={c.id === currentId || undefined}
+            className="min-w-0 flex-1 rounded-md px-2 py-1.5 text-left disabled:opacity-60 aria-[current]:bg-zinc-200/70 dark:aria-[current]:bg-zinc-800"
           >
-            <textarea
-              className={`${inputClass} min-h-10 resize-none`}
-              rows={1}
-              maxLength={8000}
-              placeholder="Frag etwas zu deinem Depot oder deinen Finanzen…"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault();
-                  void ask(input);
-                }
-              }}
-            />
-            {busy ? (
-              <button type="button" className={buttonClass} onClick={() => abort.current?.abort()}>
-                Stopp
-              </button>
-            ) : (
-              <button type="submit" className={primaryButtonClass} disabled={!input.trim()}>
-                Senden
-              </button>
-            )}
-          </form>
-        </>
-      )}
-    </main>
+            <span className="block truncate text-sm">{c.title}</span>
+            <span className="block text-xs text-zinc-500">{when(c.updatedAt)}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(c.id)}
+            disabled={disabled && c.id === currentId}
+            aria-label={`«${c.title}» löschen`}
+            title="Löschen"
+            className="shrink-0 rounded-md p-1.5 text-zinc-400 hover:text-red-600 disabled:opacity-40 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 dark:hover:text-red-400"
+          >
+            <TrashIcon />
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const iconProps = {
+  viewBox: "0 0 24 24",
+  className: "h-5 w-5",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.75,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  "aria-hidden": true,
+};
+
+function ChatIcon() {
+  return (
+    <svg {...iconProps} className="h-6 w-6">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      <path d="M8 9h8" />
+      <path d="M8 13h5" />
+    </svg>
+  );
+}
+
+function HistoryIcon() {
+  return (
+    <svg {...iconProps}>
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg {...iconProps}>
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+function SettingsIcon() {
+  return (
+    <svg {...iconProps}>
+      <path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0" />
+      <circle cx="16" cy="6" r="2" />
+      <circle cx="10" cy="12" r="2" />
+      <circle cx="18" cy="18" r="2" />
+    </svg>
+  );
+}
+
+function ExpandIcon({ full }: { full: boolean }) {
+  return (
+    <svg {...iconProps}>
+      {full ? <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /> : <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />}
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg {...iconProps}>
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg {...iconProps} className="h-4 w-4">
+      <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
+    </svg>
   );
 }
 
 /** What the assistant has cost so far, and where to top up. */
-function SpendCard({ status, onManageKey }: { status: AssistantStatus; onManageKey: () => void }) {
+function SpendCard({ status }: { status: AssistantStatus }) {
   const tile = (label: string, value: string, sub?: string) => (
     <div>
       <p className="text-xs text-zinc-500">{label}</p>
@@ -300,14 +721,7 @@ function SpendCard({ status, onManageKey }: { status: AssistantStatus; onManageK
     </div>
   );
   return (
-    <Card
-      title="Deine Kosten"
-      action={
-        <button className="text-sm text-zinc-500 underline hover:text-zinc-900 dark:hover:text-zinc-100" onClick={onManageKey}>
-          {status.connected ? `API-Key ${status.hint}` : "API-Key verbinden"}
-        </button>
-      }
-    >
+    <Card title="Deine Kosten" action={status.connected && <span className="text-xs text-zinc-500">API-Key {status.hint}</span>}>
       <div className="grid grid-cols-3 gap-3">
         {tile("Heute", usd(status.spent.today))}
         {tile("Dieser Monat", usd(status.spent.month), `${status.requests.month} Anfragen`)}
@@ -367,7 +781,7 @@ function ModelPicker({ status, disabled, onChange }: { status: AssistantStatus; 
             onClick={() => void pick(m.id)}
             className={`rounded-md px-2 py-1.5 text-sm disabled:cursor-default ${current === m.id ? "bg-white font-medium shadow-sm dark:bg-zinc-900" : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"}`}
           >
-            {m.label} <span className="hidden text-xs text-zinc-500 sm:inline">· {m.hint}</span>
+            {m.label} <span className="hidden text-xs text-zinc-500 @md:inline">· {m.hint}</span>
           </button>
         ))}
       </div>
@@ -420,7 +834,7 @@ function KeyCard({ status, onChange }: { status: AssistantStatus; onChange: (s: 
           Der Key wird verschlüsselt gespeichert und nur für deine Fragen an Claude verwendet. Du kannst ihn jederzeit hier entfernen oder in der Console löschen.
         </p>
         <form
-          className="flex flex-col gap-2 sm:flex-row"
+          className="flex flex-col gap-2 @md:flex-row"
           onSubmit={(e) => {
             e.preventDefault();
             void call("PUT");
