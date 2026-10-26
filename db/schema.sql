@@ -71,3 +71,26 @@ create table if not exists budgets (
   data jsonb not null,
   updated_at timestamptz not null default now()
 );
+
+-- Assistant: each member's own Claude API key (AES-encrypted with a key derived from BETTER_AUTH_SECRET)
+-- and the token counts and estimated cost of every answer. Also created on first use.
+create table if not exists assistant_keys (
+  user_id text primary key references "user" ("id") on delete cascade,
+  api_key text not null,
+  hint text not null,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists assistant_usage (
+  id bigserial primary key,
+  user_id text not null references "user" ("id") on delete cascade,
+  created_at timestamptz not null default now(),
+  model text not null,
+  input_tokens integer not null,
+  output_tokens integer not null,
+  cache_read_tokens integer not null,
+  cache_write_tokens integer not null,
+  cost_usd numeric(12, 6) not null
+);
+
+create index if not exists assistant_usage_user_idx on assistant_usage (user_id, created_at);

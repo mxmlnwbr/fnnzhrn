@@ -9,6 +9,7 @@
 | `/depot` | Depot: portfolio tracker for shares and cash | members |
 | `/cockpit` | Cockpit: market dashboard (depot, markets, news, opportunities) | members |
 | `/budget` | Finanzen: income, fixed costs and how much of it to invest | members |
+| `/assistant` | Assistent: ask Claude about your depots, finances and the markets | members |
 
 The Depot used to be a separate repository on `depot.fnnzhrn.ch`. Its full history is merged into this one, and the old subdomain redirects to `/depot`.
 
@@ -33,7 +34,7 @@ npm run dev                  # http://localhost:3000
 
 ```
 src/
-  proxy.ts                 Sends signed-out visitors of /depot, /budget and /cockpit to /login
+  proxy.ts                 Sends signed-out visitors of /depot, /budget, /cockpit and /assistant to /login
   app/
     page.tsx, site.css     Landing page (styles scoped to .site)
     login/page.tsx         Sign-in, sign-up and "forgot password"; ?next= is where to go afterwards
@@ -47,6 +48,9 @@ src/
     api/quotes, history, search, resolve Depot market data (yahoo-finance2)
     api/cockpit/*          Cockpit data (see below)
     api/budget             The signed-in user's financial overview
+    assistant/             Assistent page (chat, spend, API key)
+    api/assistant/chat     Answers a question with the user's own Claude API key, streamed
+    api/assistant/key      Connects or removes the key; reports what the assistant has cost
   lib/
     auth.ts, db.ts, session.ts  Server-only Better Auth setup, Neon pool, session helpers
     auth-client.ts         Browser side of sign-in
@@ -54,8 +58,9 @@ src/
     budget.ts              Financial overview: data model and totals
     budget-store.ts, budget-seeds.ts  Loading and saving it; spreadsheets imported per account
     portfolio.ts, storage.ts, sync.ts, swissquote.ts, yuh.ts, ...  Depot logic
+    assistant/             The assistant's tools (tools.ts), pricing and stored keys and usage
   components/              Depot UI; site/ holds the landing and sign-in components
-db/schema.sql              Database tables for sign-in, depots and budgets
+db/schema.sql              Database tables for sign-in, depots, budgets and the assistant
 ```
 
 Every tool route checks the session on the server: the proxy only does a fast cookie check and redirects, while `/cockpit`, all `/api/*` routes except sign-in, and the depot sync verify the session themselves and answer 401 (or redirect) otherwise. They also require the account to be authorized (see below) and answer 403 (or redirect to `/login`, which says the account isn't approved yet) otherwise.
@@ -133,6 +138,16 @@ Gainers/losers, the Schnäppchen-Radar and Value-Chancen each come per market: U
 A financial overview per account: **Einnahmen** (net income), **Fixkosten** (costs that are certain each month or year) and **Investieren** (what goes into the 3rd pillar, shares and so on). Each entry is paid per month, per year, or per month 13× (a salary with a 13th month's pay). The top cards and the split bar show income, fixed costs, investments and what is left, per month or per year, with the fixed-cost share and the savings rate. Monthly figures leave out the 13th month's pay; yearly ones include it and spread yearly costs over twelve months. Changes save to the `budgets` table as you type.
 
 The `budgets` table is created on first use. To bring in an existing overview, add it to `src/lib/budget-seeds.ts` under the account's email: the account starts with it the first time it opens Finanzen, and from then on only what's saved counts.
+
+## Assistent
+
+A chat with Claude about the signed-in member's own data. Claude reads it through tools (`src/lib/assistant/tools.ts`) that call the same code as the tools: the depots with current prices (as in the Cockpit's "Mein Depot"), every transaction and cash account, the Finanzen overview with its months and snapshots, and the Cockpit's sources (quotes, news, gainers and losers, Value-Chancen, Schnäppchen-Radar, earnings, sentiment, 13F changes). It only ever sees the data of the member asking.
+
+**Each member uses their own Claude API key**, so everyone pays for their own questions directly at Anthropic and there's nothing to set up on the server. The page walks through it: create an account in the [Claude Console](https://platform.claude.com), buy credits under **Billing** (optionally with auto reload), optionally set a monthly spend limit under **Limits**, create a key under **API Keys** and paste it in. The key is checked with Anthropic, then stored AES-encrypted with a key derived from `BETTER_AUTH_SECRET` (changing the secret means reconnecting keys). **Entfernen** deletes it.
+
+**Spend.** Every answer records its token counts and estimated cost (Anthropic's list prices, in `src/lib/assistant/pricing.ts`; update them when prices change) in `assistant_usage`. The page shows the cost per answer and the member's spend today, this month and in total, with links to top up and to set a limit. The Console stays the authority for the actual balance and bill. When the credit runs out, the answer says so and links to Billing.
+
+Answers come from Claude Opus 5.5 at medium effort, streamed; a refused request falls back to another model on Anthropic's side (`fallbacks: "default"`). The conversation is kept in the browser only. The tables are created on first use.
 
 ## Deploying
 
