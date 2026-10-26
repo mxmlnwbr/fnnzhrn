@@ -19,7 +19,12 @@ describe("costUsd", () => {
     expect(costUsd(usage, "claude-sonnet-5-5")).toBeCloseTo(4 + 2 + 10);
   });
 
-  it("falls back to the assistant model's price for unknown models", () => {
-    expect(costUsd({ input_tokens: 1_000_000, output_tokens: 0 }, "claude-something-new")).toBeCloseTo(4);
+  it("falls back to the default model's price for unknown models", () => {
+    expect(costUsd({ input_tokens: 10_000, output_tokens: 0 }, "claude-something-new")).toBeCloseTo(0.001);
+  });
+
+  it("charges Haiku 5.5's long-prompt rate above 100K prompt tokens", () => {
+    expect(costUsd({ input_tokens: 100_000, output_tokens: 0 }, "claude-haiku-5-5")).toBeCloseTo(0.01);
+    expect(costUsd({ input_tokens: 50_000, output_tokens: 1000, cache_read_input_tokens: 60_000 }, "claude-haiku-5-5")).toBeCloseTo(0.025 + 0.0025 + 0.003);
   });
 });

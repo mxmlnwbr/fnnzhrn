@@ -81,6 +81,9 @@ create table if not exists assistant_keys (
   updated_at timestamptz not null default now()
 );
 
+-- The model the member picked for their answers; empty means the default (Haiku 5.5).
+alter table assistant_keys add column if not exists model text;
+
 create table if not exists assistant_usage (
   id bigserial primary key,
   user_id text not null references "user" ("id") on delete cascade,

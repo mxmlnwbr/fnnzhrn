@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ASSISTANT_MODELS, type AssistantModel } from "@/lib/assistant/pricing";
 import type { AssistantStatus } from "@/lib/assistant/store";
 import { Markdown } from "./Markdown";
 import { buttonClass, Card, inputClass, primaryButtonClass } from "./ui";
@@ -153,6 +154,7 @@ export function Assistant({ initial }: { initial: AssistantStatus }) {
 
       {status.connected && (
         <>
+          <ModelPicker status={status} disabled={busy} onChange={setStatus} />
           <div className="flex-1 space-y-3">
             {messages.length === 0 && (
               <div className="space-y-2">
@@ -276,6 +278,50 @@ function SpendCard({ status, onManageKey }: { status: AssistantStatus; onManageK
         </a>
       </div>
     </Card>
+  );
+}
+
+/** Which model answers: cheaper or more thorough, saved with the user's key. */
+function ModelPicker({ status, disabled, onChange }: { status: AssistantStatus; disabled: boolean; onChange: (s: AssistantStatus) => void }) {
+  const [saving, setSaving] = useState<AssistantModel | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const current = saving ?? status.model;
+
+  async function pick(model: AssistantModel) {
+    if (model === status.model) return;
+    setSaving(model);
+    setError(null);
+    try {
+      const res = await fetch("/api/assistant/key", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model }) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) setError(body.error ?? `Fehler ${res.status}`);
+      else onChange(body);
+    } catch {
+      setError("Keine Verbindung zum Server.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  return (
+    <div className="space-y-1">
+      <div role="radiogroup" aria-label="Modell" className="grid grid-cols-3 gap-1 rounded-lg bg-zinc-200/60 p-1 dark:bg-zinc-800/60">
+        {ASSISTANT_MODELS.map((m) => (
+          <button
+            key={m.id}
+            role="radio"
+            aria-checked={current === m.id}
+            disabled={disabled || saving !== null}
+            title={m.description}
+            onClick={() => void pick(m.id)}
+            className={`rounded-md px-2 py-1.5 text-sm disabled:cursor-default ${current === m.id ? "bg-white font-medium shadow-sm dark:bg-zinc-900" : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"}`}
+          >
+            {m.label} <span className="hidden text-xs text-zinc-500 sm:inline">· {m.hint}</span>
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-zinc-500">{error ?? ASSISTANT_MODELS.find((m) => m.id === current)?.description}</p>
+    </div>
   );
 }
 

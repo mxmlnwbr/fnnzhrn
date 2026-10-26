@@ -147,7 +147,7 @@ A chat with Claude about the signed-in member's own data. Claude reads it throug
 
 **Spend.** Every answer records its token counts and estimated cost (Anthropic's list prices, in `src/lib/assistant/pricing.ts`; update them when prices change) in `assistant_usage`. The page shows the cost per answer and the member's spend today, this month and in total, with links to top up and to set a limit. The Console stays the authority for the actual balance and bill. When the credit runs out, the answer says so and links to Billing.
 
-Answers come from Claude Opus 5.5 at medium effort, streamed; a refused request falls back to another model on Anthropic's side (`fallbacks: "default"`). The conversation is kept in the browser only. The tables are created on first use.
+**Model.** Each member picks the model for their answers, saved with their key: **Haiku 5.5** (the default, by far the cheapest), **Sonnet 5.5** (about 20× Haiku, better at calculations across depots) or **Opus 5.5** (about twice Sonnet, for the hardest questions). Answers stream at medium effort. On Sonnet and Opus a refused request falls back to another model on Anthropic's side (`fallbacks: "default"`); Haiku has no such fallback, so the answer says it was declined. The conversation is kept in the browser only. The tables are created on first use.
 
 ## Deploying
 

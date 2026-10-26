@@ -3,6 +3,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import type { Pool } from "pg";
 import { getPool } from "../db";
 import { cleanEnv } from "../env";
+import { type AssistantModel, DEFAULT_MODEL, isAssistantModel } from "./pricing";
 
 let tablesReady: Promise<unknown> | undefined;
 
@@ -16,6 +17,7 @@ function ensureTables(pool: Pool) {
          hint text not null,
          updated_at timestamptz not null default now()
        );
+       alter table assistant_keys add column if not exists model text;
        create table if not exists assistant_usage (
          id bigserial primary key,
          user_id text not null references "user" ("id") on delete cascade,
@@ -61,15 +63,23 @@ function decrypt(stored: string) {
   return Buffer.concat([decipher.update(data), decipher.final()]).toString("utf8");
 }
 
-/** The user's own Claude API key, or null when none is connected (or it can't be read after a secret change). */
-export async function loadApiKey(userId: string): Promise<string | null> {
-  const { rows } = await (await pool()).query("select api_key from assistant_keys where user_id = $1", [userId]);
+/**
+ * The user's own Claude API key and the model they chose, or null when no key is connected (or it can't
+ * be read after a secret change).
+ */
+export async function loadApiKey(userId: string): Promise<{ key: string; model: AssistantModel } | null> {
+  const { rows } = await (await pool()).query("select api_key, model from assistant_keys where user_id = $1", [userId]);
   if (!rows[0]) return null;
   try {
-    return decrypt(rows[0].api_key);
+    return { key: decrypt(rows[0].api_key), model: isAssistantModel(rows[0].model) ? rows[0].model : DEFAULT_MODEL };
   } catch {
     return null;
   }
+}
+
+/** Remembers the model for the user's answers; needs a connected key, which the choice is stored with. */
+export async function saveModel(userId: string, model: AssistantModel) {
+  await (await pool()).query("update assistant_keys set model = $2 where user_id = $1", [userId, model]);
 }
 
 /** The last characters of the key, shown so the user recognises which key is connected. */
@@ -107,6 +117,7 @@ export async function recordUsage(userId: string, u: UsageRow) {
 export interface AssistantStatus {
   connected: boolean;
   hint: string | null;
+  model: AssistantModel;
   /** Estimated spend in US dollars, from the token counts of every answer. */
   spent: { today: number; month: number; total: number };
   requests: { month: number; total: number };
@@ -116,7 +127,7 @@ export interface AssistantStatus {
 export async function assistantStatus(userId: string): Promise<AssistantStatus> {
   const p = await pool();
   const [key, usage] = await Promise.all([
-    p.query("select hint from assistant_keys where user_id = $1", [userId]),
+    p.query("select hint, model from assistant_keys where user_id = $1", [userId]),
     p.query(
       `select
          coalesce(sum(cost_usd) filter (where created_at >= date_trunc('day', now() at time zone 'Europe/Zurich') at time zone 'Europe/Zurich'), 0) as today,
@@ -132,6 +143,7 @@ export async function assistantStatus(userId: string): Promise<AssistantStatus> 
   return {
     connected: Boolean(key.rows[0]),
     hint: key.rows[0]?.hint ?? null,
+    model: isAssistantModel(key.rows[0]?.model) ? key.rows[0].model : DEFAULT_MODEL,
     spent: { today: Number(u.today), month: Number(u.month), total: Number(u.total) },
     requests: { month: Number(u.month_requests), total: Number(u.total_requests) },
   };

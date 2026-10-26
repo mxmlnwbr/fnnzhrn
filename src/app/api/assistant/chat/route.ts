@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { requireMemberUser } from "@/lib/auth";
-import { ASSISTANT_MODEL, costUsd } from "@/lib/assistant/pricing";
+import { costUsd } from "@/lib/assistant/pricing";
 import { assistantStatus, loadApiKey, recordUsage } from "@/lib/assistant/store";
 import { runTool, TOOL_DEFINITIONS, ToolInputError } from "@/lib/assistant/tools";
 
@@ -48,10 +48,13 @@ export async function POST(request: Request) {
   if (user instanceof Response) return user;
   const parsed = parseMessages(await request.json().catch(() => null));
   if (typeof parsed === "string") return Response.json({ error: parsed }, { status: 400 });
-  const apiKey = await loadApiKey(user.id);
-  if (!apiKey) return Response.json({ error: "Verbinde zuerst deinen Claude API-Key.", needsKey: true }, { status: 409 });
+  const connected = await loadApiKey(user.id);
+  if (!connected) return Response.json({ error: "Verbinde zuerst deinen Claude API-Key.", needsKey: true }, { status: 409 });
 
+  const { key: apiKey, model } = connected;
   const client = new Anthropic({ apiKey });
+  // Haiku 5.5 has no server-side fallback; a refusal there ends the answer.
+  const fallback = model === "claude-haiku-5-5" ? {} : { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const };
   const today = new Date().toLocaleDateString("de-CH", { timeZone: "Europe/Zurich", weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const messages: Anthropic.Beta.BetaMessageParam[] = parsed.map((m) => ({ role: m.role, content: m.content }));
   const encoder = new TextEncoder();
@@ -64,10 +67,9 @@ export async function POST(request: Request) {
         for (let round = 0; ; round++) {
           const response = client.beta.messages.stream(
             {
-              model: ASSISTANT_MODEL,
+              model,
               max_tokens: 16000,
-              betas: ["server-side-fallback-2026-07-01"],
-              fallbacks: "default",
+              ...fallback,
               output_config: { effort: "medium" },
               cache_control: { type: "ephemeral" },
               system: `${SYSTEM}\n\nHeute ist ${today}.`,
