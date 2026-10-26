@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ASSISTANT_MODELS, type AssistantModel } from "@/lib/assistant/pricing";
 import type { AssistantStatus } from "@/lib/assistant/store";
 import { Markdown } from "./Markdown";
 import { buttonClass, Card, inputClass, primaryButtonClass } from "./ui";
@@ -35,6 +36,61 @@ const SUGGESTIONS = [
   "Gibt es News zu meinen grössten Positionen?",
   "Wann kommen die nächsten Quartalszahlen meiner Aktien?",
 ];
+
+/** Shown in turn while an answer is on its way. */
+const WAITING_WORDS = [
+  "Zinseszins berechnen",
+  "Dividenden zählen",
+  "Bilanzen wälzen",
+  "Kurse abfragen",
+  "Rendite ausrechnen",
+  "Portfolio rebalancen",
+  "Cashflow schätzen",
+  "KGV vergleichen",
+  "Volatilität messen",
+  "Bullen und Bären zählen",
+  "Säule 3a prüfen",
+  "Diversifikation checken",
+  "Charts lesen",
+  "Inflation einrechnen",
+  "Quartalszahlen studieren",
+  "Fixkosten sortieren",
+  "Sparquote polieren",
+  "Fear & Greed befragen",
+  "Ticker entziffern",
+  "Rappen spalten",
+  "Gebühren aufspüren",
+  "Buffett zitieren",
+  "Marktkapitalisierung wiegen",
+  "Börsenglocke läuten",
+];
+
+const randomWord = (not?: string) => {
+  const pool = WAITING_WORDS.filter((w) => w !== not);
+  return pool[Math.floor(Math.random() * pool.length)];
+};
+
+/** A spinner with a changing finance word while the answer is on its way; `detail` names the data being read. */
+function Waiting({ detail }: { detail: string }) {
+  const [word, setWord] = useState(randomWord);
+  useEffect(() => {
+    const timer = setInterval(() => setWord((w) => randomWord(w)), 1800);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <div role="status" className="flex items-center gap-2 py-1 text-zinc-500">
+      <span
+        className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-emerald-500/30 border-t-emerald-500 motion-reduce:animate-none"
+        aria-hidden
+      />
+      <span key={word} className="animate-fade-in" aria-hidden>
+        {word}…
+      </span>
+      {detail && <span className="text-xs text-zinc-400" aria-hidden>· {detail}</span>}
+      <span className="sr-only">Antwort wird geladen</span>
+    </div>
+  );
+}
 
 const usd = (v: number) => `$${v < 1 ? v.toFixed(v < 0.01 && v > 0 ? 4 : 2) : v.toFixed(2)}`;
 
@@ -83,7 +139,7 @@ export function Assistant({ initial }: { initial: AssistantStatus }) {
     setMessages([...sent, { role: "assistant", content: "" }]);
     setInput("");
     setBusy(true);
-    setActivity("denkt nach");
+    setActivity("");
     const controller = new AbortController();
     abort.current = controller;
     const update = (fn: (m: Message) => Message) => setMessages((all) => [...all.slice(0, -1), fn(all.at(-1)!)]);
@@ -112,7 +168,8 @@ export function Assistant({ initial }: { initial: AssistantStatus }) {
           if (!line.trim()) continue;
           const ev = JSON.parse(line);
           if (ev.type === "text") {
-            setActivity(null);
+            // The blank line between rounds of tool calls doesn't count as the answer arriving.
+            if (ev.text.trim()) setActivity(null);
             update((m) => ({ ...m, content: m.content + ev.text }));
           } else if (ev.type === "tool") setActivity(`liest ${TOOL_LABELS[ev.name] ?? ev.name}`);
           else if (ev.type === "done") {
@@ -153,6 +210,7 @@ export function Assistant({ initial }: { initial: AssistantStatus }) {
 
       {status.connected && (
         <>
+          <ModelPicker status={status} disabled={busy} onChange={setStatus} />
           <div className="flex-1 space-y-3">
             {messages.length === 0 && (
               <div className="space-y-2">
@@ -174,12 +232,7 @@ export function Assistant({ initial }: { initial: AssistantStatus }) {
               ) : (
                 <div key={i} className="max-w-full rounded-2xl rounded-bl-sm border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900">
                   {m.content && <Markdown text={m.content} />}
-                  {busy && i === messages.length - 1 && activity && (
-                    <p className="flex items-center gap-2 text-zinc-500">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500 motion-safe:animate-pulse" aria-hidden />
-                      {activity}…
-                    </p>
-                  )}
+                  {busy && i === messages.length - 1 && activity !== null && <Waiting detail={activity} />}
                   {m.error && (
                     <p className="mt-1 text-red-600 dark:text-red-400">
                       {m.error}
@@ -276,6 +329,50 @@ function SpendCard({ status, onManageKey }: { status: AssistantStatus; onManageK
         </a>
       </div>
     </Card>
+  );
+}
+
+/** Which model answers: cheaper or more thorough, saved with the user's key. */
+function ModelPicker({ status, disabled, onChange }: { status: AssistantStatus; disabled: boolean; onChange: (s: AssistantStatus) => void }) {
+  const [saving, setSaving] = useState<AssistantModel | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const current = saving ?? status.model;
+
+  async function pick(model: AssistantModel) {
+    if (model === status.model) return;
+    setSaving(model);
+    setError(null);
+    try {
+      const res = await fetch("/api/assistant/key", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model }) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) setError(body.error ?? `Fehler ${res.status}`);
+      else onChange(body);
+    } catch {
+      setError("Keine Verbindung zum Server.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  return (
+    <div className="space-y-1">
+      <div role="radiogroup" aria-label="Modell" className="grid grid-cols-3 gap-1 rounded-lg bg-zinc-200/60 p-1 dark:bg-zinc-800/60">
+        {ASSISTANT_MODELS.map((m) => (
+          <button
+            key={m.id}
+            role="radio"
+            aria-checked={current === m.id}
+            disabled={disabled || saving !== null}
+            title={m.description}
+            onClick={() => void pick(m.id)}
+            className={`rounded-md px-2 py-1.5 text-sm disabled:cursor-default ${current === m.id ? "bg-white font-medium shadow-sm dark:bg-zinc-900" : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"}`}
+          >
+            {m.label} <span className="hidden text-xs text-zinc-500 sm:inline">· {m.hint}</span>
+          </button>
+        ))}
+      </div>
+      <p className="text-xs text-zinc-500">{error ?? ASSISTANT_MODELS.find((m) => m.id === current)?.description}</p>
+    </div>
   );
 }
 
