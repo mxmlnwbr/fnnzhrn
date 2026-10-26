@@ -73,13 +73,19 @@ export function getAuth() {
 }
 
 /**
- * The signed-in user's id, or the response to send instead: 503 without sign-in configured,
+ * The signed-in user, or the response to send instead: 503 without sign-in configured,
  * 401 when signed out, 403 when the account isn't authorized for the tools.
  */
-export async function requireUser(request: Request): Promise<string | Response> {
+export async function requireMemberUser(request: Request): Promise<{ id: string; email: string } | Response> {
   const auth = getAuth();
   if (!auth) return Response.json({ error: "Sign-in isn't configured" }, { status: 503 });
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session) return Response.json({ error: "Not signed in" }, { status: 401 });
-  return session.user.authorized ? session.user.id : Response.json({ error: "Not authorized" }, { status: 403 });
+  return session.user.authorized ? session.user : Response.json({ error: "Not authorized" }, { status: 403 });
+}
+
+/** The signed-in user's id, or the response to send instead (see `requireMemberUser`). */
+export async function requireUser(request: Request): Promise<string | Response> {
+  const user = await requireMemberUser(request);
+  return user instanceof Response ? user : user.id;
 }

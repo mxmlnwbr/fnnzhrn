@@ -49,6 +49,18 @@ const TOOLS = [
       </svg>
     ),
   },
+  {
+    href: "/assistant",
+    title: "Assistent",
+    text: "Frag Claude zu deinem Depot, deinen Finanzen und den Märkten",
+    icon: (
+      <svg {...iconProps}>
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        <path d="M8 9h8" />
+        <path d="M8 13h5" />
+      </svg>
+    ),
+  },
 ];
 
 export default async function Home() {

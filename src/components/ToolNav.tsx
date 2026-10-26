@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 /** Thin bar above a tool linking back to fnnzhrn and across to the other tools. */
-export function ToolNav({ current }: { current: "depot" | "cockpit" | "budget" }) {
+export function ToolNav({ current }: { current: "depot" | "cockpit" | "budget" | "assistant" }) {
   const link = (href: string, label: string, id: typeof current) => (
     <a
       href={href}
@@ -20,6 +20,7 @@ export function ToolNav({ current }: { current: "depot" | "cockpit" | "budget" }
         {link("/depot", "Depot", "depot")}
         {link("/budget", "Finanzen", "budget")}
         {link("/cockpit", "Cockpit", "cockpit")}
+        {link("/assistant", "Assistent", "assistant")}
       </div>
     </nav>
   );
