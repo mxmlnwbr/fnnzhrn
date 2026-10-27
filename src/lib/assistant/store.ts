@@ -30,6 +30,16 @@ function ensureTables(pool: Pool) {
          cost_usd numeric(12, 6) not null
        );
        create index if not exists assistant_usage_user_idx on assistant_usage (user_id, created_at);
+       alter table assistant_usage add column if not exists key_hint text;
+       update assistant_usage u set key_hint = k.hint from assistant_keys k
+         where u.user_id = k.user_id and u.key_hint is null and u.created_at >= k.updated_at;
+       create table if not exists assistant_limits (
+         user_id text not null references "user" ("id") on delete cascade,
+         key_hint text not null,
+         limit_usd numeric(12, 2) not null,
+         period text not null,
+         primary key (user_id, key_hint)
+       );
        create table if not exists assistant_conversations (
          id uuid primary key,
          user_id text not null references "user" ("id") on delete cascade,
@@ -107,6 +117,8 @@ export async function deleteApiKey(userId: string) {
 }
 
 export interface UsageRow {
+  /** Which of the user's keys paid for the answer (`keyHint`), so each key's spend is counted on its own. */
+  keyHint: string;
   model: string;
   inputTokens: number;
   outputTokens: number;
@@ -117,44 +129,94 @@ export interface UsageRow {
 
 export async function recordUsage(userId: string, u: UsageRow) {
   await (await pool()).query(
-    `insert into assistant_usage (user_id, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd)
-     values ($1, $2, $3, $4, $5, $6, $7)`,
-    [userId, u.model, u.inputTokens, u.outputTokens, u.cacheReadTokens, u.cacheWriteTokens, u.costUsd],
+    `insert into assistant_usage (user_id, key_hint, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd)
+     values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [userId, u.keyHint, u.model, u.inputTokens, u.outputTokens, u.cacheReadTokens, u.cacheWriteTokens, u.costUsd],
   );
+}
+
+export type LimitPeriod = "month" | "total";
+export const isLimitPeriod = (v: unknown): v is LimitPeriod => v === "month" || v === "total";
+
+/** A spending limit the user set for one key: per calendar month (like the Console's), or in total (like prepaid credit). */
+export interface SpendLimit {
+  usd: number;
+  period: LimitPeriod;
+}
+
+export interface KeySpend {
+  /** `keyHint` of the key, or null for answers from before keys were told apart. */
+  hint: string | null;
+  current: boolean;
+  month: number;
+  total: number;
+  requests: number;
 }
 
 export interface AssistantStatus {
   connected: boolean;
   hint: string | null;
   model: AssistantModel;
-  /** Estimated spend in US dollars, from the token counts of every answer. */
+  /** Estimated spend in US dollars on the connected key, from the token counts of every answer. */
   spent: { today: number; month: number; total: number };
   requests: { month: number; total: number };
+  /** The connected key's limit, if the user set one. */
+  limit: SpendLimit | null;
+  /** Spend per key the user has used, the connected one first. */
+  keys: KeySpend[];
 }
 
-/** Whether a key is connected, and what the assistant has cost this user so far. */
+/** Sets or clears (`null`) the limit of the connected key. */
+export async function saveLimit(userId: string, hint: string, limit: SpendLimit | null) {
+  const p = await pool();
+  if (!limit) await p.query("delete from assistant_limits where user_id = $1 and key_hint = $2", [userId, hint]);
+  else
+    await p.query(
+      `insert into assistant_limits (user_id, key_hint, limit_usd, period) values ($1, $2, $3, $4)
+       on conflict (user_id, key_hint) do update set limit_usd = excluded.limit_usd, period = excluded.period`,
+      [userId, hint, limit.usd, limit.period],
+    );
+}
+
+const SINCE_MONTH = "date_trunc('month', now() at time zone 'Europe/Zurich') at time zone 'Europe/Zurich'";
+const SINCE_DAY = "date_trunc('day', now() at time zone 'Europe/Zurich') at time zone 'Europe/Zurich'";
+
+/** Whether a key is connected, and what each of the user's keys has cost so far. */
 export async function assistantStatus(userId: string): Promise<AssistantStatus> {
   const p = await pool();
   const [key, usage] = await Promise.all([
-    p.query("select hint, model from assistant_keys where user_id = $1", [userId]),
     p.query(
-      `select
-         coalesce(sum(cost_usd) filter (where created_at >= date_trunc('day', now() at time zone 'Europe/Zurich') at time zone 'Europe/Zurich'), 0) as today,
-         coalesce(sum(cost_usd) filter (where created_at >= date_trunc('month', now() at time zone 'Europe/Zurich') at time zone 'Europe/Zurich'), 0) as month,
+      `select k.hint, k.model, l.limit_usd, l.period from assistant_keys k
+       left join assistant_limits l on l.user_id = k.user_id and l.key_hint = k.hint
+       where k.user_id = $1`,
+      [userId],
+    ),
+    p.query(
+      `select key_hint,
+         coalesce(sum(cost_usd) filter (where created_at >= ${SINCE_DAY}), 0) as today,
+         coalesce(sum(cost_usd) filter (where created_at >= ${SINCE_MONTH}), 0) as month,
          coalesce(sum(cost_usd), 0) as total,
-         count(*) filter (where created_at >= date_trunc('month', now() at time zone 'Europe/Zurich') at time zone 'Europe/Zurich') as month_requests,
-         count(*) as total_requests
-       from assistant_usage where user_id = $1`,
+         count(*) filter (where created_at >= ${SINCE_MONTH}) as month_requests,
+         count(*) as total_requests,
+         max(created_at) as last_used
+       from assistant_usage where user_id = $1 group by key_hint order by last_used desc`,
       [userId],
     ),
   ]);
-  const u = usage.rows[0];
+  const k = key.rows[0];
+  const hint: string | null = k?.hint ?? null;
+  const mine = usage.rows.find((u) => hint && u.key_hint === hint);
+  const keys = usage.rows
+    .map((u) => ({ hint: u.key_hint, current: Boolean(hint) && u.key_hint === hint, month: Number(u.month), total: Number(u.total), requests: Number(u.total_requests) }))
+    .sort((a, b) => Number(b.current) - Number(a.current));
   return {
-    connected: Boolean(key.rows[0]),
-    hint: key.rows[0]?.hint ?? null,
-    model: isAssistantModel(key.rows[0]?.model) ? key.rows[0].model : DEFAULT_MODEL,
-    spent: { today: Number(u.today), month: Number(u.month), total: Number(u.total) },
-    requests: { month: Number(u.month_requests), total: Number(u.total_requests) },
+    connected: Boolean(k),
+    hint,
+    model: isAssistantModel(k?.model) ? k.model : DEFAULT_MODEL,
+    spent: { today: Number(mine?.today ?? 0), month: Number(mine?.month ?? 0), total: Number(mine?.total ?? 0) },
+    requests: { month: Number(mine?.month_requests ?? 0), total: Number(mine?.total_requests ?? 0) },
+    limit: k?.limit_usd != null && isLimitPeriod(k.period) ? { usd: Number(k.limit_usd), period: k.period } : null,
+    keys,
   };
 }
 

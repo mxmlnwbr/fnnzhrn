@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { requireMemberUser } from "@/lib/auth";
 import { costUsd } from "@/lib/assistant/pricing";
-import { assistantStatus, loadApiKey, recordUsage } from "@/lib/assistant/store";
+import { assistantStatus, keyHint, loadApiKey, recordUsage } from "@/lib/assistant/store";
 import { runTool, TOOL_DEFINITIONS, ToolInputError } from "@/lib/assistant/tools";
 
 // A question can take several rounds of tool calls, each fetching market data.
@@ -86,6 +86,7 @@ export async function POST(request: Request) {
           const answerCost = costUsd(u, message.model);
           cost += answerCost;
           await recordUsage(user.id, {
+            keyHint: keyHint(apiKey),
             model: message.model,
             inputTokens: u.input_tokens,
             outputTokens: u.output_tokens,

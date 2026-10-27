@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { requireUser } from "@/lib/auth";
 import { isAssistantModel } from "@/lib/assistant/pricing";
-import { assistantStatus, deleteApiKey, saveApiKey, saveModel } from "@/lib/assistant/store";
+import { assistantStatus, deleteApiKey, isLimitPeriod, keyHint, loadApiKey, saveApiKey, saveLimit, saveModel } from "@/lib/assistant/store";
 
 /** Whether the signed-in user has connected a Claude API key, and what the assistant has cost them. */
 export async function GET(request: Request) {
@@ -29,11 +29,23 @@ export async function PUT(request: Request) {
   return Response.json(await assistantStatus(id));
 }
 
-/** Picks the model for the user's answers. Body: `{ model }`, one of `ASSISTANT_MODELS`. */
+/**
+ * Picks the model for the user's answers, or sets the connected key's spending limit.
+ * Body: `{ model }`, one of `ASSISTANT_MODELS`, or `{ limit: { usd, period: "month" | "total" } | null }`.
+ */
 export async function PATCH(request: Request) {
   const id = await requireUser(request);
   if (id instanceof Response) return id;
   const body = await request.json().catch(() => ({}));
+  if ("limit" in body) {
+    const limit = body.limit;
+    if (limit !== null && !(typeof limit?.usd === "number" && limit.usd > 0 && limit.usd < 100_000 && isLimitPeriod(limit.period)))
+      return Response.json({ error: "Ungültiges Limit" }, { status: 400 });
+    const connected = await loadApiKey(id);
+    if (!connected) return Response.json({ error: "Verbinde zuerst deinen Claude API-Key." }, { status: 409 });
+    await saveLimit(id, keyHint(connected.key), limit && { usd: Math.round(limit.usd * 100) / 100, period: limit.period });
+    return Response.json(await assistantStatus(id));
+  }
   if (!isAssistantModel(body.model)) return Response.json({ error: "Unbekanntes Modell" }, { status: 400 });
   await saveModel(id, body.model);
   return Response.json(await assistantStatus(id));
