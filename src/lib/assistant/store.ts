@@ -33,13 +33,21 @@ function ensureTables(pool: Pool) {
        alter table assistant_usage add column if not exists key_hint text;
        update assistant_usage u set key_hint = k.hint from assistant_keys k
          where u.user_id = k.user_id and u.key_hint is null and u.created_at >= k.updated_at;
-       create table if not exists assistant_limits (
-         user_id text not null references "user" ("id") on delete cascade,
-         key_hint text not null,
+       create table if not exists assistant_spend_limits (
+         user_id text primary key references "user" ("id") on delete cascade,
          limit_usd numeric(12, 2) not null,
-         period text not null,
-         primary key (user_id, key_hint)
+         period text not null
        );
+       do $$ begin
+         if to_regclass('assistant_limits') is not null then
+           insert into assistant_spend_limits (user_id, limit_usd, period)
+             select distinct on (l.user_id) l.user_id, l.limit_usd, l.period from assistant_limits l
+             left join assistant_keys k on k.user_id = l.user_id and k.hint = l.key_hint
+             order by l.user_id, k.user_id is null
+           on conflict (user_id) do nothing;
+           drop table assistant_limits;
+         end if;
+       end $$;
        create table if not exists assistant_conversations (
          id uuid primary key,
          user_id text not null references "user" ("id") on delete cascade,
@@ -138,7 +146,10 @@ export async function recordUsage(userId: string, u: UsageRow) {
 export type LimitPeriod = "month" | "total";
 export const isLimitPeriod = (v: unknown): v is LimitPeriod => v === "month" || v === "total";
 
-/** A spending limit the user set for one key: per calendar month (like the Console's), or in total (like prepaid credit). */
+/**
+ * The limit the user set in the Claude Console, entered here to compare against: per calendar month (the
+ * Console's spend limit), or in total (prepaid credit). Anthropic doesn't let a normal API key read it.
+ */
 export interface SpendLimit {
   usd: number;
   period: LimitPeriod;
@@ -157,40 +168,35 @@ export interface AssistantStatus {
   connected: boolean;
   hint: string | null;
   model: AssistantModel;
-  /** Estimated spend in US dollars on the connected key, from the token counts of every answer. */
+  /** Estimated spend in US dollars over all the user's keys, from the token counts of every answer. */
   spent: { today: number; month: number; total: number };
   requests: { month: number; total: number };
-  /** The connected key's limit, if the user set one. */
   limit: SpendLimit | null;
-  /** Spend per key the user has used, the connected one first. */
+  /** The same spend per key, the connected one first. */
   keys: KeySpend[];
 }
 
-/** Sets or clears (`null`) the limit of the connected key. */
-export async function saveLimit(userId: string, hint: string, limit: SpendLimit | null) {
+/** Sets or clears (`null`) the user's limit. */
+export async function saveLimit(userId: string, limit: SpendLimit | null) {
   const p = await pool();
-  if (!limit) await p.query("delete from assistant_limits where user_id = $1 and key_hint = $2", [userId, hint]);
+  if (!limit) await p.query("delete from assistant_spend_limits where user_id = $1", [userId]);
   else
     await p.query(
-      `insert into assistant_limits (user_id, key_hint, limit_usd, period) values ($1, $2, $3, $4)
-       on conflict (user_id, key_hint) do update set limit_usd = excluded.limit_usd, period = excluded.period`,
-      [userId, hint, limit.usd, limit.period],
+      `insert into assistant_spend_limits (user_id, limit_usd, period) values ($1, $2, $3)
+       on conflict (user_id) do update set limit_usd = excluded.limit_usd, period = excluded.period`,
+      [userId, limit.usd, limit.period],
     );
 }
 
 const SINCE_MONTH = "date_trunc('month', now() at time zone 'Europe/Zurich') at time zone 'Europe/Zurich'";
 const SINCE_DAY = "date_trunc('day', now() at time zone 'Europe/Zurich') at time zone 'Europe/Zurich'";
 
-/** Whether a key is connected, and what each of the user's keys has cost so far. */
+/** Whether a key is connected, and what the assistant has cost the user so far, in total and per key. */
 export async function assistantStatus(userId: string): Promise<AssistantStatus> {
   const p = await pool();
-  const [key, usage] = await Promise.all([
-    p.query(
-      `select k.hint, k.model, l.limit_usd, l.period from assistant_keys k
-       left join assistant_limits l on l.user_id = k.user_id and l.key_hint = k.hint
-       where k.user_id = $1`,
-      [userId],
-    ),
+  const [key, limit, usage] = await Promise.all([
+    p.query("select hint, model from assistant_keys where user_id = $1", [userId]),
+    p.query("select limit_usd, period from assistant_spend_limits where user_id = $1", [userId]),
     p.query(
       `select key_hint,
          coalesce(sum(cost_usd) filter (where created_at >= ${SINCE_DAY}), 0) as today,
@@ -204,8 +210,9 @@ export async function assistantStatus(userId: string): Promise<AssistantStatus> 
     ),
   ]);
   const k = key.rows[0];
+  const l = limit.rows[0];
   const hint: string | null = k?.hint ?? null;
-  const mine = usage.rows.find((u) => hint && u.key_hint === hint);
+  const sum = (field: string) => usage.rows.reduce((a, u) => a + Number(u[field]), 0);
   const keys = usage.rows
     .map((u) => ({ hint: u.key_hint, current: Boolean(hint) && u.key_hint === hint, month: Number(u.month), total: Number(u.total), requests: Number(u.total_requests) }))
     .sort((a, b) => Number(b.current) - Number(a.current));
@@ -213,9 +220,9 @@ export async function assistantStatus(userId: string): Promise<AssistantStatus> 
     connected: Boolean(k),
     hint,
     model: isAssistantModel(k?.model) ? k.model : DEFAULT_MODEL,
-    spent: { today: Number(mine?.today ?? 0), month: Number(mine?.month ?? 0), total: Number(mine?.total ?? 0) },
-    requests: { month: Number(mine?.month_requests ?? 0), total: Number(mine?.total_requests ?? 0) },
-    limit: k?.limit_usd != null && isLimitPeriod(k.period) ? { usd: Number(k.limit_usd), period: k.period } : null,
+    spent: { today: sum("today"), month: sum("month"), total: sum("total") },
+    requests: { month: sum("month_requests"), total: sum("total_requests") },
+    limit: l && isLimitPeriod(l.period) ? { usd: Number(l.limit_usd), period: l.period } : null,
     keys,
   };
 }
