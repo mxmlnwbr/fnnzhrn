@@ -712,12 +712,12 @@ function TrashIcon() {
   );
 }
 
-/** What the connected key has spent this month (or in total) against the limit the user set for it. */
+/** What all the user's keys have spent this month (or in total), to compare with their limit. */
 function spentTowards(status: AssistantStatus) {
   return status.limit?.period === "total" ? status.spent.total : status.spent.month;
 }
 
-/** The connected key's spend and limit, right under the chat's header. */
+/** The spend over all keys against the user's Console limit, right under the chat's header. */
 function LimitBar({ status, onSetLimit }: { status: AssistantStatus; onSetLimit: () => void }) {
   const { limit } = status;
   const spent = spentTowards(status);
@@ -727,7 +727,7 @@ function LimitBar({ status, onSetLimit }: { status: AssistantStatus; onSetLimit:
     <div className="shrink-0 border-b border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex items-center gap-2">
         <span className="min-w-0 flex-1 truncate">
-          Key {status.hint} ·{" "}
+          Alle Keys:{" "}
           {limit ? (
             <>
               <span className={`font-medium tabular-nums ${share >= 1 ? "text-red-600 dark:text-red-400" : "text-zinc-900 dark:text-zinc-100"}`}>{usd(spent)}</span> von{" "}
@@ -760,7 +760,7 @@ function LimitBar({ status, onSetLimit }: { status: AssistantStatus; onSetLimit:
   );
 }
 
-/** What the connected key has cost so far, its limit, the other keys' spend, and where to top up. */
+/** What the assistant has cost over all the user's keys, per key, their limit, and where to top up. */
 function SpendCard({ status, onChange }: { status: AssistantStatus; onChange: (s: AssistantStatus) => void }) {
   const tile = (label: string, value: string, sub?: string) => (
     <div>
@@ -769,20 +769,17 @@ function SpendCard({ status, onChange }: { status: AssistantStatus; onChange: (s
       {sub && <p className="text-xs text-zinc-400">{sub}</p>}
     </div>
   );
-  const others = status.keys.filter((k) => !k.current);
   return (
-    <Card title={status.connected ? `Kosten mit Key ${status.hint}` : "Deine Kosten"}>
-      {status.connected && (
-        <div className="grid grid-cols-3 gap-3">
-          {tile("Heute", usd(status.spent.today))}
-          {tile("Dieser Monat", usd(status.spent.month), `${status.requests.month} Anfragen`)}
-          {tile("Total", usd(status.spent.total), `${status.requests.total} Anfragen`)}
-        </div>
-      )}
-      {status.connected && <LimitForm key={status.hint} status={status} onChange={onChange} />}
-      {others.length > 0 && (
+    <Card title="Deine Kosten, alle Keys">
+      <div className="grid grid-cols-3 gap-3">
+        {tile("Heute", usd(status.spent.today))}
+        {tile("Dieser Monat", usd(status.spent.month), `${status.requests.month} Anfragen`)}
+        {tile("Total", usd(status.spent.total), `${status.requests.total} Anfragen`)}
+      </div>
+      <LimitForm status={status} onChange={onChange} />
+      {status.keys.length > 1 && (
         <div className="mt-3">
-          <p className="text-xs font-medium text-zinc-500">{status.connected ? "Andere Keys" : "Deine Keys"}</p>
+          <p className="text-xs font-medium text-zinc-500">Nach Key</p>
           <table className="mt-1 w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-zinc-500">
@@ -792,9 +789,12 @@ function SpendCard({ status, onChange }: { status: AssistantStatus; onChange: (s
               </tr>
             </thead>
             <tbody className="tabular-nums">
-              {others.map((k) => (
+              {status.keys.map((k) => (
                 <tr key={k.hint ?? "unknown"} className="border-t border-zinc-100 dark:border-zinc-800">
-                  <td className="py-1">{k.hint ?? "früher (nicht zugeordnet)"}</td>
+                  <td className="py-1">
+                    {k.hint ?? "früher (nicht zugeordnet)"}
+                    {k.current && <span className="text-xs text-zinc-500"> · verbunden</span>}
+                  </td>
                   <td className="py-1 text-right">{usd(k.month)}</td>
                   <td className="py-1 text-right">{usd(k.total)}</td>
                 </tr>
@@ -804,7 +804,7 @@ function SpendCard({ status, onChange }: { status: AssistantStatus; onChange: (s
         </div>
       )}
       <p className="mt-3 text-xs text-zinc-500">
-        Geschätzt aus den Tokens jeder Antwort, zu Anthropics Listenpreisen in US-Dollar, getrennt nach API-Key. Bezahlt wird über dein eigenes Anthropic-Konto: Guthaben und genaue Abrechnung siehst du in der{" "}
+        Geschätzt aus den Tokens jeder Antwort, zu Anthropics Listenpreisen in US-Dollar. Bezahlt wird über dein eigenes Anthropic-Konto: Guthaben und genaue Abrechnung siehst du in der{" "}
         <a href={BILLING_URL} target="_blank" rel="noreferrer" className="underline">
           Claude Console
         </a>
@@ -822,7 +822,7 @@ function SpendCard({ status, onChange }: { status: AssistantStatus; onChange: (s
   );
 }
 
-/** The connected key's own limit, shown at the top of the chat. */
+/** The limit the user set in the Claude Console, entered here so the chat can show how much of it is used. */
 function LimitForm({ status, onChange }: { status: AssistantStatus; onChange: (s: AssistantStatus) => void }) {
   const [amount, setAmount] = useState(status.limit ? String(status.limit.usd) : "");
   const [period, setPeriod] = useState<LimitPeriod>(status.limit?.period ?? "month");
@@ -857,7 +857,10 @@ function LimitForm({ status, onChange }: { status: AssistantStatus; onChange: (s
       }}
     >
       <label className="block text-xs font-medium text-zinc-500" htmlFor="assistant-limit">
-        Limit für diesen Key
+        Dein Limit aus der{" "}
+        <a href={LIMITS_URL} target="_blank" rel="noreferrer" className="underline">
+          Claude Console
+        </a>
       </label>
       <div className="flex flex-wrap gap-2">
         <div className="relative w-28">
@@ -872,8 +875,8 @@ function LimitForm({ status, onChange }: { status: AssistantStatus; onChange: (s
           />
         </div>
         <select className={`${buttonClass} w-auto`} value={period} onChange={(e) => setPeriod(e.target.value as LimitPeriod)} aria-label="Zeitraum">
-          <option value="month">pro Monat</option>
-          <option value="total">insgesamt</option>
+          <option value="month">pro Monat (Ausgabenlimit)</option>
+          <option value="total">insgesamt (Guthaben)</option>
         </select>
         <button type="submit" className={primaryButtonClass} disabled={busy || !valid || unchanged}>
           Speichern
@@ -885,7 +888,8 @@ function LimitForm({ status, onChange }: { status: AssistantStatus; onChange: (s
         )}
       </div>
       <p className="text-xs text-zinc-500">
-        {error ?? "Zeigt oben im Chat, wie viel davon dieser Key schon gebraucht hat. «Pro Monat» passt zum Ausgabenlimit der Console, «insgesamt» zu einmal gekauftem Guthaben. Antworten werden nicht gestoppt; das macht nur das Limit in der Console."}
+        {error ??
+          "Anthropic lässt das Limit nicht mit einem normalen API-Key auslesen, darum trägst du es hier ein: das monatliche Ausgabenlimit unter «Limits» oder das gekaufte Guthaben. Oben im Chat siehst du dann, wie viel davon alle deine Keys zusammen schon gebraucht haben. Stoppen tut die Console, nicht diese Anzeige."}
       </p>
     </form>
   );

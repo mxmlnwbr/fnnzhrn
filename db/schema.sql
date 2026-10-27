@@ -101,13 +101,12 @@ create index if not exists assistant_usage_user_idx on assistant_usage (user_id,
 -- The key that paid for each answer (its hint), so spend is counted per key.
 alter table assistant_usage add column if not exists key_hint text;
 
--- A spending limit per key, shown above the chat: per calendar month or in total.
-create table if not exists assistant_limits (
-  user_id text not null references "user" ("id") on delete cascade,
-  key_hint text not null,
+-- The member's limit from the Claude Console, entered by hand (a normal API key can't read it), shown
+-- above the chat against the spend over all their keys: per calendar month or in total.
+create table if not exists assistant_spend_limits (
+  user_id text primary key references "user" ("id") on delete cascade,
   limit_usd numeric(12, 2) not null,
-  period text not null,
-  primary key (user_id, key_hint)
+  period text not null
 );
 
 -- Past conversations with the assistant (the chat's history); the browser picks the id.
