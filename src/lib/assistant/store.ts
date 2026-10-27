@@ -3,6 +3,7 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:
 import type { Pool } from "pg";
 import { getPool } from "../db";
 import { cleanEnv } from "../env";
+import { accountMonth, accountSpend } from "./account";
 import { type AssistantModel, DEFAULT_MODEL, isAssistantModel } from "./pricing";
 
 let tablesReady: Promise<unknown> | undefined;
@@ -35,19 +36,25 @@ function ensureTables(pool: Pool) {
          where u.user_id = k.user_id and u.key_hint is null and u.created_at >= k.updated_at;
        create table if not exists assistant_spend_limits (
          user_id text primary key references "user" ("id") on delete cascade,
-         limit_usd numeric(12, 2) not null,
-         period text not null
+         limit_usd numeric(12, 2) not null
        );
        do $$ begin
          if to_regclass('assistant_limits') is not null then
-           insert into assistant_spend_limits (user_id, limit_usd, period)
-             select distinct on (l.user_id) l.user_id, l.limit_usd, l.period from assistant_limits l
+           insert into assistant_spend_limits (user_id, limit_usd)
+             select distinct on (l.user_id) l.user_id, l.limit_usd from assistant_limits l
              left join assistant_keys k on k.user_id = l.user_id and k.hint = l.key_hint
              order by l.user_id, k.user_id is null
            on conflict (user_id) do nothing;
            drop table assistant_limits;
          end if;
        end $$;
+       alter table assistant_spend_limits drop column if exists period;
+       create table if not exists assistant_admin_keys (
+         user_id text primary key references "user" ("id") on delete cascade,
+         admin_key text not null,
+         hint text not null,
+         updated_at timestamptz not null default now()
+       );
        create table if not exists assistant_conversations (
          id uuid primary key,
          user_id text not null references "user" ("id") on delete cascade,
@@ -143,18 +150,6 @@ export async function recordUsage(userId: string, u: UsageRow) {
   );
 }
 
-export type LimitPeriod = "month" | "total";
-export const isLimitPeriod = (v: unknown): v is LimitPeriod => v === "month" || v === "total";
-
-/**
- * The limit the user set in the Claude Console, entered here to compare against: per calendar month (the
- * Console's spend limit), or in total (prepaid credit). Anthropic doesn't let a normal API key read it.
- */
-export interface SpendLimit {
-  usd: number;
-  period: LimitPeriod;
-}
-
 export interface KeySpend {
   /** `keyHint` of the key, or null for answers from before keys were told apart. */
   hint: string | null;
@@ -168,35 +163,65 @@ export interface AssistantStatus {
   connected: boolean;
   hint: string | null;
   model: AssistantModel;
-  /** Estimated spend in US dollars over all the user's keys, from the token counts of every answer. */
+  /** Estimated spend in US dollars of the answers in fnnzhrn, over all the user's keys. Months and days are UTC, like Anthropic's billing. */
   spent: { today: number; month: number; total: number };
   requests: { month: number; total: number };
-  limit: SpendLimit | null;
+  /** The monthly spend limit the user set in the Claude Console, copied here since a normal API key can't read it. */
+  limit: number | null;
   /** The same spend per key, the connected one first. */
   keys: KeySpend[];
+  /**
+   * The whole Anthropic account's spend this month (every key and app), when the user connected an Admin
+   * API key; `error` when Anthropic couldn't be asked.
+   */
+  account: { hint: string; month: number | null; error?: string } | null;
 }
 
-/** Sets or clears (`null`) the user's limit. */
-export async function saveLimit(userId: string, limit: SpendLimit | null) {
+/** Sets or clears (`null`) the user's monthly limit. */
+export async function saveLimit(userId: string, usd: number | null) {
   const p = await pool();
-  if (!limit) await p.query("delete from assistant_spend_limits where user_id = $1", [userId]);
+  if (usd == null) await p.query("delete from assistant_spend_limits where user_id = $1", [userId]);
   else
     await p.query(
-      `insert into assistant_spend_limits (user_id, limit_usd, period) values ($1, $2, $3)
-       on conflict (user_id) do update set limit_usd = excluded.limit_usd, period = excluded.period`,
-      [userId, limit.usd, limit.period],
+      `insert into assistant_spend_limits (user_id, limit_usd) values ($1, $2)
+       on conflict (user_id) do update set limit_usd = excluded.limit_usd`,
+      [userId, usd],
     );
 }
 
-const SINCE_MONTH = "date_trunc('month', now() at time zone 'Europe/Zurich') at time zone 'Europe/Zurich'";
-const SINCE_DAY = "date_trunc('day', now() at time zone 'Europe/Zurich') at time zone 'Europe/Zurich'";
+/** The user's Admin API key, which reads their account's cost report, or null. */
+export async function loadAdminKey(userId: string): Promise<string | null> {
+  const { rows } = await (await pool()).query("select admin_key from assistant_admin_keys where user_id = $1", [userId]);
+  if (!rows[0]) return null;
+  try {
+    return decrypt(rows[0].admin_key);
+  } catch {
+    return null;
+  }
+}
 
-/** Whether a key is connected, and what the assistant has cost the user so far, in total and per key. */
+export async function saveAdminKey(userId: string, key: string) {
+  await (await pool()).query(
+    `insert into assistant_admin_keys (user_id, admin_key, hint, updated_at) values ($1, $2, $3, now())
+     on conflict (user_id) do update set admin_key = excluded.admin_key, hint = excluded.hint, updated_at = excluded.updated_at`,
+    [userId, encrypt(key), keyHint(key)],
+  );
+}
+
+export async function deleteAdminKey(userId: string) {
+  await (await pool()).query("delete from assistant_admin_keys where user_id = $1", [userId]);
+}
+
+const SINCE_MONTH = "date_trunc('month', now() at time zone 'UTC') at time zone 'UTC'";
+const SINCE_DAY = "date_trunc('day', now() at time zone 'UTC') at time zone 'UTC'";
+
+/** Whether a key is connected, and what the assistant (and, with an admin key, the whole account) has cost so far. */
 export async function assistantStatus(userId: string): Promise<AssistantStatus> {
   const p = await pool();
-  const [key, limit, usage] = await Promise.all([
+  const [key, limit, admin, usage] = await Promise.all([
     p.query("select hint, model from assistant_keys where user_id = $1", [userId]),
-    p.query("select limit_usd, period from assistant_spend_limits where user_id = $1", [userId]),
+    p.query("select limit_usd from assistant_spend_limits where user_id = $1", [userId]),
+    p.query("select admin_key, hint from assistant_admin_keys where user_id = $1", [userId]),
     p.query(
       `select key_hint,
          coalesce(sum(cost_usd) filter (where created_at >= ${SINCE_DAY}), 0) as today,
@@ -210,20 +235,31 @@ export async function assistantStatus(userId: string): Promise<AssistantStatus> 
     ),
   ]);
   const k = key.rows[0];
-  const l = limit.rows[0];
   const hint: string | null = k?.hint ?? null;
   const sum = (field: string) => usage.rows.reduce((a, u) => a + Number(u[field]), 0);
   const keys = usage.rows
     .map((u) => ({ hint: u.key_hint, current: Boolean(hint) && u.key_hint === hint, month: Number(u.month), total: Number(u.total), requests: Number(u.total_requests) }))
     .sort((a, b) => Number(b.current) - Number(a.current));
+  const spent = { today: sum("today"), month: sum("month"), total: sum("total") };
+
+  let account: AssistantStatus["account"] = null;
+  const a = admin.rows[0];
+  if (a) {
+    try {
+      account = { hint: a.hint, month: accountMonth(await accountSpend(userId, decrypt(a.admin_key)), spent.today) };
+    } catch (e) {
+      account = { hint: a.hint, month: null, error: (e as Error).message };
+    }
+  }
   return {
     connected: Boolean(k),
     hint,
     model: isAssistantModel(k?.model) ? k.model : DEFAULT_MODEL,
-    spent: { today: sum("today"), month: sum("month"), total: sum("total") },
+    spent,
     requests: { month: sum("month_requests"), total: sum("total_requests") },
-    limit: l && isLimitPeriod(l.period) ? { usd: Number(l.limit_usd), period: l.period } : null,
+    limit: limit.rows[0] ? Number(limit.rows[0].limit_usd) : null,
     keys,
+    account,
   };
 }
 

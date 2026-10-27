@@ -12,7 +12,7 @@ export const DEFAULT_MODEL: AssistantModel = "claude-haiku-5-5";
 
 export const isAssistantModel = (id: unknown): id is AssistantModel => ASSISTANT_MODELS.some((m) => m.id === id);
 
-/** US dollars per million tokens: input, output, cache reads, cache writes (5-minute cache). */
+/** US dollars per million tokens: input, output, cache reads, cache writes (5-minute cache; a 1-hour write costs 2× input). */
 type Price = { input: number; output: number; cacheRead: number; cacheWrite: number };
 
 const PRICES: Record<string, Price> = {
@@ -35,6 +35,8 @@ export interface TokenUsage {
   output_tokens: number;
   cache_read_input_tokens?: number | null;
   cache_creation_input_tokens?: number | null;
+  /** Cache writes split by how long they're kept, when the API reports it. */
+  cache_creation?: { ephemeral_5m_input_tokens: number; ephemeral_1h_input_tokens: number } | null;
   model?: string | null;
 }
 
@@ -54,16 +56,21 @@ function priceFor(model: string, promptTokens: number): Price {
  */
 export function costUsd(usage: TokenUsage & { iterations?: TokenUsage[] | null }, model: string): number {
   const parts = usage.iterations?.length ? usage.iterations : [usage];
-  let total = 0;
-  for (const u of parts) {
-    const prompt = u.input_tokens + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
-    const p = priceFor(u.model ?? model, prompt);
-    total +=
-      (u.input_tokens * p.input +
-        u.output_tokens * p.output +
-        (u.cache_read_input_tokens ?? 0) * p.cacheRead +
-        (u.cache_creation_input_tokens ?? 0) * p.cacheWrite) /
-      1e6;
-  }
-  return total;
+  return parts.reduce((total, u) => total + price(u, model, true), 0);
+}
+
+/**
+ * What a sum of many requests' tokens cost, e.g. an hour of the Usage Report. Haiku's long-prompt rate is
+ * per request, so it can't be told from a sum and isn't applied.
+ */
+export const costOfTotalsUsd = (usage: TokenUsage, model: string) => price(usage, model, false);
+
+function price(u: TokenUsage, model: string, oneRequest: boolean) {
+  const writes = u.cache_creation_input_tokens ?? (u.cache_creation ? u.cache_creation.ephemeral_5m_input_tokens + u.cache_creation.ephemeral_1h_input_tokens : 0);
+  const hour = u.cache_creation?.ephemeral_1h_input_tokens ?? 0;
+  const p = priceFor(u.model ?? model, oneRequest ? u.input_tokens + (u.cache_read_input_tokens ?? 0) + writes : 0);
+  return (
+    (u.input_tokens * p.input + u.output_tokens * p.output + (u.cache_read_input_tokens ?? 0) * p.cacheRead + (writes - hour) * p.cacheWrite + hour * p.input * 2) /
+    1e6
+  );
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ASSISTANT_MODELS, type AssistantModel } from "@/lib/assistant/pricing";
-import type { AssistantStatus, ConversationSummary, LimitPeriod } from "@/lib/assistant/store";
+import type { AssistantStatus, ConversationSummary } from "@/lib/assistant/store";
 import { Markdown } from "./Markdown";
 import { buttonClass, Card, inputClass, primaryButtonClass } from "./ui";
 
@@ -10,6 +10,7 @@ const CONSOLE = "https://platform.claude.com";
 const BILLING_URL = `${CONSOLE}/settings/billing`;
 const KEYS_URL = `${CONSOLE}/settings/keys`;
 const LIMITS_URL = `${CONSOLE}/settings/limits`;
+const ADMIN_KEYS_URL = `${CONSOLE}/settings/admin-keys`;
 
 type Message = { role: "user" | "assistant"; content: string; cost?: number; error?: string; billing?: boolean };
 
@@ -712,46 +713,53 @@ function TrashIcon() {
   );
 }
 
-/** What all the user's keys have spent this month (or in total), to compare with their limit. */
-function spentTowards(status: AssistantStatus) {
-  return status.limit?.period === "total" ? status.spent.total : status.spent.month;
+/** This month's spend to compare with the limit: the whole account's with an admin key, otherwise fnnzhrn's own. */
+function spentThisMonth(status: AssistantStatus) {
+  return status.account?.month ?? status.spent.month;
 }
 
-/** The spend over all keys against the user's Console limit, right under the chat's header. */
+/** This month's spend against the user's Console limit, right under the chat's header. */
 function LimitBar({ status, onSetLimit }: { status: AssistantStatus; onSetLimit: () => void }) {
   const { limit } = status;
-  const spent = spentTowards(status);
-  const share = limit ? spent / limit.usd : 0;
+  const whole = status.account?.month != null;
+  const spent = spentThisMonth(status);
+  const share = limit ? spent / limit : 0;
   const tone = share >= 1 ? "bg-red-500" : share >= 0.8 ? "bg-amber-500" : "bg-emerald-500";
   return (
-    <div className="shrink-0 border-b border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
+    <div
+      className="shrink-0 border-b border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900"
+      title={
+        whole
+          ? `Ganzes Anthropic-Konto diesen Monat (alle Keys und Apps), laut Anthropic. Davon fnnzhrn: ${usd(status.spent.month)}.`
+          : status.account?.error
+            ? `Nur fnnzhrn. Das ganze Konto liess sich nicht lesen: ${status.account.error}`
+            : "Nur die Antworten in fnnzhrn. Mit einem Admin-Key unter Einstellungen siehst du das ganze Konto."
+      }
+    >
       <div className="flex items-center gap-2">
         <span className="min-w-0 flex-1 truncate">
-          Alle Keys:{" "}
-          {limit ? (
+          {whole ? "Konto" : "fnnzhrn"} diesen Monat:{" "}
+          <span className={`font-medium tabular-nums ${share >= 1 ? "text-red-600 dark:text-red-400" : "text-zinc-900 dark:text-zinc-100"}`}>{usd(spent)}</span>
+          {limit != null && (
             <>
-              <span className={`font-medium tabular-nums ${share >= 1 ? "text-red-600 dark:text-red-400" : "text-zinc-900 dark:text-zinc-100"}`}>{usd(spent)}</span> von{" "}
-              <span className="tabular-nums">{usd(limit.usd)}</span> {limit.period === "month" ? "diesen Monat" : "insgesamt"}
+              {" "}
+              von <span className="tabular-nums">{usd(limit)}</span>
               {share >= 1 && " · Limit erreicht"}
-            </>
-          ) : (
-            <>
-              <span className="font-medium tabular-nums text-zinc-900 dark:text-zinc-100">{usd(status.spent.month)}</span> diesen Monat
             </>
           )}
         </span>
         <button type="button" className="shrink-0 underline hover:text-zinc-900 dark:hover:text-zinc-100" onClick={onSetLimit}>
-          {limit ? "Ändern" : "Limit setzen"}
+          {limit != null ? "Ändern" : "Limit setzen"}
         </button>
       </div>
-      {limit && (
+      {limit != null && (
         <div
           className="mt-1 h-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800"
           role="meter"
           aria-label="Verbrauch des Limits"
           aria-valuemin={0}
-          aria-valuemax={limit.usd}
-          aria-valuenow={Math.min(spent, limit.usd)}
+          aria-valuemax={limit}
+          aria-valuenow={Math.min(spent, limit)}
         >
           <div className={`h-full ${tone}`} style={{ width: `${Math.min(100, share * 100)}%` }} />
         </div>
@@ -760,7 +768,7 @@ function LimitBar({ status, onSetLimit }: { status: AssistantStatus; onSetLimit:
   );
 }
 
-/** What the assistant has cost over all the user's keys, per key, their limit, and where to top up. */
+/** What the assistant (and, with an admin key, the whole account) has cost, the limit, and where to top up. */
 function SpendCard({ status, onChange }: { status: AssistantStatus; onChange: (s: AssistantStatus) => void }) {
   const tile = (label: string, value: string, sub?: string) => (
     <div>
@@ -770,13 +778,19 @@ function SpendCard({ status, onChange }: { status: AssistantStatus; onChange: (s
     </div>
   );
   return (
-    <Card title="Deine Kosten, alle Keys">
+    <Card title="Deine Kosten">
+      {status.account?.month != null && (
+        <div className="mb-3 rounded-lg bg-zinc-100 px-3 py-2 dark:bg-zinc-800">
+          <p className="text-xs text-zinc-500">Ganzes Anthropic-Konto diesen Monat, alle Keys und Apps</p>
+          <p className="text-lg font-semibold tabular-nums">{usd(status.account.month)}</p>
+        </div>
+      )}
+      <p className="mb-1 text-xs font-medium text-zinc-500">In fnnzhrn</p>
       <div className="grid grid-cols-3 gap-3">
         {tile("Heute", usd(status.spent.today))}
         {tile("Dieser Monat", usd(status.spent.month), `${status.requests.month} Anfragen`)}
         {tile("Total", usd(status.spent.total), `${status.requests.total} Anfragen`)}
       </div>
-      <LimitForm status={status} onChange={onChange} />
       {status.keys.length > 1 && (
         <div className="mt-3">
           <p className="text-xs font-medium text-zinc-500">Nach Key</p>
@@ -803,8 +817,10 @@ function SpendCard({ status, onChange }: { status: AssistantStatus; onChange: (s
           </table>
         </div>
       )}
+      <LimitForm status={status} onChange={onChange} />
+      <AdminKeyForm status={status} onChange={onChange} />
       <p className="mt-3 text-xs text-zinc-500">
-        Geschätzt aus den Tokens jeder Antwort, zu Anthropics Listenpreisen in US-Dollar. Bezahlt wird über dein eigenes Anthropic-Konto: Guthaben und genaue Abrechnung siehst du in der{" "}
+        fnnzhrn schätzt seine Kosten aus den Tokens jeder Antwort, zu Anthropics Listenpreisen in US-Dollar; Monate zählen nach UTC wie bei Anthropic. Bezahlt wird über dein eigenes Anthropic-Konto: Guthaben und genaue Abrechnung siehst du in der{" "}
         <a href={BILLING_URL} target="_blank" rel="noreferrer" className="underline">
           Claude Console
         </a>
@@ -822,30 +838,32 @@ function SpendCard({ status, onChange }: { status: AssistantStatus; onChange: (s
   );
 }
 
-/** The limit the user set in the Claude Console, entered here so the chat can show how much of it is used. */
+/** Sends a change to the assistant's settings and hands back the new status; returns the error, if any. */
+async function patchStatus(url: string, method: string, body: unknown, onChange: (s: AssistantStatus) => void): Promise<string | null> {
+  try {
+    const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return json.error ?? `Fehler ${res.status}`;
+    onChange(json);
+    return null;
+  } catch {
+    return "Keine Verbindung zum Server.";
+  }
+}
+
+/** The monthly limit the user set in the Claude Console, copied here so the chat can show how much of it is used. */
 function LimitForm({ status, onChange }: { status: AssistantStatus; onChange: (s: AssistantStatus) => void }) {
-  const [amount, setAmount] = useState(status.limit ? String(status.limit.usd) : "");
-  const [period, setPeriod] = useState<LimitPeriod>(status.limit?.period ?? "month");
+  const [amount, setAmount] = useState(status.limit != null ? String(status.limit) : "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const value = Number(amount.replace(",", "."));
   const valid = amount.trim() !== "" && Number.isFinite(value) && value > 0;
-  const unchanged = status.limit ? valid && value === status.limit.usd && period === status.limit.period : !valid;
 
-  async function save(limit: { usd: number; period: LimitPeriod } | null) {
+  async function save(limit: number | null) {
     setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/assistant/key", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limit }) });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) return setError(body.error ?? `Fehler ${res.status}`);
-      if (!limit) setAmount("");
-      onChange(body);
-    } catch {
-      setError("Keine Verbindung zum Server.");
-    } finally {
-      setBusy(false);
-    }
+    setError(await patchStatus("/api/assistant/key", "PATCH", { limit }, onChange));
+    if (limit === null) setAmount("");
+    setBusy(false);
   }
 
   return (
@@ -853,11 +871,11 @@ function LimitForm({ status, onChange }: { status: AssistantStatus; onChange: (s
       className="mt-3 space-y-2 border-t border-zinc-100 pt-3 dark:border-zinc-800"
       onSubmit={(e) => {
         e.preventDefault();
-        if (valid) void save({ usd: value, period });
+        if (valid) void save(value);
       }}
     >
       <label className="block text-xs font-medium text-zinc-500" htmlFor="assistant-limit">
-        Dein Limit aus der{" "}
+        Monatliches Ausgabenlimit aus der{" "}
         <a href={LIMITS_URL} target="_blank" rel="noreferrer" className="underline">
           Claude Console
         </a>
@@ -865,32 +883,77 @@ function LimitForm({ status, onChange }: { status: AssistantStatus; onChange: (s
       <div className="flex flex-wrap gap-2">
         <div className="relative w-28">
           <span className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-sm text-zinc-400">$</span>
-          <input
-            id="assistant-limit"
-            className={`${inputClass} pl-5 tabular-nums`}
-            inputMode="decimal"
-            placeholder="5.00"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
+          <input id="assistant-limit" className={`${inputClass} pl-5 tabular-nums`} inputMode="decimal" placeholder="5.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
         </div>
-        <select className={`${buttonClass} w-auto`} value={period} onChange={(e) => setPeriod(e.target.value as LimitPeriod)} aria-label="Zeitraum">
-          <option value="month">pro Monat (Ausgabenlimit)</option>
-          <option value="total">insgesamt (Guthaben)</option>
-        </select>
-        <button type="submit" className={primaryButtonClass} disabled={busy || !valid || unchanged}>
+        <button type="submit" className={primaryButtonClass} disabled={busy || !valid || value === status.limit}>
           Speichern
         </button>
-        {status.limit && (
+        {status.limit != null && (
           <button type="button" className={buttonClass} disabled={busy} onClick={() => void save(null)}>
             Entfernen
           </button>
         )}
       </div>
       <p className="text-xs text-zinc-500">
-        {error ??
-          "Anthropic lässt das Limit nicht mit einem normalen API-Key auslesen, darum trägst du es hier ein: das monatliche Ausgabenlimit unter «Limits» oder das gekaufte Guthaben. Oben im Chat siehst du dann, wie viel davon alle deine Keys zusammen schon gebraucht haben. Stoppen tut die Console, nicht diese Anzeige."}
+        {error ?? "Anthropic lässt das Limit nicht mit einem API-Key auslesen, darum trägst du es hier ein. Oben im Chat siehst du dann, wie viel davon diesen Monat gebraucht ist. Stoppen tut die Console, nicht diese Anzeige."}
       </p>
+    </form>
+  );
+}
+
+/** An optional Admin API key, with which the chat shows the whole account's spend instead of only fnnzhrn's. */
+function AdminKeyForm({ status, onChange }: { status: AssistantStatus; onChange: (s: AssistantStatus) => void }) {
+  const [key, setKey] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { account } = status;
+
+  async function call(method: "PUT" | "DELETE") {
+    setBusy(true);
+    const failed = await patchStatus("/api/assistant/admin-key", method, method === "PUT" ? { key } : undefined, onChange);
+    setError(failed);
+    if (!failed) setKey("");
+    setBusy(false);
+  }
+
+  return (
+    <form
+      className="mt-3 space-y-2 border-t border-zinc-100 pt-3 dark:border-zinc-800"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void call("PUT");
+      }}
+    >
+      <label className="block text-xs font-medium text-zinc-500" htmlFor="assistant-admin-key">
+        Ganzes Konto anzeigen (optional)
+      </label>
+      <p className="text-xs text-zinc-500">
+        Mit einem Admin-Key liest fnnzhrn bei Anthropic, was dein ganzes Konto diesen Monat ausgegeben hat, auch mit anderen Keys und Apps, so wie die Console es fürs Limit zählt. Erstellen unter{" "}
+        <a href={ADMIN_KEYS_URL} target="_blank" rel="noreferrer" className="underline">
+          Admin Keys
+        </a>{" "}
+        (geht nur in einer Organisation, nicht in einem Einzelkonto). Er wird verschlüsselt gespeichert und nur für die Kostenberichte verwendet.
+      </p>
+      <div className="flex flex-col gap-2 @md:flex-row">
+        <input
+          id="assistant-admin-key"
+          className={inputClass}
+          type="password"
+          autoComplete="off"
+          placeholder={account ? `Neuer Admin-Key (verbunden: ${account.hint})` : "sk-ant-admin…"}
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+        />
+        <button type="submit" className={primaryButtonClass} disabled={busy || !key.trim()}>
+          {busy ? "Prüfe…" : account ? "Ersetzen" : "Verbinden"}
+        </button>
+        {account && (
+          <button type="button" className={buttonClass} disabled={busy} onClick={() => void call("DELETE")}>
+            Entfernen
+          </button>
+        )}
+      </div>
+      {(error ?? account?.error) && <p className="text-xs text-red-600 dark:text-red-400">{error ?? `Konto nicht lesbar: ${account?.error}`}</p>}
     </form>
   );
 }
