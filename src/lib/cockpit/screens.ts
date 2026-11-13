@@ -30,7 +30,16 @@ export type Market = {
   minCap: number;
   minVolume: number;
   minPrice: number;
+  /**
+   * Where the companies must have their seat (Yahoo's profile country), per exchange code or "*" for the
+   * rest. Xetra lists hundreds of foreign stocks in euros (Tesla, Apple, Shell, AXA …); without this they
+   * would show up as German and, next to their home listing, twice in Europe.
+   */
+  home?: Record<string, string[]>;
 };
+
+/** Yahoo's names of the euro area countries. */
+const EURO_AREA = ["Germany", "France", "Netherlands", "Italy", "Spain", "Belgium", "Luxembourg", "Ireland", "Austria", "Finland", "Portugal", "Greece"];
 
 /**
  * The markets with their own gainers/losers lists. Secondary listings (e.g. LVMH on SIX) rarely pass the
@@ -40,8 +49,9 @@ export const MARKETS: Record<MarketId, Market> = {
   // Same floors as Yahoo's own day gainers / losers.
   us: { id: "us", name: "USA", currency: "USD", where: [eq("region", "us"), exchanges("NMS", "NYQ", "NGM", "NCM")], capUnit: 1, minCap: 2e9, minVolume: 100_000, minPrice: 5 },
   ch: { id: "ch", name: "Schweiz", currency: "CHF", where: [eq("region", "ch"), eq("exchange", "EBS")], capUnit: 1, minCap: 1e9, minVolume: 10_000, minPrice: 0 },
-  de: { id: "de", name: "Deutschland", currency: "EUR", where: [eq("region", "de"), eq("exchange", "GER")], capUnit: 1, minCap: 1e9, minVolume: 20_000, minPrice: 0 },
-  eu: { id: "eu", name: "Europa", currency: "EUR", where: [exchanges("GER", "PAR", "AMS", "MIL", "MCE")], capUnit: 1, minCap: 1e9, minVolume: 50_000, minPrice: 0 },
+  de: { id: "de", name: "Deutschland", currency: "EUR", where: [eq("region", "de"), eq("exchange", "GER")], capUnit: 1, minCap: 1e9, minVolume: 20_000, minPrice: 0, home: { GER: ["Germany"] } },
+  // On Xetra only German companies: the others' home listing is in Paris, Amsterdam, Milan or Madrid.
+  eu: { id: "eu", name: "Europa", currency: "EUR", where: [exchanges("GER", "PAR", "AMS", "MIL", "MCE")], capUnit: 1, minCap: 1e9, minVolume: 50_000, minPrice: 0, home: { GER: ["Germany"], "*": EURO_AREA } },
   gb: { id: "gb", name: "UK", currency: "GBP", where: [eq("region", "gb"), eq("exchange", "LSE")], capUnit: 100, minCap: 1e9, minVolume: 100_000, minPrice: 0 },
   jp: { id: "jp", name: "Japan", currency: "JPY", where: [eq("region", "jp"), eq("exchange", "JPX")], capUnit: 1, minCap: 1.5e11, minVolume: 100_000, minPrice: 0 },
 };
@@ -131,6 +141,7 @@ export function slimQuote(q: Record<string, unknown>) {
     name: s("shortName") || s("longName") || s("displayName") || s("symbol") || "",
     currency,
     exchange: s("fullExchangeName"),
+    exchangeCode: s("exchange"),
     price: price != null ? price / divisor : null,
     chgPct: n("regularMarketChangePercent"),
     marketCap: n("marketCap"),
@@ -145,6 +156,12 @@ export function slimQuote(q: Record<string, unknown>) {
     earnings: n("earningsTimestamp") != null ? n("earningsTimestamp")! * 1000 : null,
     rating: s("averageAnalystRating"),
   };
+}
+
+/** The countries a quote's company may have its seat in, or null when the market doesn't care. */
+export function homeCountries(q: ScreenerQuote, m: Market): string[] | null {
+  if (!m.home) return null;
+  return m.home[q.exchangeCode ?? ""] ?? m.home["*"] ?? null;
 }
 
 /** Whether a quote belongs to the market: quoted in its currency, with a price. */

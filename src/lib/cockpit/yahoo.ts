@@ -1,5 +1,6 @@
 import "server-only";
 import { fetchJson } from "./http";
+import { previousClose } from "./previous-close";
 
 const YAHOO = "https://query1.finance.yahoo.com";
 // Yahoo rate-limits full browser user agents from cloud IPs more often than this short one.
@@ -36,10 +37,14 @@ export type Quote = {
 
 const DAY = 864e5;
 
-/** Daily chart for one symbol, reduced to price, period changes and a sparkline. */
-export async function yahooChart(symbol: string, { range = "1y", withDividends = false } = {}): Promise<Quote> {
+/**
+ * Daily chart for one symbol, reduced to price, period changes and a sparkline.
+ * By default this asks Yahoo every time: the data cache hands out its stale copy once after expiry, so the
+ * first view after a quiet spell would otherwise show hours-old prices as current.
+ */
+export async function yahooChart(symbol: string, { range = "1y", withDividends = false, revalidate = 0 } = {}): Promise<Quote> {
   const url = `${YAHOO}/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d&includePrePost=false`;
-  const j = await fetchJson<ChartResponse>(url, { headers: YAHOO_HEADERS, revalidate: 120 });
+  const j = await fetchJson<ChartResponse>(url, { headers: YAHOO_HEADERS, revalidate });
   const r = j.chart.result?.[0];
   if (!r) throw new Error(j.chart.error?.description || "Keine Daten");
   const m = r.meta;
@@ -52,8 +57,9 @@ export async function yahooChart(symbol: string, { range = "1y", withDividends =
   }
 
   const price = m.regularMarketPrice;
+  const time = m.regularMarketTime * 1000;
   const prevClose =
-    m.regularMarketChangePercent != null ? price / (1 + m.regularMarketChangePercent / 100) : (pts.at(-2)?.[1] ?? m.chartPreviousClose);
+    m.regularMarketChangePercent != null ? price / (1 + m.regularMarketChangePercent / 100) : previousClose(pts, time, (m.gmtoffset || 0) * 1000) ?? m.chartPreviousClose;
   const now = Date.now();
   const at = (msAgo: number) => closeAt(pts, now - msAgo);
   const ytdBase = closeAt(pts, Date.UTC(new Date().getUTCFullYear(), 0, 1) - 1);
@@ -65,7 +71,7 @@ export async function yahooChart(symbol: string, { range = "1y", withDividends =
     currency: m.currency,
     exchange: m.fullExchangeName || m.exchangeName,
     type: m.instrumentType,
-    time: m.regularMarketTime * 1000,
+    time,
     price,
     prevClose,
     yearStartPrice: ytdBase,

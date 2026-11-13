@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MARKETS, MAX_DEBT_TO_EQUITY, RADAR_CAP_FACTOR, inMarket, isMarketId, moversScreen, radarScreen, screenBody, slimQuote, valueScreen } from "./screens";
+import { MARKETS, MAX_DEBT_TO_EQUITY, RADAR_CAP_FACTOR, homeCountries, inMarket, isMarketId, moversScreen, radarScreen, screenBody, slimQuote, valueScreen } from "./screens";
 
 const conditions = (s: { conditions: { operator: string; operands: unknown[] }[] }) => s.conditions.map((c) => [c.operator, ...c.operands.map((o) => (typeof o === "object" ? "…" : o))].join(" "));
 
@@ -94,5 +94,23 @@ describe("slimQuote and inMarket", () => {
     expect(q.fromHigh52).toBeCloseTo(-25);
     expect(q.dividendYield).toBeCloseTo(3.1);
     expect(q.earnings).toBe(1700000000000);
+  });
+});
+
+describe("homeCountries", () => {
+  const quote = (exchange: string) => slimQuote({ symbol: "X", exchange, currency: "EUR", regularMarketPrice: 1 });
+
+  it("keeps Germany to German companies, also in Europe's Xetra listings", () => {
+    expect(homeCountries(quote("GER"), MARKETS.de)).toEqual(["Germany"]);
+    expect(homeCountries(quote("GER"), MARKETS.eu)).toEqual(["Germany"]);
+  });
+
+  it("lets Europe's other exchanges list any euro area company", () => {
+    expect(homeCountries(quote("PAR"), MARKETS.eu)).toContain("Netherlands");
+    expect(homeCountries(quote("PAR"), MARKETS.eu)).not.toContain("United Kingdom");
+  });
+
+  it("asks nothing of markets without foreign listings", () => {
+    expect(homeCountries(quote("EBS"), MARKETS.ch)).toBeNull();
   });
 });

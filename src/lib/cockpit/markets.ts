@@ -1,7 +1,7 @@
 import "server-only";
 import { failed, fetchJson, mapLimit } from "./http";
-import { market, screenCached } from "./screener";
-import { inMarket, radarScreen } from "./screens";
+import { local, market, screenCached } from "./screener";
+import { radarScreen } from "./screens";
 import { yahooChart } from "./yahoo";
 
 /** Upcoming quarterly reports (Nasdaq earnings calendar: US listings incl. ADRs like UBS). */
@@ -73,8 +73,9 @@ export async function sentiment() {
  */
 export async function radar(marketId: string | null) {
   const m = market(marketId);
-  const candidates = (await screenCached(radarScreen(m), 1800)).filter((q) => inMarket(q, m));
-  const charts = await mapLimit(candidates, 8, (c) => yahooChart(c.symbol));
+  const candidates = await local(await screenCached(radarScreen(m), 1800), m);
+  // Six-month moves don't need a fresh price; 100 charts per view are a lot of requests.
+  const charts = await mapLimit(candidates, 8, (c) => yahooChart(c.symbol, { revalidate: 600 }));
   const firstFailure = charts.find(failed);
   if (firstFailure && charts.every(failed)) throw new Error(firstFailure.error);
   const rows = candidates

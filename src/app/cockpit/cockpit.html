@@ -349,7 +349,7 @@
           <button class="chip" type="button" data-period="y" aria-pressed="false">1 Jahr</button>
         </div>
         <div class="tile-body"></div>
-        <div class="tile-foot"><span class="when"></span><span class="src">Yahoo Finance · teils verzögert</span></div>
+        <div class="tile-foot"><span class="when"></span><span class="src">Yahoo Finance · teils verzögert · unter dem Stand die Zeit des letzten Kurses</span></div>
       </section>
 
       <section class="tile s4" id="t-gainers">
@@ -539,6 +539,7 @@
       { g: 'Rohstoffe & Krypto' },
       { s: 'GC=F', n: 'Gold', u: 'USD/oz' },
       { s: 'SI=F', n: 'Silber', u: 'USD/oz' },
+      { s: 'BZ=F', n: 'Öl (Brent)', u: 'USD/bbl' },
       { s: 'CL=F', n: 'Öl (WTI)', u: 'USD/bbl' },
       { s: 'NG=F', n: 'Erdgas', u: 'USD/MMBtu' },
       { s: 'BTC-USD', n: 'Bitcoin', u: 'USD' },
@@ -552,8 +553,8 @@
     var MARKETS = [
       { id: 'us', n: 'USA', cur: 'USD', large: 1e10, note: 'Nasdaq & NYSE · Marktkap. > 2 Mrd. USD · Kurs > 5 USD', radar: 'Nasdaq & NYSE · Marktkap. > 600 Mio. USD · unter den 100 grössten 12-Monats-Verlierern' },
       { id: 'ch', n: 'Schweiz', cur: 'CHF', large: 1e10, note: 'SIX · Marktkap. > 1 Mrd. CHF', radar: 'SIX · Marktkap. > 300 Mio. CHF · unter den 100 grössten 12-Monats-Verlierern' },
-      { id: 'de', n: 'Deutschland', cur: 'EUR', large: 1e10, note: 'Xetra · Marktkap. > 1 Mrd. EUR', radar: 'Xetra · Marktkap. > 300 Mio. EUR · unter den 100 grössten 12-Monats-Verlierern' },
-      { id: 'eu', n: 'Europa', cur: 'EUR', large: 1e10, note: 'Xetra, Paris, Amsterdam, Mailand, Madrid · Marktkap. > 1 Mrd. EUR', radar: 'Xetra, Paris, Amsterdam, Mailand, Madrid · Marktkap. > 300 Mio. EUR · unter den 100 grössten 12-Monats-Verlierern' },
+      { id: 'de', n: 'Deutschland', cur: 'EUR', large: 1e10, note: 'Xetra · Firmensitz Deutschland · Marktkap. > 1 Mrd. EUR', radar: 'Xetra · Firmensitz Deutschland · Marktkap. > 300 Mio. EUR · unter den 100 grössten 12-Monats-Verlierern' },
+      { id: 'eu', n: 'Europa', cur: 'EUR', large: 1e10, note: 'Xetra, Paris, Amsterdam, Mailand, Madrid · Firmensitz Euroraum · Marktkap. > 1 Mrd. EUR', radar: 'Xetra, Paris, Amsterdam, Mailand, Madrid · Firmensitz Euroraum · Marktkap. > 300 Mio. EUR · unter den 100 grössten 12-Monats-Verlierern' },
       { id: 'gb', n: 'UK', cur: 'GBP', large: 1e10, note: 'London · Marktkap. > 1 Mrd. GBP', radar: 'London · Marktkap. > 300 Mio. GBP · unter den 100 grössten 12-Monats-Verlierern' },
       { id: 'jp', n: 'Japan', cur: 'JPY', large: 1.5e12, note: 'Tokio · Marktkap. > 150 Mrd. JPY', radar: 'Tokio · Marktkap. > 45 Mrd. JPY · unter den 100 grössten 12-Monats-Verlierern' }
     ];
@@ -637,6 +638,12 @@
       return d === 1 ? 'gestern' : 'vor ' + d + ' Tagen';
     }
     function time(ts) { return new Date(ts).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' }); }
+    // When a price is from: the time today, else the date too (the tile's "Stand" is when it was fetched).
+    function priceTime(ts) {
+      if (!ts) return '';
+      var d = new Date(ts);
+      return d.toDateString() === new Date().toDateString() ? time(ts) : d.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' }) + ' ' + time(ts);
+    }
     function when(ts) {
       if (Date.now() - ts < 864e5) return ago(ts);
       return new Date(ts).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit' }) + ' ' + time(ts);
@@ -840,8 +847,8 @@
         if (!q || q.error) { html += '<tr><td class="sym">' + esc(x.n) + '</td><td colspan="3" class="muted small">keine Daten</td></tr>'; return; }
         var v = q.chg[ui.period];
         var sp = ui.period === 'd' || ui.period === 'w' ? q.spark.slice(-6) : ui.period === 'm' ? q.spark.slice(-22) : q.spark;
-        html += '<tr' + (i === 3 ? ' style="box-shadow:0 1px 0 var(--line) inset"' : '') + '><td class="sym">' + esc(x.n) + '</td>' +
-          '<td class="r num">' + num(q.price, q.price >= 1000 ? 0 : 2) + '</td>' +
+        html += '<tr' + (i === 3 ? ' style="box-shadow:0 1px 0 var(--line) inset"' : '') + '><td><span class="sym">' + esc(x.n) + '</span></td>' +
+          '<td class="r num">' + num(q.price, q.price >= 1000 ? 0 : 2) + '<span class="sub">' + esc(priceTime(q.time)) + '</span></td>' +
           '<td class="r">' + pct(v) + '</td>' +
           '<td class="r ' + (v >= 0 ? 'up' : 'down') + '">' + spark(sp, v >= 0) + '</td></tr>';
       });
