@@ -1,7 +1,7 @@
 import "server-only";
 import YahooFinance from "yahoo-finance2";
 import { yahooFinance } from "../yahoo";
-import { BadRequest } from "./http";
+import { BadRequest, failed, mapLimit } from "./http";
 import {
   type Market,
   MARKETS,
@@ -9,6 +9,7 @@ import {
   type Screen,
   type ScreenerQuote,
   type ValueFilters,
+  homeCountries,
   inMarket,
   isMarketId,
   moversScreen,
@@ -78,11 +79,52 @@ export function screenCached(screen: Screen, ttl: number): Promise<ScreenerQuote
   return value;
 }
 
+// A company's seat doesn't change: once known, kept for the life of the server.
+const countries = new Map<string, Promise<string | null | undefined>>();
+
+/**
+ * Where a company has its seat, from Yahoo's profile: null when Yahoo has no profile for the listing,
+ * undefined when the lookup failed (not kept, so the next view asks again).
+ */
+function countryOf(symbol: string) {
+  let hit = countries.get(symbol);
+  if (!hit) {
+    hit = yahooFinance
+      .quoteSummary(symbol, { modules: ["assetProfile"] }, { validateResult: false })
+      .then((r) => (r as { assetProfile?: { country?: string } }).assetProfile?.country ?? null)
+      .catch((e: Error) => {
+        if (/no fundamentals/i.test(e.message)) return null;
+        countries.delete(symbol);
+        return undefined;
+      });
+    countries.set(symbol, hit);
+  }
+  return hit;
+}
+
+/**
+ * The quotes that belong to the market (`inMarket`) and, where it asks for that, whose company has its
+ * seat at home. A listing without a profile is left out; one whose lookup failed is kept.
+ */
+export async function local(rows: ScreenerQuote[], m: Market): Promise<ScreenerQuote[]> {
+  const listed = rows.filter((q) => inMarket(q, m));
+  if (!m.home) return listed;
+  const seats = await mapLimit(listed, 8, (q) => (homeCountries(q, m) ? countryOf(q.symbol) : Promise.resolve(undefined)));
+  return listed.filter((q, i) => {
+    const home = homeCountries(q, m);
+    const seat = seats[i];
+    if (!home || seat === undefined || failed(seat)) return true;
+    return seat !== null && home.includes(seat);
+  });
+}
+
 /** Today's top 10 gainers and losers of a market. */
 export async function movers(id: string | null) {
   const m = market(id);
+  // Where foreign listings are dropped, more candidates so ten are left.
+  const size = m.home ? 40 : 15;
   const [gainers, losers] = await Promise.all(
-    (["gainers", "losers"] as const).map((dir) => screenCached(moversScreen(m, dir), 300).then((rows) => rows.filter((q) => inMarket(q, m)).slice(0, 10))),
+    (["gainers", "losers"] as const).map((dir) => screenCached(moversScreen(m, dir, size), 300).then((rows) => local(rows, m)).then((rows) => rows.slice(0, 10))),
   );
   return { market: m.id, gainers, losers };
 }
@@ -91,5 +133,5 @@ export async function movers(id: string | null) {
 export async function valueStocks(id: string | null, filters: ValueFilters) {
   const m = market(id);
   const rows = await screenCached(valueScreen(m, filters), 600);
-  return { market: m.id, rows: rows.filter((q) => inMarket(q, m)) };
+  return { market: m.id, rows: await local(rows, m) };
 }
