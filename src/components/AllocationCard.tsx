@@ -7,7 +7,7 @@ import { formatMoney } from "@/lib/currency";
 import { useDiscreet } from "@/lib/discreet";
 import type { Holding, Quote } from "@/lib/types";
 import { useProfiles } from "@/lib/useProfiles";
-import { buttonClass, Card, inputClass } from "./ui";
+import { buttonClass, Card, inputClass, segmentClass } from "./ui";
 
 /** Each asset class keeps its colour in every view, so the colour follows the class, not its rank. */
 const CLASS_COLORS: Record<string, string> = {
@@ -51,9 +51,7 @@ function Tabs<T extends string>({ value, options, onChange }: { value: T; option
           key={v}
           onClick={() => onChange(v)}
           aria-pressed={v === value}
-          className={`rounded px-2 py-0.5 text-xs ${
-            v === value ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          }`}
+          className={`rounded-full px-2.5 py-0.5 text-xs transition-colors ${segmentClass(v === value)}`}
         >
           {label}
         </button>

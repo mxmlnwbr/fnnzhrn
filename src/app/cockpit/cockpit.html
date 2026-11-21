@@ -7,7 +7,11 @@
   <meta name="description" content="fnnzhrn Cockpit – Depot, Märkte, News und Chancen auf einen Blick.">
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0b0d0c" media="(prefers-color-scheme: dark)">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧭</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%230b0d0c'/><path d='M10 46 L22 34 L31 40 L44 24 L54 16' fill='none' stroke='%233ddc84' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+  <!-- The tools' typeface (Geist); the Next.js pages load the same family through next/font. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400..800&family=Geist+Mono:wght@400..600&display=swap">
   <style>
     :root {
       --bg: #ffffff;
@@ -15,8 +19,8 @@
       --muted: #5f6661;
       --line: #e3e6e4;
       --card: #f7f8f7;
-      --accent: #0f8a4f;
-      --accent-soft: rgba(15, 138, 79, 0.1);
+      --accent: #0d8048;
+      --accent-soft: rgba(13, 128, 72, 0.1);
       --down: #c93434;
       --down-soft: rgba(201, 52, 52, 0.1);
       --warn: #b7791f;
@@ -45,7 +49,7 @@
       margin: 0;
       background: var(--bg);
       color: var(--fg);
-      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-family: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       font-size: 15px;
       line-height: 1.45;
       -webkit-font-smoothing: antialiased;
@@ -288,7 +292,7 @@
     .edit-table td { padding: 4px; border: 0; }
     .dlg-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
     .dlg-actions .right { margin-left: auto; display: flex; gap: 8px; }
-    textarea.json { width: 100%; min-height: 140px; margin-top: 10px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); font-family: ui-monospace, monospace; font-size: 0.8rem; }
+    textarea.json { width: 100%; min-height: 140px; margin-top: 10px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); font-family: "Geist Mono", ui-monospace, monospace; font-size: 0.8rem; }
     .search-results { list-style: none; margin: 6px 0 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
     .search-results li button { display: flex; width: 100%; gap: 10px; padding: 7px 10px; border: 0; border-bottom: 1px solid var(--line); background: var(--card); text-align: left; cursor: pointer; }
     .search-results li:last-child button { border-bottom: 0; }
@@ -660,10 +664,14 @@
     function spark(values, up) {
       if (!values || values.length < 2) return '';
       var min = Math.min.apply(null, values), max = Math.max.apply(null, values), span = max - min || 1;
-      var pts = values.map(function (v, i) {
-        return (i / (values.length - 1) * 72).toFixed(1) + ',' + (20 - (v - min) / span * 18).toFixed(1);
-      }).join(' ');
-      return '<svg class="spark ' + (up ? 'up' : 'down') + '" viewBox="0 0 72 22" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" vector-effect="non-scaling-stroke" points="' + pts + '"/></svg>';
+      // A line with a faint area under it and a dot on the latest value; 3px kept free so the dot isn't clipped.
+      var xy = values.map(function (v, i) { return [3 + i / (values.length - 1) * 66, 19 - (v - min) / span * 16]; });
+      var pts = xy.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' ');
+      var end = xy[xy.length - 1];
+      return '<svg class="spark ' + (up ? 'up' : 'down') + '" viewBox="0 0 72 22" aria-hidden="true">' +
+        '<polygon fill="currentColor" fill-opacity="0.12" points="3,22 ' + pts + ' 69,22"/>' +
+        '<polyline fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" points="' + pts + '"/>' +
+        '<circle cx="' + end[0].toFixed(1) + '" cy="' + end[1].toFixed(1) + '" r="2.2" fill="currentColor"/></svg>';
     }
 
     // Set while "Aktualisieren" runs, so the browser cache is skipped and the server is asked again.

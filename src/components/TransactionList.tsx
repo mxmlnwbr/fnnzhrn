@@ -5,12 +5,12 @@ import { formatMoney } from "@/lib/currency";
 import { useDiscreet } from "@/lib/discreet";
 import { sortTransactions } from "@/lib/portfolio";
 import type { Quote, Transaction, TransactionType } from "@/lib/types";
-import { buttonClass, Card } from "./ui";
+import { buttonClass, Card, segmentClass } from "./ui";
 
 const TYPE_STYLE = {
   buy: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
   sell: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
-  dividend: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300",
+  dividend: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
   fee: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
 };
 
@@ -114,9 +114,7 @@ export function TransactionList({
               key={f.type}
               onClick={() => setFilter(f.type)}
               aria-pressed={f.type === filter}
-              className={`rounded px-2 py-0.5 text-xs ${
-                f.type === filter ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              }`}
+              className={`rounded-full px-2.5 py-0.5 text-xs transition-colors ${segmentClass(f.type === filter)}`}
             >
               {f.label} <span className="opacity-60">{count(f.type)}</span>
             </button>

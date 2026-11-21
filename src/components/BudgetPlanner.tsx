@@ -30,7 +30,7 @@ import {
   withSnapshots,
 } from "@/lib/budget";
 import { formatMoney } from "@/lib/currency";
-import { buttonClass, Card, inputClass, pnlClass } from "./ui";
+import { buttonClass, Card, inputClass, pnlClass, segmentClass } from "./ui";
 
 type Period = keyof Amounts;
 type View = "overview" | "months" | "history";
@@ -237,7 +237,7 @@ function Toggle<T extends string>({
           key={o.value}
           aria-pressed={value === o.value}
           onClick={() => onChange(o.value)}
-          className={`flex-1 rounded px-3 py-1.5 sm:flex-none sm:py-1 ${value === o.value ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"}`}
+          className={`flex-1 rounded px-3 py-1.5 sm:flex-none sm:py-1 transition-colors ${segmentClass(value === o.value)}`}
         >
           {o.label}
         </button>
