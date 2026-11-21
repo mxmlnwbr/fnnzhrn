@@ -1,21 +1,93 @@
 @import "tailwindcss";
 
+/*
+ * fnnzhrn's one palette, shared by the landing page (site.css), the tools and the Cockpit (cockpit.html):
+ * neutrals with a slight green bias, one green accent that also means "up", red for "down", amber for
+ * warnings. Change a value here and in those two files together.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --bg: #ffffff;
+  --fg: #111412;
+  --muted: #5f6661;
+  --line: #e3e6e4;
+  --card: #f7f8f7;
+  --accent: #0d8048;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(13, 128, 72, 0.1);
+  --up: #0d8048;
+  --down: #c93434;
+  --warn: #b7791f;
+  /* The tools' muted text: one step darker on light, lighter on dark, so it stays readable on cards. */
+  --n-500: #6d7570;
+  --background: var(--bg);
+  --foreground: var(--fg);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #0b0d0c;
+    --fg: #ecefed;
+    --muted: #949b96;
+    --line: #232826;
+    --card: #121614;
+    --accent: #3ddc84;
+    --accent-fg: #0b0d0c;
+    --accent-soft: rgba(61, 220, 132, 0.12);
+    --up: #3ddc84;
+    --down: #ff6b6b;
+    --warn: #f0b429;
+    --n-500: #868e89;
+    color-scheme: dark;
+  }
+}
+
+/*
+ * The tools are written with Tailwind's zinc, emerald and red. These remap them onto the palette above, so
+ * the Depot and Finanzen look like the rest of fnnzhrn without touching every class name.
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-up: var(--up);
+  --color-down: var(--down);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  --color-zinc-50: #f6f8f7;
+  --color-zinc-100: #edf0ee;
+  --color-zinc-200: #e1e5e2;
+  --color-zinc-300: #c9cfcb;
+  --color-zinc-400: #9aa29d;
+  --color-zinc-500: var(--n-500);
+  --color-zinc-600: #525954;
+  --color-zinc-700: #3b413d;
+  --color-zinc-800: #232826;
+  --color-zinc-900: #141816;
+  --color-zinc-950: #0b0d0c;
+
+  --color-emerald-400: #3ddc84;
+  --color-emerald-500: #1fb866;
+  --color-emerald-600: #0d8048;
+  --color-red-400: #ff6b6b;
+  --color-red-500: #e04848;
+  --color-red-600: #c93434;
+}
+
+@layer base {
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--accent-soft);
   }
 }
 
@@ -75,7 +147,7 @@
     --series-6: #008300;
     --series-7: #9085e9;
     --series-8: #e66767;
-    --series-other: #71717a;
-    --chart-surface: #18181b;
+    --series-other: #6d7570;
+    --chart-surface: #141816;
   }
 }

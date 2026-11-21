@@ -19,7 +19,7 @@ interface Request {
 }
 
 const TONE = {
-  primary: "border-zinc-900 bg-zinc-900 text-white hover:bg-zinc-700 dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300",
+  primary: "border-accent bg-accent font-semibold text-accent-fg hover:brightness-110",
   danger: "border-red-300 text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40",
   default: "border-zinc-300 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800",
 };

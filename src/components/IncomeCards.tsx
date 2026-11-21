@@ -5,7 +5,7 @@ import { formatMoney } from "@/lib/currency";
 import { useDiscreet } from "@/lib/discreet";
 import { CUSTODY_KEY, type IncomeOverview, type IncomeRow } from "@/lib/portfolio";
 import type { Quote } from "@/lib/types";
-import { Card } from "./ui";
+import { Card, segmentClass } from "./ui";
 
 type View = "year" | "position";
 const MAX_ROWS = 6;
@@ -20,9 +20,7 @@ function ViewToggle({ view, onChange }: { view: View; onChange: (v: View) => voi
           key={v}
           onClick={() => onChange(v)}
           aria-pressed={v === view}
-          className={`rounded px-2 py-0.5 text-xs ${
-            v === view ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          }`}
+          className={`rounded-full px-2.5 py-0.5 text-xs transition-colors ${segmentClass(v === view)}`}
         >
           {v === "year" ? "By year" : "By position"}
         </button>

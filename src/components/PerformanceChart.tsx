@@ -5,7 +5,7 @@ import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip,
 import { formatMoney, formatPercent } from "@/lib/currency";
 import { useDiscreet } from "@/lib/discreet";
 import { returnSeries, type HistoryPoint } from "@/lib/portfolio";
-import { Card, pnlClass } from "./ui";
+import { Card, pnlClass, segmentClass } from "./ui";
 
 const RANGES = ["1M", "3M", "YTD", "1Y", "All"] as const;
 type Range = (typeof RANGES)[number];
@@ -46,9 +46,7 @@ export function PerformanceChart({ history, currency, loading }: { history: Hist
             <button
               key={r}
               onClick={() => setRange(r)}
-              className={`rounded px-2 py-0.5 text-xs ${
-                r === range ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900" : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              }`}
+              className={`rounded-full px-2.5 py-0.5 text-xs transition-colors ${segmentClass(r === range)}`}
             >
               {r}
             </button>
@@ -74,20 +72,28 @@ export function PerformanceChart({ history, currency, loading }: { history: Hist
           )}
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+              <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
                 <defs>
                   <linearGradient id="valueFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#0ea5e9" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#0ea5e9" stopOpacity={0} />
+                    <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.22} />
+                    <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="currentColor" strokeOpacity={0.1} vertical={false} />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} minTickGap={40} stroke="currentColor" strokeOpacity={0.4} />
+                <CartesianGrid stroke="var(--line)" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 11, fill: "var(--n-500)" }}
+                  tickFormatter={(d: string) => new Date(d).toLocaleDateString("en-GB", { month: "short", year: "2-digit" })}
+                  minTickGap={48}
+                  axisLine={false}
+                  tickLine={false}
+                  tickMargin={8}
+                />
                 <YAxis
-                  tick={{ fontSize: 11 }}
-                  width={64}
-                  stroke="currentColor"
-                  strokeOpacity={0.4}
+                  tick={{ fontSize: 11, fill: "var(--n-500)" }}
+                  width={56}
+                  axisLine={false}
+                  tickLine={false}
                   domain={["auto", "auto"]}
                   tickFormatter={(v: number) =>
                     discreet
@@ -96,27 +102,53 @@ export function PerformanceChart({ history, currency, loading }: { history: Hist
                   }
                 />
                 <Tooltip
+                  cursor={{ stroke: "var(--n-500)", strokeWidth: 1, strokeDasharray: "3 3" }}
+                  labelFormatter={(d) => new Date(String(d)).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                   formatter={(v, name) =>
                     name === "return"
                       ? [formatPercent(Number(v)), "Return"]
                       : [formatMoney(Number(v), currency), name === "value" ? "Value" : "Invested"]
                   }
-                  contentStyle={{ fontSize: 12, borderRadius: 8, background: "var(--background)", borderColor: "#71717a" }}
+                  contentStyle={{
+                    fontSize: 12,
+                    borderRadius: 10,
+                    background: "var(--bg)",
+                    border: "1px solid var(--line)",
+                    boxShadow: "0 6px 20px rgb(0 0 0 / 0.08)",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                  labelStyle={{ color: "var(--muted)", marginBottom: 2 }}
+                  itemStyle={{ color: "var(--fg)", padding: 0 }}
                 />
-                <Area type="monotone" dataKey={discreet ? "return" : "value"} stroke="#0ea5e9" strokeWidth={2} fill="url(#valueFill)" />
                 {!discreet && (
-                  <Line type="stepAfter" dataKey="invested" stroke="#a1a1aa" strokeDasharray="4 4" dot={false} strokeWidth={1.5} />
+                  <Line type="stepAfter" dataKey="invested" stroke="var(--series-other)" strokeDasharray="4 4" dot={false} strokeWidth={1.5} activeDot={false} />
                 )}
+                <Area
+                  type="monotone"
+                  dataKey={discreet ? "return" : "value"}
+                  stroke="var(--accent)"
+                  strokeWidth={2}
+                  fill="url(#valueFill)"
+                  activeDot={{ r: 4, fill: "var(--accent)", stroke: "var(--bg)", strokeWidth: 2 }}
+                  // Only the latest point is marked: where the depot stands now.
+                  dot={(props: { cx?: number; cy?: number; index?: number }) =>
+                    props.index === data.length - 1 && props.cx != null && props.cy != null ? (
+                      <circle key="end" cx={props.cx} cy={props.cy} r={4} fill="var(--accent)" stroke="var(--bg)" strokeWidth={2} />
+                    ) : (
+                      <g key={props.index} />
+                    )
+                  }
+                />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
           <div className="mt-2 flex gap-4 text-xs text-zinc-500">
             {discreet ? (
-              <span className="flex items-center gap-1"><span className="h-0.5 w-4 bg-sky-500" />Cumulative return</span>
+              <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 rounded-full bg-accent" />Cumulative return</span>
             ) : (
               <>
-                <span className="flex items-center gap-1"><span className="h-0.5 w-4 bg-sky-500" />Market value</span>
-                <span className="flex items-center gap-1"><span className="h-0.5 w-4 border-t border-dashed border-zinc-400" />Net invested</span>
+                <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 rounded-full bg-accent" />Market value</span>
+                <span className="flex items-center gap-1.5"><span className="h-0 w-4 border-t-[1.5px] border-dashed" style={{ borderColor: "var(--series-other)" }} />Net invested</span>
               </>
             )}
           </div>

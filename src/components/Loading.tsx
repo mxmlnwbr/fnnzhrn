@@ -5,18 +5,18 @@ export function SplashLoader() {
       <svg viewBox="0 0 64 64" className="h-16 w-16" aria-hidden>
         <defs>
           <linearGradient id="splashFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#0ea5e9" stopOpacity={0.45} />
-            <stop offset="1" stopColor="#0ea5e9" stopOpacity={0} />
+            <stop offset="0" stopColor="#3ddc84" stopOpacity={0.4} />
+            <stop offset="1" stopColor="#3ddc84" stopOpacity={0} />
           </linearGradient>
         </defs>
-        <rect width="64" height="64" rx="14" fill="#18181b" />
+        <rect width="64" height="64" rx="14" fill="#0b0d0c" />
         <path className="animate-fade-area" d="M10 46 L22 34 L31 40 L44 24 L54 16 L54 54 L10 54 Z" fill="url(#splashFill)" />
         <path
           className="animate-draw-line"
           d="M10 46 L22 34 L31 40 L44 24 L54 16"
           pathLength={100}
           fill="none"
-          stroke="#38bdf8"
+          stroke="#3ddc84"
           strokeWidth={5}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -36,7 +36,7 @@ export function TopProgress({ active }: { active: boolean }) {
       aria-hidden={!active}
       aria-label="Updating prices"
     >
-      {active && <div className="animate-slide-bar h-full w-1/4 bg-sky-500" />}
+      {active && <div className="animate-slide-bar h-full w-1/4 bg-accent" />}
     </div>
   );
 }

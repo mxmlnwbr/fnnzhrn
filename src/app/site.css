@@ -6,8 +6,8 @@
       --muted: #5f6661;
       --line: #e3e6e4;
       --card: #f7f8f7;
-      --accent: #0f8a4f;
-      --accent-soft: rgba(15, 138, 79, 0.1);
+      --accent: #0d8048;
+      --accent-soft: rgba(13, 128, 72, 0.1);
       --grid: rgba(17, 20, 18, 0.045);
     }
 
@@ -36,7 +36,7 @@
       background: var(--bg);
       overflow-x: hidden;
       color: var(--fg);
-      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       line-height: 1.55;
       -webkit-font-smoothing: antialiased;
     }
@@ -400,4 +400,4 @@
 .site .card .switch { display: flex; justify-content: space-between; gap: 12px; margin: 14px 0 0; }
 .site .link-btn { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-size: 0.875rem; cursor: pointer; }
 .site .link-btn:hover, .site .link-btn:focus-visible { text-decoration: underline; outline: none; }
-.site .card code { font-family: ui-monospace, monospace; font-size: 0.85em; }
+.site .card code { font-family: var(--font-geist-mono), ui-monospace, monospace; font-size: 0.85em; }

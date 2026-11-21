@@ -15,7 +15,7 @@ export function TickerBackground() {
     type Line = { y: number; vol: number; speed: number; alpha: number; width: number; pts: number[]; off: number };
     let w = 0;
     let h = 0;
-    let color = "#0f8a4f";
+    let color = "#0d8048";
     let series: Line[] = [];
     let raf = 0;
 

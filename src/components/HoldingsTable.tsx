@@ -112,7 +112,7 @@ export function HoldingsTable({ holdings, currency }: { holdings: Holding[]; cur
                   <td className="py-2 pl-3">
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 w-12 overflow-hidden rounded bg-zinc-100 dark:bg-zinc-800">
-                        <div className="h-full bg-sky-500" style={{ width: `${h.weight * 100}%` }} />
+                        <div className="h-full bg-accent" style={{ width: `${h.weight * 100}%` }} />
                       </div>
                       <span className="text-xs text-zinc-500">{(h.weight * 100).toFixed(1)}%</span>
                     </div>

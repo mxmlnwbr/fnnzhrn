@@ -385,7 +385,7 @@ export function AssistantDock({ embedded = false }: { embedded?: boolean }) {
         onClick={() => setMode("open")}
         aria-label="Assistent öffnen"
         title="Assistent"
-        className={`${embedded ? "fixed inset-0" : "fixed right-4 bottom-4 h-14 w-14 shadow-lg"} z-50 flex items-center justify-center rounded-full bg-emerald-600 text-white hover:bg-emerald-700 print:hidden`}
+        className={`${embedded ? "fixed inset-0" : "fixed right-[max(1rem,env(safe-area-inset-right))] bottom-[max(1rem,env(safe-area-inset-bottom))] h-14 w-14 shadow-lg"} z-50 flex items-center justify-center rounded-full bg-accent text-accent-fg transition-[filter] hover:brightness-110 print:hidden`}
       >
         <ChatIcon />
         {busy && <span className="absolute top-1 right-1 h-3 w-3 animate-pulse rounded-full border-2 border-white bg-amber-400" aria-label="Antwort wird geladen" />}
@@ -502,7 +502,7 @@ export function AssistantDock({ embedded = false }: { embedded?: boolean }) {
                   )}
                   {messages.map((m, i) =>
                     m.role === "user" ? (
-                      <div key={i} className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-sm bg-zinc-900 px-3 py-2 text-sm whitespace-pre-wrap text-white dark:bg-zinc-100 dark:text-zinc-900">
+                      <div key={i} className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-sm bg-accent-soft px-3 py-2 text-sm whitespace-pre-wrap text-zinc-900 dark:text-zinc-100">
                         {m.content}
                       </div>
                     ) : (
@@ -1025,7 +1025,7 @@ function KeyCard({ status, onChange }: { status: AssistantStatus; onChange: (s: 
   }
 
   const link = (href: string, label: string) => (
-    <a href={href} target="_blank" rel="noreferrer" className="text-emerald-700 underline dark:text-emerald-400">
+    <a href={href} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">
       {label}
     </a>
   );
