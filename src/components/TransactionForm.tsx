@@ -103,20 +103,20 @@ export function TransactionForm({
 
   return (
     <div ref={root}>
-      <Card title={editing ? "Edit transaction" : "Add transaction"}>
+      <Card title={editing ? "Transaktion bearbeiten" : "Transaktion erfassen"}>
         <form onSubmit={submit} className="grid grid-cols-2 gap-3">
           {!isFee && (
             <label className="relative col-span-2 text-xs text-zinc-500">
-              Symbol (Yahoo ticker, e.g. NESN.SW, AAPL)
+              Symbol (Yahoo-Ticker, z. B. NESN.SW, AAPL)
               <input
-                className={`${inputClass} mt-1 uppercase`}
+                className={`${inputClass} mt-1 uppercase placeholder:normal-case`}
                 value={symbol}
                 onChange={(e) => {
                   setSymbol(e.target.value);
                   setShowResults(true);
                 }}
                 onBlur={() => setTimeout(() => setShowResults(false), 150)}
-                placeholder="Search name or ticker"
+                placeholder="Name oder Ticker suchen"
                 autoComplete="off"
               />
               {showResults && symbol.trim().length >= 2 && results.length > 0 && (
@@ -143,31 +143,31 @@ export function TransactionForm({
             </label>
           )}
           <label className="text-xs text-zinc-500">
-            Type
+            Art
             <select className={`${inputClass} mt-1`} value={type} onChange={(e) => setType(e.target.value as TransactionType)}>
-              <option value="buy">Buy</option>
-              <option value="sell">Sell</option>
-              <option value="dividend">Dividend</option>
-              <option value="fee">Custody fee</option>
+              <option value="buy">Kauf</option>
+              <option value="sell">Verkauf</option>
+              <option value="dividend">Dividende</option>
+              <option value="fee">Depotgebühr</option>
             </select>
           </label>
           <label className="text-xs text-zinc-500">
-            Date
+            Datum
             <input type="date" className={`${inputClass} mt-1`} value={date} max={today()} onChange={(e) => setDate(e.target.value)} />
           </label>
           {!isDividend && !isFee && (
             <label className="text-xs text-zinc-500">
-              Shares
+              Anzahl
               <input type="number" step="any" min="0" className={`${inputClass} mt-1`} value={quantity} onChange={(e) => setQuantity(e.target.value)} />
             </label>
           )}
           <label className={`text-xs text-zinc-500 ${isDividend ? "col-span-1" : ""}`}>
-            {isDividend || isFee ? "Total amount" : "Price per share"}
+            {isDividend || isFee ? "Gesamtbetrag" : "Kurs pro Aktie"}
             <input type="number" step="any" min="0" className={`${inputClass} mt-1`} value={price} onChange={(e) => setPrice(e.target.value)} />
           </label>
           {isFee ? (
             <label className="text-xs text-zinc-500">
-              Currency
+              Währung
               <input
                 className={`${inputClass} mt-1 uppercase`}
                 value={feeCurrency}
@@ -183,30 +183,30 @@ export function TransactionForm({
             </label>
           ) : (
             <label className="text-xs text-zinc-500">
-              {isDividend ? "Withholding tax" : "Fees"}
+              {isDividend ? "Verrechnungssteuer" : "Gebühren"}
               <input type="number" step="any" min="0" className={`${inputClass} mt-1`} value={fees} onChange={(e) => setFees(e.target.value)} />
             </label>
           )}
           <p className="col-span-2 text-xs text-zinc-500">
-            {isFee ? "What the bank charged for the account, e.g. the yearly Depotgebühr." : "Amounts are in the share's trading currency."}
+            {isFee ? "Was die Bank für das Depot verrechnet hat, z. B. die jährliche Depotgebühr." : "Beträge in der Handelswährung der Aktie."}
           </p>
           {editing && isImported(editing) && (
             <p className="col-span-2 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-              This transaction came from an import. Importing the file again replaces your edit with the original.
+              Diese Transaktion stammt aus einem Import. Importierst du die Datei erneut, wird deine Änderung durch das Original ersetzt.
             </p>
           )}
           {editing ? (
             <div className="col-span-2 flex gap-2">
               <button type="button" className={`${buttonClass} flex-1`} onClick={onCancel}>
-                Cancel
+                Abbrechen
               </button>
               <button type="submit" disabled={!valid} className={`${primaryButtonClass} flex-1`}>
-                Save changes
+                Änderungen speichern
               </button>
             </div>
           ) : (
             <button type="submit" disabled={!valid} className={`${primaryButtonClass} col-span-2`}>
-              {isFee ? "Add custody fee" : `Add ${type}`}
+              {{ buy: "Kauf erfassen", sell: "Verkauf erfassen", dividend: "Dividende erfassen", fee: "Depotgebühr erfassen" }[type]}
             </button>
           )}
         </form>

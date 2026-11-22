@@ -22,14 +22,14 @@ export function SummaryCards({ summary, currency }: { summary: PortfolioSummary;
     const share = (v: number) => `${summary.netWorth ? ((v / summary.netWorth) * 100).toFixed(1) : "0.0"}%`;
     return (
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Allocation" value={`${share(summary.marketValue)} shares`} sub={`${share(summary.cash)} cash`} />
-        <Stat label="Today" value={formatPercent(summary.dayChangePercent)} tone={summary.dayChange} />
+        <Stat label="Aufteilung" value={`${share(summary.marketValue)} Aktien`} sub={`${share(summary.cash)} Konten`} />
+        <Stat label="Heute" value={formatPercent(summary.dayChangePercent)} tone={summary.dayChange} />
         <Stat
-          label="Unrealized P/L"
+          label="Gewinn/Verlust"
           value={unrealizedPercent !== undefined ? formatPercent(unrealizedPercent) : "–"}
           tone={summary.unrealizedPL}
         />
-        <Stat label="Total return" value={formatPercent(summary.totalReturnPercent)} tone={summary.totalReturn} />
+        <Stat label="Gesamtrendite" value={formatPercent(summary.totalReturnPercent)} tone={summary.totalReturn} />
       </div>
     );
   }
@@ -37,27 +37,27 @@ export function SummaryCards({ summary, currency }: { summary: PortfolioSummary;
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <Stat
-        label="Net worth"
+        label="Vermögen"
         value={m(summary.netWorth)}
-        sub={`Shares ${m(summary.marketValue)} · Cash ${m(summary.cash)}`}
+        sub={`Aktien ${m(summary.marketValue)} · Konten ${m(summary.cash)}`}
       />
       <Stat
-        label="Today"
+        label="Heute"
         value={m(summary.dayChange)}
         sub={formatPercent(summary.dayChangePercent)}
         tone={summary.dayChange}
       />
       <Stat
-        label="Unrealized P/L"
+        label="Gewinn/Verlust"
         value={m(summary.unrealizedPL)}
         sub={unrealizedPercent !== undefined ? formatPercent(unrealizedPercent) : undefined}
         tone={summary.unrealizedPL}
       />
       <Stat
-        label="Total return"
+        label="Gesamtrendite"
         value={m(summary.totalReturn)}
-        sub={`${formatPercent(summary.totalReturnPercent)} · realized ${m(summary.realizedPL)} · dividends ${m(summary.dividends)}${
-          summary.custodyFees ? ` · custody fees ${m(-summary.custodyFees)}` : ""
+        sub={`${formatPercent(summary.totalReturnPercent)} · realisiert ${m(summary.realizedPL)} · Dividenden ${m(summary.dividends)}${
+          summary.custodyFees ? ` · Depotgebühren ${m(-summary.custodyFees)}` : ""
         }`}
         tone={summary.totalReturn}
       />

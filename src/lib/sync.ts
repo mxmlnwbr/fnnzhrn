@@ -15,7 +15,7 @@ export const EMPTY_STORE: DepotStore = {
 
 /** Fills in defaults and rejects data without a transactions array. */
 export function normalizePortfolio(data: Partial<PortfolioData> | null | undefined): PortfolioData {
-  if (!data || !Array.isArray(data.transactions)) throw new Error("File has no transactions array");
+  if (!data || !Array.isArray(data.transactions)) throw new Error("Die Datei enthält keine Transaktionen");
   return {
     version: 1,
     settings: { ...EMPTY_PORTFOLIO.settings, ...data.settings },

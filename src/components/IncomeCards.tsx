@@ -22,7 +22,7 @@ function ViewToggle({ view, onChange }: { view: View; onChange: (v: View) => voi
           aria-pressed={v === view}
           className={`rounded-full px-2.5 py-0.5 text-xs transition-colors ${segmentClass(v === view)}`}
         >
-          {v === "year" ? "By year" : "By position"}
+          {v === "year" ? "Nach Jahr" : "Nach Titel"}
         </button>
       ))}
     </div>
@@ -71,7 +71,7 @@ function BarList({
       </ul>
       {rows.length > MAX_ROWS && (
         <button className="mt-2 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100" onClick={() => setAll((a) => !a)}>
-          {all ? "Show less" : `Show all ${rows.length}`}
+          {all ? "Weniger zeigen" : `Alle ${rows.length} zeigen`}
         </button>
       )}
     </>
@@ -93,20 +93,20 @@ export function DividendCard({ overview, quotes, currency }: { overview: IncomeO
   const d = overview.dividends;
   const m = (v: number) => formatMoney(v, currency);
   const taxRate = d.gross ? d.tax / d.gross : 0;
-  const payments = (r: IncomeRow) => `${r.count} ${r.count === 1 ? "payment" : "payments"}`;
+  const payments = (r: IncomeRow) => `${r.count} ${r.count === 1 ? "Zahlung" : "Zahlungen"}`;
 
   return (
-    <Card title="Dividends" action={d.byYear.length > 0 && <ViewToggle view={view} onChange={setView} />}>
+    <Card title="Dividenden" action={d.byYear.length > 0 && <ViewToggle view={view} onChange={setView} />}>
       {d.byYear.length === 0 ? (
-        <p className="text-sm text-zinc-500">No dividends yet. Add a dividend transaction or import a Swissquote CSV.</p>
+        <p className="text-sm text-zinc-500">Noch keine Dividenden. Erfasse eine Dividende oder importiere eine Swissquote-CSV.</p>
       ) : (
         <>
           {discreet ? (
-            <Headline value={`${percent(taxRate)} withheld`} sub={`${d.byYear.reduce((s, r) => s + r.count, 0)} payments · net share per ${view}`} />
+            <Headline value={`${percent(taxRate)} einbehalten`} sub={`${d.byYear.reduce((s, r) => s + r.count, 0)} Zahlungen · Nettoanteil pro ${view === "year" ? "Jahr" : "Titel"}`} />
           ) : (
             <Headline
               value={m(d.net)}
-              sub={`net received · gross ${m(d.gross)} · withholding tax ${m(d.tax)} (${percent(taxRate)}) · last 12 months ${m(d.last12Months)}`}
+              sub={`netto erhalten · brutto ${m(d.gross)} · Verrechnungssteuer ${m(d.tax)} (${percent(taxRate)}) · letzte 12 Monate ${m(d.last12Months)}`}
             />
           )}
           <BarList
@@ -129,31 +129,31 @@ export function FeeCard({ overview, quotes, currency }: { overview: IncomeOvervi
   const f = overview.fees;
   const m = (v: number) => formatMoney(v, currency);
   const rate = f.volume ? f.trading / f.volume : 0;
-  const trades = (r: IncomeRow) => `${r.count} ${r.count === 1 ? "trade" : "trades"}`;
-  const tradeSummary = f.trades ? `${f.trades} trades · Ø ${m(f.trading / f.trades)} per trade · ${percent(rate)} of ${m(f.volume)} traded` : "";
-  const custodySummary = f.custody ? `custody fees ${m(f.custody)}` : "";
+  const trades = (r: IncomeRow) => `${r.count} ${r.count === 1 ? "Trade" : "Trades"}`;
+  const tradeSummary = f.trades ? `${f.trades} Trades · Ø ${m(f.trading / f.trades)} pro Trade · ${percent(rate)} von ${m(f.volume)} Handelsvolumen` : "";
+  const custodySummary = f.custody ? `Depotgebühren ${m(f.custody)}` : "";
   /** Per year: trades, plus the custody fees in that year. Per position: custody fees get their own row. */
   const detail = (r: IncomeRow) => {
     if (r.key === CUSTODY_KEY) return "";
-    const parts = [r.count ? trades(r) : "", view === "year" && r.gross ? `custody ${m(r.gross)}` : "", view === "position" ? (quotes[r.key]?.name ?? "") : ""];
+    const parts = [r.count ? trades(r) : "", view === "year" && r.gross ? `Depotgebühr ${m(r.gross)}` : "", view === "position" ? (quotes[r.key]?.name ?? "") : ""];
     return parts.filter(Boolean).join(" · ");
   };
 
   return (
-    <Card title="Fees" action={f.total > 0 && <ViewToggle view={view} onChange={setView} />}>
+    <Card title="Gebühren" action={f.total > 0 && <ViewToggle view={view} onChange={setView} />}>
       {f.trades === 0 && f.custody === 0 ? (
-        <p className="text-sm text-zinc-500">No trades or custody fees yet.</p>
+        <p className="text-sm text-zinc-500">Noch keine Trades oder Depotgebühren.</p>
       ) : (
         <>
           {discreet ? (
-            <Headline value={`${percent(rate)} of volume`} sub={`${f.trades} trades · share of fees per ${view}`} />
+            <Headline value={`${percent(rate)} des Volumens`} sub={`${f.trades} Trades · Anteil der Gebühren pro ${view === "year" ? "Jahr" : "Titel"}`} />
           ) : (
             <Headline value={m(f.total)} sub={[tradeSummary, custodySummary].filter(Boolean).join(" · ")} />
           )}
           <BarList
             rows={view === "year" ? f.byYear : f.bySymbol}
             total={f.total}
-            label={(r) => r.key}
+            label={(r) => (r.key === CUSTODY_KEY ? "Depotgebühren" : r.key)}
             detail={detail}
             color="bg-amber-500"
             currency={currency}

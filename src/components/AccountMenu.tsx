@@ -25,7 +25,7 @@ export function AccountMenu() {
 
   if (sync.status !== "signed-in") return null;
 
-  const status = sync.error ? "Sync failed" : sync.syncing ? "Syncing…" : "Synced";
+  const status = sync.error ? "Synchronisierung fehlgeschlagen" : sync.syncing ? "Wird synchronisiert …" : "Synchronisiert";
   const dot = sync.error ? "bg-red-500" : sync.syncing ? "bg-sky-500 motion-safe:animate-pulse" : "bg-emerald-500";
 
   return (
@@ -34,7 +34,7 @@ export function AccountMenu() {
         className="relative flex h-8 w-8 items-center justify-center rounded-full bg-zinc-900 text-sm font-semibold text-white uppercase hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        aria-label={`Account: ${sync.email || "signed in"}, ${status}`}
+        aria-label={`Konto: ${sync.email || "angemeldet"}, ${status}`}
         title={status}
       >
         {sync.email.charAt(0) || "?"}
@@ -46,21 +46,21 @@ export function AccountMenu() {
       {open && (
         <div className="animate-fade-in absolute right-0 z-10 mt-2 w-72 max-w-[calc(100vw-2rem)] space-y-3 rounded-xl border border-zinc-200 bg-white p-4 text-sm shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
           <div>
-            <p className="text-xs text-zinc-500">Signed in as</p>
+            <p className="text-xs text-zinc-500">Angemeldet als</p>
             <p className="font-medium break-all">{sync.email}</p>
           </div>
           <p className="flex items-center gap-2 text-zinc-500">
             <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} aria-hidden />
             {sync.error ? (
-              <span className="text-red-600 dark:text-red-400">Last sync failed: {sync.error}</span>
+              <span className="text-red-600 dark:text-red-400">Letzte Synchronisierung fehlgeschlagen: {sync.error}</span>
             ) : (
-              `${status} across your devices`
+              `${status} auf all deinen Geräten`
             )}
           </p>
           <div className="flex gap-2 border-t border-zinc-200 pt-3 dark:border-zinc-800">
             {sync.error && (
               <button className={buttonClass} onClick={() => void retrySync()}>
-                Retry
+                Erneut versuchen
               </button>
             )}
             <button
@@ -70,7 +70,7 @@ export function AccountMenu() {
                 void signOut();
               }}
             >
-              Sign out
+              Abmelden
             </button>
           </div>
         </div>

@@ -19,7 +19,7 @@ const EMPTY: MarketData = { quotes: {}, fx: {}, prices: {}, fxHistory: {}, updat
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
   const body = await res.json();
-  if (!res.ok) throw new Error(body.error ?? `Request failed: ${res.status}`);
+  if (!res.ok) throw new Error(body.error ?? `Anfrage fehlgeschlagen: ${res.status}`);
   return body as T;
 }
 

@@ -14,12 +14,17 @@ const TYPE_STYLE = {
   fee: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
 };
 
+const TYPE_LABEL: Record<TransactionType, string> = { buy: "Kauf", sell: "Verkauf", dividend: "Dividende", fee: "Gebühr" };
+
+/** 2026-02-03 as 03.02.2026. */
+const swissDate = (iso: string) => iso.split("-").reverse().join(".");
+
 const FILTERS: { type: TransactionType | "all"; label: string }[] = [
-  { type: "all", label: "All" },
-  { type: "buy", label: "Buys" },
-  { type: "sell", label: "Sells" },
-  { type: "dividend", label: "Dividends" },
-  { type: "fee", label: "Custody fees" },
+  { type: "all", label: "Alle" },
+  { type: "buy", label: "Käufe" },
+  { type: "sell", label: "Verkäufe" },
+  { type: "dividend", label: "Dividenden" },
+  { type: "fee", label: "Depotgebühren" },
 ];
 
 export function TransactionList({
@@ -67,12 +72,12 @@ export function TransactionList({
     .filter((t) => filter === "all" || t.type === filter);
   return (
     <Card
-      title={`Transactions (${transactions.length})`}
+      title={`Transaktionen (${transactions.length})`}
       action={
         canDelete &&
         onDelete && (
           <button className={`${buttonClass} text-xs`} onClick={onDeleteMany}>
-            Delete…
+            Löschen …
           </button>
         )
       }
@@ -84,9 +89,9 @@ export function TransactionList({
               className="mr-1 max-w-40 rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-xs dark:border-zinc-700 dark:bg-zinc-950"
               value={activeDepot}
               onChange={(e) => setDepot(e.target.value)}
-              aria-label="Filter by depot"
+              aria-label="Nach Depot filtern"
             >
-              <option value="">All depots</option>
+              <option value="">Alle Depots</option>
               {depots.map((d) => (
                 <option key={d} value={d}>
                   {d}
@@ -99,9 +104,9 @@ export function TransactionList({
               className="mr-1 rounded border border-zinc-300 bg-white px-1.5 py-0.5 text-xs dark:border-zinc-700 dark:bg-zinc-950"
               value={activeSymbol}
               onChange={(e) => setSymbol(e.target.value)}
-              aria-label="Filter by position"
+              aria-label="Nach Titel filtern"
             >
-              <option value="">All positions</option>
+              <option value="">Alle Titel</option>
               {symbols.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -122,14 +127,14 @@ export function TransactionList({
         </div>
       )}
       {rows.length === 0 ? (
-        <p className="text-sm text-zinc-500">{transactions.length ? "No matching transactions." : "No transactions yet."}</p>
+        <p className="text-sm text-zinc-500">{transactions.length ? "Keine passenden Transaktionen." : "Noch keine Transaktionen."}</p>
       ) : (
         <ul className="max-h-96 divide-y divide-zinc-100 overflow-auto text-sm dark:divide-zinc-800">
           {rows.map((t) => {
             const fee = t.type === "fee";
             const currency = (fee ? t.currency : quotes[t.symbol]?.currency) ?? "USD";
             const total = t.type === "dividend" || fee ? t.price : t.quantity * t.price;
-            const label = fee ? "Custody fee" : t.symbol;
+            const label = fee ? "Depotgebühr" : t.symbol;
             return (
               <li
                 key={t.id}
@@ -137,7 +142,7 @@ export function TransactionList({
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${TYPE_STYLE[t.type]}`}>{t.type}</span>
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${TYPE_STYLE[t.type]}`}>{TYPE_LABEL[t.type]}</span>
                     <span className="font-medium">{label}</span>
                     {!activeDepot && depotOf?.(t) && (
                       <span className="truncate rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
@@ -146,9 +151,9 @@ export function TransactionList({
                     )}
                   </div>
                   <div className="text-xs tabular-nums text-zinc-500">
-                    {t.date}
+                    {swissDate(t.date)}
                     {!discreet && t.type !== "dividend" && !fee && ` · ${t.quantity} × ${formatMoney(t.price, currency)}`}
-                    {!discreet && t.fees > 0 && ` · ${t.type === "dividend" ? "tax" : "fees"} ${formatMoney(t.fees, currency)}`}
+                    {!discreet && t.fees > 0 && ` · ${t.type === "dividend" ? "Steuer" : "Gebühren"} ${formatMoney(t.fees, currency)}`}
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
@@ -157,17 +162,17 @@ export function TransactionList({
                     <button
                       onClick={() => onEdit(t)}
                       className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
-                      aria-label="Edit transaction"
-                      title="Edit"
+                      aria-label="Transaktion bearbeiten"
+                      title="Bearbeiten"
                     >
                       <PencilIcon />
                     </button>
                   )}
                   {onDelete && (
                     <button
-                      onClick={() => confirm(fee ? `Delete this custody fee from ${t.date}?` : `Delete this ${t.type} of ${t.symbol}?`) && onDelete(t.id)}
+                      onClick={() => confirm(fee ? `Depotgebühr vom ${swissDate(t.date)} löschen?` : `${TYPE_LABEL[t.type]} von ${t.symbol} löschen?`) && onDelete(t.id)}
                       className="rounded px-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-red-600 dark:hover:bg-zinc-800"
-                      aria-label="Delete transaction"
+                      aria-label="Transaktion löschen"
                     >
                       ×
                     </button>

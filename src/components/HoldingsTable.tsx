@@ -75,22 +75,22 @@ export function HoldingsTable({ holdings, currency }: { holdings: Holding[]; cur
   const header = { sort, onSort };
   const rows = sortHoldings(holdings, sort, discreet);
   return (
-    <Card title="Holdings">
+    <Card title="Positionen">
       {holdings.length === 0 ? (
-        <p className="text-sm text-zinc-500">No open positions yet. Add a buy transaction to get started.</p>
+        <p className="text-sm text-zinc-500">Noch keine offenen Positionen. Erfasse einen Kauf, um loszulegen.</p>
       ) : (
         <div className="-mx-4 overflow-x-auto px-4">
           <table className={`w-full text-sm tabular-nums ${discreet ? "min-w-[480px]" : "min-w-[720px]"}`}>
             <thead className="text-left text-xs text-zinc-500">
               <tr>
-                <SortHeader label="Position" sortKey="symbol" align="left" {...header} />
-                {!discreet && <SortHeader label="Shares" sortKey="quantity" {...header} />}
-                {!discreet && <SortHeader label="Avg cost" sortKey="avgCost" {...header} />}
-                <SortHeader label="Price" sortKey="price" {...header} />
-                <SortHeader label="Today" sortKey="today" {...header} />
-                {!discreet && <SortHeader label="Value" sortKey="value" {...header} />}
-                <SortHeader label="Unrealized P/L" sortKey="pl" {...header} />
-                <SortHeader label="Weight" sortKey="weight" align="left" {...header} />
+                <SortHeader label="Titel" sortKey="symbol" align="left" {...header} />
+                {!discreet && <SortHeader label="Anzahl" sortKey="quantity" {...header} />}
+                {!discreet && <SortHeader label="Kaufkurs Ø" sortKey="avgCost" {...header} />}
+                <SortHeader label="Aktuell" sortKey="price" {...header} />
+                <SortHeader label="Heute" sortKey="today" {...header} />
+                {!discreet && <SortHeader label="Wert" sortKey="value" {...header} />}
+                <SortHeader label="G/V" sortKey="pl" {...header} />
+                <SortHeader label="Anteil" sortKey="weight" align="left" {...header} />
               </tr>
             </thead>
             <tbody>

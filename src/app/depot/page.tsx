@@ -93,9 +93,8 @@ function Dashboard({ depot }: { depot: Depot }) {
   const [choiceDialog, ask] = useChoice();
   const importedCount = transactions.filter(isImported).length + cash.filter(isImportedCash).length;
   const manualCount = transactions.length + cash.length - importedCount;
-  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
   const describeEntries = (tx: Transaction[], accounts: CashAccount[]) =>
-    `${plural(tx.length, "transaction")} and ${plural(accounts.length, "cash account")}`;
+    `${tx.length} ${tx.length === 1 ? "Transaktion" : "Transaktionen"} und ${accounts.length} ${accounts.length === 1 ? "Konto" : "Konten"}`;
   const market = useMarketData(transactions, cash, base, refreshKey);
   const fileInput = useRef<HTMLInputElement>(null);
   const discreet = useDiscreet();
@@ -123,20 +122,20 @@ function Dashboard({ depot }: { depot: Depot }) {
 
   async function deleteMany() {
     const manual = removeImported(portfolio);
-    const choice = await ask("Delete data", "Cash accounts are included. This can't be undone, so consider exporting first.", [
+    const choice = await ask("Daten löschen", "Die Konten werden mitgelöscht. Das lässt sich nicht rückgängig machen, exportiere also am besten vorher.", [
       ...(importedCount && manualCount
         ? [
             {
               value: "imported" as const,
-              label: "Delete imported only",
-              description: `Removes everything from your last import. Your ${describeEntries(manual.transactions, manual.cash)} added by hand stay.`,
+              label: "Nur Importiertes löschen",
+              description: `Entfernt alles aus deinem letzten Import. Deine ${describeEntries(manual.transactions, manual.cash)} von Hand bleiben.`,
             },
           ]
         : []),
       {
         value: "all" as const,
-        label: "Delete everything",
-        description: `Removes all ${describeEntries(transactions, cash)}.`,
+        label: "Alles löschen",
+        description: `Entfernt alle ${describeEntries(transactions, cash)}.`,
         tone: "danger" as const,
       },
     ]);
@@ -173,23 +172,23 @@ function Dashboard({ depot }: { depot: Depot }) {
         if (transactions.length || cash.length) {
           const manual = removeImported(portfolio);
           mode = await ask(
-            `Import ${bank.name} file`,
-            `The file has ${describeEntries(parsed.transactions, parsed.cash)}. What should happen to what's there now?`,
+            `${bank.name}-Datei importieren`,
+            `Die Datei enthält ${describeEntries(parsed.transactions, parsed.cash)}. Was soll mit den bisherigen Daten passieren?`,
             [
               {
                 value: "keep" as const,
-                label: manualCount ? "Replace imported, keep manual entries" : "Replace imported data",
+                label: manualCount ? "Importiertes ersetzen, eigene Einträge behalten" : "Importierte Daten ersetzen",
                 description: manualCount
-                  ? `Replaces your last import. Your ${describeEntries(manual.transactions, manual.cash)} added by hand stay.`
-                  : `Replaces your last import (${importedCount} ${importedCount === 1 ? "entry" : "entries"}).`,
+                  ? `Ersetzt deinen letzten Import. Deine ${describeEntries(manual.transactions, manual.cash)} von Hand bleiben.`
+                  : `Ersetzt deinen letzten Import (${importedCount} ${importedCount === 1 ? "Eintrag" : "Einträge"}).`,
                 tone: "primary",
               },
               ...(manualCount
                 ? [
                     {
                       value: "all" as const,
-                      label: "Replace everything",
-                      description: `Also removes the ${describeEntries(manual.transactions, manual.cash)} you added by hand.`,
+                      label: "Alles ersetzen",
+                      description: `Entfernt auch deine ${describeEntries(manual.transactions, manual.cash)} von Hand.`,
                       tone: "danger" as const,
                     },
                   ]
@@ -219,11 +218,11 @@ function Dashboard({ depot }: { depot: Depot }) {
         // A JSON file is a full backup, so it replaces everything.
         if (
           (transactions.length || cash.length) &&
-          !(await ask("Restore backup", `The file has ${describeEntries(data.transactions, data.cash)}.`, [
+          !(await ask("Sicherung wiederherstellen", `Die Datei enthält ${describeEntries(data.transactions, data.cash)}.`, [
             {
               value: true,
-              label: "Replace everything",
-              description: `Removes your current ${describeEntries(transactions, cash)}, including ones added by hand.`,
+              label: "Alles ersetzen",
+              description: `Entfernt deine bisherigen ${describeEntries(transactions, cash)}, auch die von Hand erfassten.`,
               tone: "danger" as const,
             },
           ]))
@@ -244,7 +243,7 @@ function Dashboard({ depot }: { depot: Depot }) {
       savePortfolio(data);
       setImportResult(result);
     } catch (e) {
-      alert(`Import failed: ${(e as Error).message}`);
+      alert(`Import fehlgeschlagen: ${(e as Error).message}`);
     }
   }
 
@@ -262,8 +261,8 @@ function Dashboard({ depot }: { depot: Depot }) {
       className={`${buttonClass} px-2`}
       onClick={() => setDiscreet(!discreet)}
       aria-pressed={discreet}
-      aria-label={discreet ? "Show amounts" : "Hide amounts"}
-      title={discreet ? "Show amounts" : "Hide amounts, show percentages only"}
+      aria-label={discreet ? "Beträge zeigen" : "Beträge verbergen"}
+      title={discreet ? "Beträge zeigen" : "Beträge verbergen, nur Prozente zeigen"}
     >
       <EyeIcon off={discreet} />
     </button>
@@ -276,7 +275,7 @@ function Dashboard({ depot }: { depot: Depot }) {
         savePortfolio({ ...portfolio, settings: { ...settings, baseCurrency: e.target.value } });
         setMenuOpen(false);
       }}
-      aria-label="Base currency"
+      aria-label="Basiswährung"
     >
       {BASE_CURRENCIES.map((c) => (
         <option key={c}>{c}</option>
@@ -293,7 +292,7 @@ function Dashboard({ depot }: { depot: Depot }) {
       disabled={market.loading}
     >
       <RefreshIcon spinning={market.loading} />
-      Refresh
+      Aktualisieren
     </button>
   );
   const exportButton = (
@@ -304,7 +303,7 @@ function Dashboard({ depot }: { depot: Depot }) {
         setMenuOpen(false);
       }}
     >
-      Export
+      Exportieren
     </button>
   );
   const importButton = (
@@ -315,7 +314,7 @@ function Dashboard({ depot }: { depot: Depot }) {
         setMenuOpen(false);
       }}
     >
-      Import
+      Importieren
     </button>
   );
 
@@ -328,11 +327,11 @@ function Dashboard({ depot }: { depot: Depot }) {
           <DepotMenu />
           <p className="text-xs text-zinc-500">
             {market.loading
-              ? "Updating prices…"
+              ? "Kurse werden aktualisiert …"
               : market.error
-                ? `Price update failed: ${market.error}`
+                ? `Kurse konnten nicht aktualisiert werden: ${market.error}`
                 : market.updatedAt
-                  ? `Prices from Yahoo Finance · updated ${market.updatedAt.toLocaleTimeString("de-CH")}`
+                  ? `Kurse von Yahoo Finance · Stand ${market.updatedAt.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" })}`
                   : ""}
           </p>
         </div>
@@ -351,7 +350,7 @@ function Dashboard({ depot }: { depot: Depot }) {
             onClick={() => setMenuOpen((o) => !o)}
             aria-expanded={menuOpen}
             aria-controls="mobile-menu"
-            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-label={menuOpen ? "Menü schliessen" : "Menü öffnen"}
           >
             <MenuIcon open={menuOpen} />
           </button>
@@ -363,7 +362,7 @@ function Dashboard({ depot }: { depot: Depot }) {
             className="animate-fade-in basis-full space-y-3 rounded-xl border border-zinc-200 bg-white p-3 sm:hidden dark:border-zinc-800 dark:bg-zinc-900"
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-sm text-zinc-500">Base currency</span>
+              <span className="text-sm text-zinc-500">Basiswährung</span>
               {currencySelect}
             </div>
             <div className={`grid ${combined ? "grid-cols-2" : "grid-cols-3"} gap-2 [&>button]:justify-center`}>
