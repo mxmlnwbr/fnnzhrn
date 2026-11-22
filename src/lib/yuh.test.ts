@@ -60,7 +60,7 @@ describe("parseYuhCsv", () => {
 
     const partial = parseYuhCsv(csv(BUY_KO, swap("-24,9538"), swap("24,9538")));
     expect(partial.warnings).toHaveLength(1);
-    expect(partial.warnings![0]).toMatch(/^KO: 24.9538 shares were held on 2026-09-14/);
+    expect(partial.warnings![0]).toMatch(/^KO: Am 2026-09-14 wurden 24.9538 Aktien gehalten/);
   });
 
   it("books a one-sided share movement", () => {

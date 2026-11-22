@@ -161,7 +161,7 @@ async function api(init?: RequestInit): Promise<{ data?: unknown }> {
     // The session ended (signed out elsewhere or expired): hand over to the signed-out state.
     setTimeout(() => void checkSession(), 0);
   }
-  if (!res.ok) throw new Error(body.error ?? `Request failed: ${res.status}`);
+  if (!res.ok) throw new Error(body.error ?? `Anfrage fehlgeschlagen: ${res.status}`);
   return body;
 }
 

@@ -74,7 +74,7 @@ function parseRows(text: string): Row[] {
   return lines.slice(1).map((line) => {
     const c = splitLine(line);
     const [, dd, mm, yyyy] = /^(\d{2})[/.](\d{2})[/.](\d{4})$/.exec(c[at.date]) ?? [];
-    if (!yyyy) throw new Error(`Unrecognised date "${c[at.date]}"`);
+    if (!yyyy) throw new Error(`Unbekanntes Datum «${c[at.date]}»`);
     return {
       line,
       date: `${yyyy}-${mm}-${dd}`,
@@ -184,7 +184,7 @@ export function parseYuhCsv(text: string, tickers: Record<string, string> = {}):
         const total = moved.get(key!)!;
         if (held !== null && Math.abs(held - total) > 1e-4 && !warnings.some((w) => w.startsWith(`${asset}:`)))
           warnings.push(
-            `${asset}: ${total} shares were held on ${r.date}, but the trades in the file add up to ${+held.toFixed(4)}. The export probably starts after your first trades; export the full period from Yuh.`,
+            `${asset}: Am ${r.date} wurden ${total} Aktien gehalten, die Trades in der Datei ergeben aber ${+held.toFixed(4)}. Der Export beginnt wohl nach deinen ersten Trades; exportiere bei Yuh den ganzen Zeitraum.`,
           );
         continue;
       }

@@ -82,7 +82,7 @@ export function useChoice() {
         </div>
         <div className="mt-3 flex justify-end">
           <button className={buttonClass} onClick={() => close(null)}>
-            Cancel
+            Abbrechen
           </button>
         </div>
       </div>

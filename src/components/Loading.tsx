@@ -22,7 +22,7 @@ export function SplashLoader() {
           strokeLinejoin="round"
         />
       </svg>
-      <p className="text-sm text-zinc-500">Loading your portfolio…</p>
+      <p className="text-sm text-zinc-500">Dein Depot wird geladen …</p>
     </div>
   );
 }
@@ -34,7 +34,7 @@ export function TopProgress({ active }: { active: boolean }) {
       className={`fixed inset-x-0 top-0 z-50 h-0.5 overflow-hidden transition-opacity duration-300 ${active ? "opacity-100" : "opacity-0"}`}
       role="progressbar"
       aria-hidden={!active}
-      aria-label="Updating prices"
+      aria-label="Kurse werden aktualisiert"
     >
       {active && <div className="animate-slide-bar h-full w-1/4 bg-accent" />}
     </div>

@@ -18,12 +18,12 @@ export async function PUT(request: Request) {
   const id = await requireUser(request);
   if (id instanceof Response) return id;
   const text = await request.text();
-  if (text.length > MAX_BYTES) return Response.json({ error: "Portfolio too large" }, { status: 413 });
+  if (text.length > MAX_BYTES) return Response.json({ error: "Depot zu gross" }, { status: 413 });
   let data;
   try {
     data = normalizeStore(JSON.parse(text).data);
   } catch (e) {
-    return Response.json({ error: `Invalid portfolio: ${(e as Error).message}` }, { status: 400 });
+    return Response.json({ error: `Ungültiges Depot: ${(e as Error).message}` }, { status: 400 });
   }
   await getPool()!.query(
     `insert into portfolios (user_id, data, updated_at) values ($1, $2, now())

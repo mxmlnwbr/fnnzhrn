@@ -30,15 +30,15 @@ function AddForm({ currency, onAdd, onCancel }: { currency: string; onAdd: (a: C
   return (
     <form onSubmit={submit} className="mt-3 grid grid-cols-[1fr_5rem] gap-3 rounded-lg bg-zinc-50 p-3 dark:bg-zinc-950/50">
       <label className="col-span-2 text-xs text-zinc-500">
-        Account name
-        <input className={`${inputClass} mt-1`} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. UBS savings" autoFocus />
+        Kontoname
+        <input className={`${inputClass} mt-1`} value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. UBS Sparkonto" autoFocus />
       </label>
       <label className="text-xs text-zinc-500">
-        Balance
+        Saldo
         <input type="number" step="any" className={`${inputClass} mt-1`} value={balance} onChange={(e) => setBalance(e.target.value)} />
       </label>
       <label className="text-xs text-zinc-500">
-        Currency
+        Währung
         <input
           className={`${inputClass} mt-1 uppercase`}
           value={accountCurrency}
@@ -54,10 +54,10 @@ function AddForm({ currency, onAdd, onCancel }: { currency: string; onAdd: (a: C
       </label>
       <div className="col-span-2 flex justify-end gap-2">
         <button type="button" className={buttonClass} onClick={onCancel}>
-          Cancel
+          Abbrechen
         </button>
         <button type="submit" disabled={!valid} className={primaryButtonClass}>
-          Add account
+          Konto hinzufügen
         </button>
       </div>
     </form>
@@ -106,7 +106,7 @@ function AccountRow({
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium">{account.name}</div>
         <div className="text-xs text-zinc-500">
-          {isImportedCash(account) ? "Imported" : "Manual"}
+          {isImportedCash(account) ? "Importiert" : "Von Hand"}
           {!discreet && value > 0 && ` · ${shareText}`}
         </div>
       </div>
@@ -125,13 +125,13 @@ function AccountRow({
             if (e.key === "Escape") setDraft(null);
           }}
           autoFocus
-          aria-label={`Balance of ${account.name}`}
+          aria-label={`Saldo von ${account.name}`}
         />
       ) : onUpdate ? (
         <button
           className="-mr-1 rounded px-1 text-right tabular-nums hover:bg-zinc-100 dark:hover:bg-zinc-800"
           onClick={() => setDraft(String(account.balance))}
-          title="Edit balance"
+          title="Saldo ändern"
         >
           {balance}
         </button>
@@ -141,9 +141,9 @@ function AccountRow({
       {onDelete && (
         <button
           className="shrink-0 rounded p-1 text-zinc-400 transition-opacity hover:text-red-600 focus:opacity-100 md:opacity-0 md:group-hover:opacity-100"
-          onClick={() => confirm(`Delete the cash account "${account.name}"?`) && onDelete()}
-          aria-label={`Delete ${account.name}`}
-          title="Delete"
+          onClick={() => confirm(`Konto «${account.name}» löschen?`) && onDelete()}
+          aria-label={`${account.name} löschen`}
+          title="Löschen"
         >
           ✕
         </button>
@@ -175,12 +175,12 @@ export function CashAccounts({
 
   return (
     <Card
-      title="Cash"
+      title="Konten"
       action={
         !adding &&
         onChange && (
           <button className={`${buttonClass} text-xs`} onClick={() => setAdding(true)}>
-            + Add account
+            + Konto
           </button>
         )
       }
@@ -189,16 +189,16 @@ export function CashAccounts({
         !adding && (
           <p className="text-sm text-zinc-500">
             {onChange
-              ? "No cash accounts yet. Add your bank and broker balances, or import a Swissquote CSV to fill them in."
-              : "No cash accounts in any depot."}
+              ? "Noch keine Konten. Erfasse die Saldi deiner Bank- und Brokerkonten oder importiere eine Swissquote-CSV."
+              : "In keinem Depot sind Konten erfasst."}
           </p>
         )
       ) : (
         <>
           {!discreet && <div className="text-2xl font-semibold tabular-nums">{formatMoney(total, currency)}</div>}
           <div className="text-xs text-zinc-500">
-            {accounts.length} {accounts.length === 1 ? "account" : "accounts"}
-            {discreet ? " · share of positive balances" : onChange ? " · click a balance to edit it" : ""}
+            {accounts.length} {accounts.length === 1 ? "Konto" : "Konten"}
+            {discreet ? " · Anteil an den positiven Saldi" : onChange ? " · Saldo antippen, um ihn zu ändern" : ""}
           </div>
           {rows.length > 1 && positive > 0 && (
             <div className="mt-3 flex h-1.5 gap-0.5 overflow-hidden rounded-full">

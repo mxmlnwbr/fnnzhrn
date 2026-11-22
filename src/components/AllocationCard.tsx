@@ -39,8 +39,37 @@ const MAX_SLICES = 7;
 /** Positions below this share fold into "Other" in the position view. */
 const MIN_POSITION_SHARE = 0.005;
 
+/**
+ * German names of the asset classes, Yahoo's sectors and the catch-all slices. The keys stay English (they
+ * are stored in settings and come from Yahoo); only what's shown is translated. Industries stay as Yahoo
+ * names them.
+ */
+const LABELS: Record<string, string> = {
+  Stocks: "Aktien",
+  Bonds: "Anleihen",
+  "Real estate": "Immobilien",
+  Commodities: "Rohstoffe",
+  Crypto: "Krypto",
+  Cash: "Konten",
+  Other: "Übrige",
+  Unknown: "Unbekannt",
+  Technology: "Technologie",
+  Industrials: "Industrie",
+  Healthcare: "Gesundheit",
+  "Consumer Defensive": "Basiskonsum",
+  "Consumer Cyclical": "Zyklischer Konsum",
+  Energy: "Energie",
+  "Financial Services": "Finanzen",
+  "Communication Services": "Kommunikation",
+  "Basic Materials": "Grundstoffe",
+  Utilities: "Versorger",
+  "Real Estate": "Immobilien",
+  Fund: "Fonds",
+};
+const label = (key: string) => LABELS[key] ?? key;
+
 const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const whole = (v: number) => new Intl.NumberFormat("de-CH", { maximumFractionDigits: 0 }).format(v);
 
 function Tabs<T extends string>({ value, options, onChange }: { value: T; options: [T, string][]; onChange: (v: T) => void }) {
@@ -98,7 +127,7 @@ function Donut({
         </PieChart>
       </ResponsiveContainer>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-        <span className="max-w-24 truncate text-xs text-zinc-500">{current ? current.key : center.label}</span>
+        <span className="max-w-24 truncate text-xs text-zinc-500">{current ? label(current.key) : center.label}</span>
         <span className="text-lg font-semibold tabular-nums">{current ? pct(current.share) : center.value}</span>
       </div>
     </div>
@@ -191,22 +220,22 @@ export function AllocationCard({
 
   if (total <= 0) {
     return (
-      <Card title="Allocation">
-        <p className="text-sm text-zinc-500">Add positions or cash to see how your money is split.</p>
+      <Card title="Aufteilung">
+        <p className="text-sm text-zinc-500">Erfasse Positionen oder Konten, um zu sehen, wie dein Geld verteilt ist.</p>
       </Card>
     );
   }
 
   return (
     <Card
-      title="Allocation"
+      title="Aufteilung"
       action={
         <Tabs
           value={tab}
           onChange={setTab}
           options={[
-            ["allocation", "Split"],
-            ["rebalance", "Rebalance"],
+            ["allocation", "Aufteilung"],
+            ["rebalance", "Umschichten"],
           ]}
         />
       }
@@ -222,10 +251,10 @@ export function AllocationCard({
                 setActive(null);
               }}
               options={[
-                ["class", "Asset class"],
-                ["sector", "Sector"],
-                ["currency", "Currency"],
-                ["position", "Position"],
+                ["class", "Anlageklasse"],
+                ["sector", "Sektor"],
+                ["currency", "Währung"],
+                ["position", "Titel"],
               ]}
             />
           </div>
@@ -243,7 +272,7 @@ export function AllocationCard({
                   {legend.map((sector) => (
                     <li key={sector} className="flex items-center gap-1">
                       <span className="h-2 w-2 rounded-full" style={{ backgroundColor: SECTOR_COLORS[sector] ?? GREY }} />
-                      {sector}
+                      {label(sector)}
                     </li>
                   ))}
                 </ul>
@@ -272,11 +301,11 @@ export function AllocationCard({
                     >
                       <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color(s, i) }} />
                       <span className="min-w-0 flex-1 truncate font-medium">
-                        {s.key}
+                        {label(s.key)}
                         {name && s.key !== "Other" && <span className="ml-1.5 text-xs font-normal text-zinc-500">{name}</span>}
                         {expandable && (
                           <span className="ml-1.5 text-xs font-normal text-zinc-500">
-                            {byIndustry ? plural(industries(s, total).length, "industry", "industries") : plural(s.positions.length, "position")}{" "}
+                            {byIndustry ? plural(industries(s, total).length, "Branche", "Branchen") : plural(s.positions.length, "Titel", "Titel")}{" "}
                             {isOpen ? "▴" : "▾"}
                           </span>
                         )}
@@ -289,7 +318,7 @@ export function AllocationCard({
                         {industries(s, total).map((ind) => (
                           <li key={ind.industry} className="text-xs">
                             <div className="flex items-center gap-2">
-                              <span className="min-w-0 flex-1 truncate font-medium">{ind.industry}</span>
+                              <span className="min-w-0 flex-1 truncate font-medium">{label(ind.industry)}</span>
                               <span className="tabular-nums text-zinc-500">{pct(ind.share)}</span>
                             </div>
                             <div className="truncate text-zinc-500">{ind.positions.map((p) => p.symbol).join(" · ")}</div>
@@ -310,12 +339,12 @@ export function AllocationCard({
                                 className="rounded border border-zinc-300 bg-white px-1 py-0.5 dark:border-zinc-700 dark:bg-zinc-950"
                                 value={categories[p.symbol] ?? ""}
                                 onChange={(e) => setCategory(p.symbol, e.target.value)}
-                                aria-label={`Asset class of ${p.symbol}`}
+                                aria-label={`Anlageklasse von ${p.symbol}`}
                               >
-                                <option value="">Auto ({defaultClass(quotes[p.symbol])})</option>
+                                <option value="">Automatisch ({label(defaultClass(quotes[p.symbol]))})</option>
                                 {ASSET_CLASSES.filter((c) => c !== "Cash").map((c) => (
                                   <option key={c} value={c}>
-                                    {c}
+                                    {label(c)}
                                   </option>
                                 ))}
                               </select>
@@ -329,10 +358,10 @@ export function AllocationCard({
               })}
             </ul>
           </div>
-          {by === "class" && <p className="mt-2 text-xs text-zinc-500">Open a class to move a position to another one.</p>}
+          {by === "class" && <p className="mt-2 text-xs text-zinc-500">Öffne eine Klasse, um einen Titel einer anderen zuzuordnen.</p>}
         </>
       ) : stocks.length === 0 ? (
-        <p className="text-sm text-zinc-500">Add stock positions to rebalance between them.</p>
+        <p className="text-sm text-zinc-500">Erfasse Aktienpositionen, um zwischen ihnen umzuschichten.</p>
       ) : (
         <>
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -340,13 +369,13 @@ export function AllocationCard({
               value={mode}
               onChange={setMode}
               options={[
-                ["buy", "Only buy"],
-                ["full", "Full rebalance"],
+                ["buy", "Nur kaufen"],
+                ["full", "Ganz umschichten"],
               ]}
             />
             {mode === "buy" && (
               <label className="flex items-center gap-1.5 text-xs whitespace-nowrap text-zinc-500">
-                New money
+                Neues Geld
                 <input
                   type="number"
                   min={0}
@@ -364,10 +393,10 @@ export function AllocationCard({
           <table className="w-full text-sm tabular-nums">
             <thead className="text-left text-xs text-zinc-500">
               <tr>
-                <th className="py-1.5 font-medium">{plural(stocks.length, "stock")}</th>
-                <th className="py-1.5 text-right font-medium">Now</th>
-                <th className="py-1.5 pl-3 text-right font-medium">Target</th>
-                <th className="py-1.5 pl-3 text-right font-medium">{mode === "full" ? "Buy / sell" : "Buy"}</th>
+                <th className="py-1.5 font-medium">{plural(stocks.length, "Aktie", "Aktien")}</th>
+                <th className="py-1.5 text-right font-medium">Jetzt</th>
+                <th className="py-1.5 pl-3 text-right font-medium">Ziel</th>
+                <th className="py-1.5 pl-3 text-right font-medium">{mode === "full" ? "Kauf / Verkauf" : "Kauf"}</th>
               </tr>
             </thead>
             <tbody>
@@ -391,7 +420,7 @@ export function AllocationCard({
                         value={stockTargets[sym] !== undefined ? Math.round(stockTargets[sym] * 100) / 100 : ""}
                         placeholder="–"
                         onChange={(e) => setTarget(sym, e.target.value)}
-                        aria-label={`Target for ${sym} in percent`}
+                        aria-label={`Ziel für ${sym} in Prozent`}
                       />
                       <span className="ml-0.5 text-xs text-zinc-500">%</span>
                     </td>
@@ -406,7 +435,7 @@ export function AllocationCard({
 
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
             <span className={Math.abs(targetSum - 100) < 0.01 || !hasTargets ? "text-zinc-500" : "text-amber-600 dark:text-amber-400"}>
-              Targets add up to {+targetSum.toFixed(2)}%{hasTargets && Math.abs(targetSum - 100) >= 0.01 && " (should be 100%)"}
+              Ziele ergeben zusammen {+targetSum.toFixed(2)}%{hasTargets && Math.abs(targetSum - 100) >= 0.01 && " (sollten 100% sein)"}
             </span>
             <span className="flex gap-2">
               <button
@@ -415,18 +444,18 @@ export function AllocationCard({
                   onTargetsChange(Object.fromEntries(stocks.filter((s) => s.share > 0).map((s) => [s.key, Math.round(s.share * 1000) / 10])))
                 }
               >
-                Use current split
+                Aktuelle Aufteilung übernehmen
               </button>
               <button
                 className={`${buttonClass} py-0.5 text-xs`}
                 onClick={() => onTargetsChange(Object.fromEntries(stocks.map((s) => [s.key, equalWeight])))}
-                title={`Give each of your ${plural(stocks.length, "stock")} the same weight`}
+                title={`Allen ${plural(stocks.length, "Aktie", "Aktien")} das gleiche Gewicht geben`}
               >
-                Equal weight · {+equalWeight.toFixed(2)}% each
+                Gleich gewichtet · je {+equalWeight.toFixed(2)}%
               </button>
               {hasTargets && (
                 <button className={`${buttonClass} py-0.5 text-xs`} onClick={() => onTargetsChange({})}>
-                  Clear
+                  Zurücksetzen
                 </button>
               )}
             </span>
@@ -434,11 +463,11 @@ export function AllocationCard({
 
           {hasTargets && (
             <div className="mt-4">
-              <h3 className="mb-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300">Suggested trades</h3>
+              <h3 className="mb-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300">Vorgeschlagene Trades</h3>
               {mode === "buy" && money <= 0 ? (
-                <p className="text-xs text-zinc-500">Enter how much new money you want to invest.</p>
+                <p className="text-xs text-zinc-500">Gib ein, wie viel neues Geld du investieren willst.</p>
               ) : plan.trades.filter((t) => Math.abs(t.amount) >= 1).length === 0 ? (
-                <p className="text-xs text-zinc-500">You&apos;re on target. Nothing to do.</p>
+                <p className="text-xs text-zinc-500">Du bist auf Kurs. Nichts zu tun.</p>
               ) : (
                 <ul className="divide-y divide-zinc-100 text-sm dark:divide-zinc-800">
                   {plan.trades
@@ -452,7 +481,7 @@ export function AllocationCard({
                               : "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
                           }`}
                         >
-                          {t.amount > 0 ? "Buy" : "Sell"}
+                          {t.amount > 0 ? "Kauf" : "Verkauf"}
                         </span>
                         <span className="min-w-0 flex-1 truncate">
                           <span className="font-medium">{t.symbol}</span> <span className="text-xs text-zinc-500">{t.name}</span>
@@ -462,7 +491,7 @@ export function AllocationCard({
                             pct(Math.abs(t.amount) / plan.total)
                           ) : (
                             <>
-                              {t.shares !== 0 ? `${Math.abs(t.shares).toLocaleString("de-CH")} × ` : "< 1 share · "}
+                              {t.shares !== 0 ? `${Math.abs(t.shares).toLocaleString("de-CH")} × ` : "< 1 Aktie · "}
                               <span className="text-zinc-500">≈ {m(Math.abs(t.amount))}</span>
                             </>
                           )}
@@ -472,8 +501,8 @@ export function AllocationCard({
                 </ul>
               )}
               <p className="mt-2 text-xs text-zinc-500">
-                Targets are shares of your stocks; cash and other classes stay as they are. Share counts round down; fees and taxes aren&apos;t
-                included.
+                Die Ziele sind Anteile an deinen Aktien; Konten und andere Klassen bleiben, wie sie sind. Stückzahlen sind abgerundet,
+                Gebühren und Steuern nicht eingerechnet.
               </p>
             </div>
           )}

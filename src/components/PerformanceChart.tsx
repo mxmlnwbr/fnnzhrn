@@ -9,6 +9,7 @@ import { Card, pnlClass, segmentClass } from "./ui";
 
 const RANGES = ["1M", "3M", "YTD", "1Y", "All"] as const;
 type Range = (typeof RANGES)[number];
+const RANGE_LABEL: Record<Range, string> = { "1M": "1M", "3M": "3M", YTD: "YTD", "1Y": "1J", All: "Alle" };
 
 function rangeStart(range: Range, last: string): string {
   if (range === "All") return "";
@@ -39,7 +40,7 @@ export function PerformanceChart({ history, currency, loading }: { history: Hist
 
   return (
     <Card
-      title="Performance"
+      title="Entwicklung"
       action={
         <div className="flex gap-1">
           {RANGES.map((r) => (
@@ -48,7 +49,7 @@ export function PerformanceChart({ history, currency, loading }: { history: Hist
               onClick={() => setRange(r)}
               className={`rounded-full px-2.5 py-0.5 text-xs transition-colors ${segmentClass(r === range)}`}
             >
-              {r}
+              {RANGE_LABEL[r]}
             </button>
           ))}
         </div>
@@ -56,18 +57,18 @@ export function PerformanceChart({ history, currency, loading }: { history: Hist
     >
       {data.length === 0 ? (
         <div className="flex h-64 items-center justify-center text-sm text-zinc-500">
-          {loading ? "Loading price history…" : "Add transactions to see performance over time."}
+          {loading ? "Kursverlauf wird geladen …" : "Erfasse Transaktionen, um die Entwicklung zu sehen."}
         </div>
       ) : (
         <>
           {discreet ? (
             <div className={`mb-2 text-sm tabular-nums ${pnlClass(last.return)}`}>
-              {formatPercent(last.return)} <span className="text-zinc-500">time-weighted return in period</span>
+              {formatPercent(last.return)} <span className="text-zinc-500">zeitgewichtete Rendite im Zeitraum</span>
             </div>
           ) : (
             <div className={`mb-2 text-sm tabular-nums ${pnlClass(gain)}`}>
               {formatMoney(gain, currency)} {base > 0 ? `(${formatPercent(gain / base)})` : ""}{" "}
-              <span className="text-zinc-500">in period, excl. deposits</span>
+              <span className="text-zinc-500">im Zeitraum, ohne Einzahlungen</span>
             </div>
           )}
           <div className="h-64">
@@ -83,7 +84,7 @@ export function PerformanceChart({ history, currency, loading }: { history: Hist
                 <XAxis
                   dataKey="date"
                   tick={{ fontSize: 11, fill: "var(--n-500)" }}
-                  tickFormatter={(d: string) => new Date(d).toLocaleDateString("en-GB", { month: "short", year: "2-digit" })}
+                  tickFormatter={(d: string) => new Date(d).toLocaleDateString("de-CH", { month: "short", year: "2-digit" })}
                   minTickGap={48}
                   axisLine={false}
                   tickLine={false}
@@ -103,11 +104,11 @@ export function PerformanceChart({ history, currency, loading }: { history: Hist
                 />
                 <Tooltip
                   cursor={{ stroke: "var(--n-500)", strokeWidth: 1, strokeDasharray: "3 3" }}
-                  labelFormatter={(d) => new Date(String(d)).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                  labelFormatter={(d) => new Date(String(d)).toLocaleDateString("de-CH", { day: "numeric", month: "short", year: "numeric" })}
                   formatter={(v, name) =>
                     name === "return"
-                      ? [formatPercent(Number(v)), "Return"]
-                      : [formatMoney(Number(v), currency), name === "value" ? "Value" : "Invested"]
+                      ? [formatPercent(Number(v)), "Rendite"]
+                      : [formatMoney(Number(v), currency), name === "value" ? "Wert" : "Investiert"]
                   }
                   contentStyle={{
                     fontSize: 12,
@@ -144,11 +145,11 @@ export function PerformanceChart({ history, currency, loading }: { history: Hist
           </div>
           <div className="mt-2 flex gap-4 text-xs text-zinc-500">
             {discreet ? (
-              <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 rounded-full bg-accent" />Cumulative return</span>
+              <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 rounded-full bg-accent" />Kumulierte Rendite</span>
             ) : (
               <>
-                <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 rounded-full bg-accent" />Market value</span>
-                <span className="flex items-center gap-1.5"><span className="h-0 w-4 border-t-[1.5px] border-dashed" style={{ borderColor: "var(--series-other)" }} />Net invested</span>
+                <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 rounded-full bg-accent" />Marktwert</span>
+                <span className="flex items-center gap-1.5"><span className="h-0 w-4 border-t-[1.5px] border-dashed" style={{ borderColor: "var(--series-other)" }} />Netto investiert</span>
               </>
             )}
           </div>

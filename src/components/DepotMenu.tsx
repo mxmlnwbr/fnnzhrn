@@ -20,7 +20,7 @@ export function DepotMenu() {
   const combined = current.id === ALL_DEPOTS_ID;
   const options = [
     ...(depots.length > 1
-      ? [{ id: ALL_DEPOTS_ID, name: "All depots", hint: `${depots.length} added up` }]
+      ? [{ id: ALL_DEPOTS_ID, name: "Alle Depots", hint: `${depots.length} zusammen` }]
       : []),
     ...depots.map((d) => ({ id: d.id, name: d.name, hint: d.data.settings.baseCurrency })),
   ];
@@ -58,17 +58,16 @@ export function DepotMenu() {
   async function remove() {
     close();
     const { transactions, cash } = current.data;
-    const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
     const imported = transactions.filter(isImported).length + cash.filter(isImportedCash).length;
     const last = depots.length === 1;
     const ok = await ask(
-      `Delete “${current.name}”`,
-      `This can't be undone, so consider exporting it first.${last ? " It's your only depot, so you start over with an empty one." : ""}`,
+      `«${current.name}» löschen`,
+      `Das lässt sich nicht rückgängig machen, exportiere es also am besten vorher.${last ? " Es ist dein einziges Depot, du beginnst danach mit einem leeren." : ""}`,
       [
         {
           value: true,
-          label: "Delete depot and all its data",
-          description: `Removes ${plural(transactions.length, "transaction")} and ${plural(cash.length, "cash account")}${imported ? ` (${imported} of them imported)` : ""}, along with the depot's settings and targets.`,
+          label: "Depot mit allen Daten löschen",
+          description: `Entfernt ${transactions.length} ${transactions.length === 1 ? "Transaktion" : "Transaktionen"} und ${cash.length} ${cash.length === 1 ? "Konto" : "Konten"}${imported ? ` (davon ${imported} importiert)` : ""} samt Einstellungen und Zielgewichten des Depots.`,
           tone: "danger" as const,
         },
       ],
@@ -85,7 +84,7 @@ export function DepotMenu() {
           onClick={() => (open ? close() : setOpen(true))}
           aria-expanded={open}
           aria-haspopup="listbox"
-          title="Switch depot"
+          title="Depot wechseln"
         >
           <span className="truncate">{current.name}</span>
           <ChevronIcon />
@@ -122,7 +121,7 @@ export function DepotMenu() {
                 }}
               >
                 <label className="block text-xs text-zinc-500" htmlFor="depot-name">
-                  {editing === "new" ? "Name of the new depot" : `Rename “${current.name}”`}
+                  {editing === "new" ? "Name des neuen Depots" : `«${current.name}» umbenennen`}
                 </label>
                 <input
                   id="depot-name"
@@ -135,20 +134,20 @@ export function DepotMenu() {
                 />
                 <div className="flex justify-end gap-2">
                   <button type="button" className={buttonClass} onClick={() => setEditing(null)}>
-                    Cancel
+                    Abbrechen
                   </button>
                   <button className={primaryButtonClass} disabled={!name.trim()}>
-                    {editing === "new" ? "Create" : "Rename"}
+                    {editing === "new" ? "Erstellen" : "Umbenennen"}
                   </button>
                 </div>
               </form>
             ) : (
               <div className="flex flex-col">
-                <MenuItem onClick={() => edit("new")}>New depot</MenuItem>
-                {!combined && <MenuItem onClick={() => edit("rename")}>Rename “{current.name}”</MenuItem>}
+                <MenuItem onClick={() => edit("new")}>Neues Depot</MenuItem>
+                {!combined && <MenuItem onClick={() => edit("rename")}>«{current.name}» umbenennen</MenuItem>}
                 {!combined && (
                   <MenuItem danger onClick={() => void remove()}>
-                    Delete “{current.name}”
+                    «{current.name}» löschen
                   </MenuItem>
                 )}
               </div>

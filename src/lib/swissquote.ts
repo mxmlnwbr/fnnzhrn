@@ -140,7 +140,7 @@ function parseRows(text: string): Row[] {
   return lines.slice(1).map((line) => {
     const c = splitLine(line);
     const [, dd, mm, yyyy, clock] = /^(\d{2})[-.](\d{2})[-.](\d{4})\s*(.*)$/.exec(c[0]) ?? [];
-    if (!yyyy) throw new Error(`Unrecognised date "${c[0]}"`);
+    if (!yyyy) throw new Error(`Unbekanntes Datum «${c[0]}»`);
     return {
       line,
       time: `${yyyy}-${mm}-${dd} ${clock}`,
