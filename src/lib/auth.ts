@@ -1,4 +1,5 @@
 import "server-only";
+import { expo } from "@better-auth/expo";
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import { Resend } from "resend";
@@ -19,7 +20,13 @@ function createAuth() {
     baseURL: cleanEnv(process.env.BETTER_AUTH_URL),
     // Sign-in requests are accepted from these sites besides BETTER_AUTH_URL, so a www. address or a
     // leftover BETTER_AUTH_URL from the old depot.fnnzhrn.ch project doesn't block signing in.
-    trustedOrigins: ["https://fnnzhrn.ch", "https://www.fnnzhrn.ch"],
+    // fnnzhrn:// is the iOS and Android app (mobile/); exp:// is Expo Go while developing it.
+    trustedOrigins: [
+      "https://fnnzhrn.ch",
+      "https://www.fnnzhrn.ch",
+      "fnnzhrn://",
+      ...(process.env.NODE_ENV === "development" ? ["exp://", "exp://**"] : []),
+    ],
     session: {
       // Stay signed in like before: a year, renewed daily while the app is used.
       expiresIn: 60 * 60 * 24 * 365,
@@ -59,6 +66,8 @@ function createAuth() {
       },
     },
     plugins: [
+      // Lets the app sign in: it has no browser cookies, so it sends the session cookie from the keychain.
+      expo(),
       nextCookies(),
     ],
   });
