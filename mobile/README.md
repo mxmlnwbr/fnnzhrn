@@ -16,6 +16,8 @@ Finanzen, Cockpit and the assistant are still website-only.
 - **Sign-in.** Better Auth's Expo plugin (`@better-auth/expo`) runs on the server (`src/lib/auth.ts`) and in the app (`src/lib/auth-client.ts`). The session cookie lives in the iOS keychain / Android keystore (`expo-secure-store`) and goes along with every API call (`src/lib/api.ts`). The server trusts the app's scheme `fnnzhrn://`.
 - **API address.** Production by default. For a local web app, put `EXPO_PUBLIC_API_URL=http://localhost:3000` in `mobile/.env.local` (the iOS simulator reaches the Mac at localhost). The server needs the Expo plugin, so sign-in only works against a deployment that includes it.
 
+- **Password AutoFill.** The app claims `webcredentials:fnnzhrn.ch` (Associated Domains, in `app.config.ts`) and the website confirms it at `/.well-known/apple-app-site-association` (`src/lib/app-links.ts`). iOS then suggests the passwords saved for fnnzhrn.ch in the sign-in and offers to save new ones. This needs a production build signed by the paid developer account and the site deployed; Apple's CDN can take a while to pick up a changed file.
+
 ## Run it
 
 Needs Xcode for iOS and Android Studio for Android.
@@ -28,6 +30,14 @@ npm run android    # same for an Android emulator
 npm start          # just the bundler, for an app that's already installed
 npm run typecheck
 ```
+
+**On your own iPhone with a free Apple account** (a "personal team"): Apple doesn't allow Associated Domains there, so leave them out. Plug in the iPhone, unlock it, then:
+
+```bash
+FNNZHRN_PERSONAL_TEAM=1 npx expo run:ios --device --configuration Release
+```
+
+On the iPhone, trust the certificate once under Settings → General → VPN & Device Management. Apps from a personal team stop opening after 7 days; install again then. Password AutoFill only suggests fnnzhrn.ch's passwords in builds with Associated Domains; without them, pick the password from the key in the keyboard's bar.
 
 `ios/` and `android/` are generated (Expo's Continuous Native Generation) and not committed. Change native settings in `app.json`.
 

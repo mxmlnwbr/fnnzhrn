@@ -47,7 +47,7 @@ export default function Login() {
           placeholder="E-Mail"
           placeholderTextColor={colors.muted}
           autoCapitalize="none"
-          autoComplete="email"
+          autoComplete="username"
           keyboardType="email-address"
           textContentType="username"
           value={email}
