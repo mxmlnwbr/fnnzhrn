@@ -17,6 +17,7 @@ import {
   withSnapshot,
   withSnapshots,
   withYearSnapshot,
+  parseAmount,
 } from "./budget";
 import { BUDGET_SEEDS } from "./budget-seeds";
 
@@ -249,5 +250,19 @@ describe("months", () => {
     expect(
       normalizeBudget({ months: [{ month: "2026-13" }, 4, { month: "2026-09", income: "100", expenses: [{ name: 3, amount: "12" }, null] }] }).months,
     ).toEqual([{ month: "2026-09", income: 100, invest: 0, planned: 0, fixed: [], expenses: [{ id: "2026-09-0", name: "", amount: 12 }] }]);
+  });
+});
+
+describe("parseAmount", () => {
+  it("reads Swiss thousands separators and decimal commas", () => {
+    expect(parseAmount("1'250.50")).toBe(1250.5);
+    expect(parseAmount("1’250")).toBe(1250);
+    expect(parseAmount("12,5")).toBe(12.5);
+    expect(parseAmount(" 40 ")).toBe(40);
+  });
+
+  it("gives 0 for anything else", () => {
+    expect(parseAmount("abc")).toBe(0);
+    expect(parseAmount("")).toBe(0);
   });
 });

@@ -12,12 +12,25 @@ export class ApiError extends Error {
 }
 
 /** GETs a path of the web app's API (e.g. `/api/portfolio`) with the session cookie and returns its JSON. */
-export async function getJson<T>(path: string): Promise<T> {
+export function getJson<T>(path: string): Promise<T> {
+  return request<T>(path);
+}
+
+/** PUTs `body` as JSON to a path of the web app's API, e.g. `{ data: budget }` to `/api/budget`. */
+export function putJson<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method: "PUT", body: JSON.stringify(body), headers: { "Content-Type": "application/json" } });
+}
+
+async function request<T>(path: string, init: { method?: string; body?: string; headers?: Record<string, string> } = {}): Promise<T> {
   const cookie = await authClient.getCookie();
   let res: Response;
   try {
     // The cookie goes in by hand; `credentials: "omit"` keeps the native cookie jar out of it.
-    res = await fetch(`${API_URL}${path}`, { headers: cookie ? { Cookie: cookie } : {}, credentials: "omit" });
+    res = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: { ...init.headers, ...(cookie ? { Cookie: cookie } : {}) },
+      credentials: "omit",
+    });
   } catch {
     throw new ApiError("Keine Verbindung zu fnnzhrn. Prüfe dein Internet.", 0);
   }

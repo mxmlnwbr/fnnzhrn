@@ -6,9 +6,10 @@ The fnnzhrn tools as a native app, built with [Expo](https://expo.dev) (React Na
 | --- | --- |
 | Sign-in | Email and password. Sign-up and password reset open fnnzhrn.ch |
 | Depot | Net worth, today's change, total return, cash and the positions, per depot or all added up. Read-only; pull to refresh |
+| Finanzen | **Monat**: frei verfügbar, Einkommen, Fixkosten, Investieren und Ausgaben gegen das Budget; Ausgaben erfassen (Name, Betrag, Kategorie) und mit langem Drücken löschen; die Fixkosten aus dem Plan. **Plan**: pro Monat oder Jahr, wohin das Einkommen geht, und alle Einträge. Changes save right away to `/api/budget`; the plan itself is edited on the website |
 | Konto | Who is signed in, a link to the website, sign out |
 
-Finanzen, Cockpit and the assistant are still website-only.
+Editing the Finanzen plan, the Cockpit and the assistant are still website-only.
 
 ## How it fits together
 

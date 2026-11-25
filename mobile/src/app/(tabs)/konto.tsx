@@ -17,7 +17,7 @@ export default function Konto() {
         <Text style={[styles.value, { color: colors.fg }]}>{session?.user.email}</Text>
       </Card>
       <Text style={[styles.note, { color: colors.muted }]}>
-        Transaktionen erfassen, Bankexporte importieren, das Cockpit und Finanzen gibt es vorerst auf der Website.
+        Transaktionen erfassen, Bankexporte importieren, den Finanzplan ändern und das Cockpit gibt es vorerst auf der Website.
       </Text>
       <View style={styles.actions}>
         <Button title="fnnzhrn.ch öffnen" variant="secondary" onPress={() => WebBrowser.openBrowserAsync(`${API_URL}/depot`)} />

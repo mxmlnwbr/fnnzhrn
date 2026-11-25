@@ -19,6 +19,7 @@ import {
   type Interval,
   type MonthExpense,
   monthCategoryTotals,
+  parseAmount,
   planMonth,
   type Section,
   SECTIONS,
@@ -810,11 +811,6 @@ function MonthCategoriesCard({ month, categories, format }: { month: BudgetMonth
       </ul>
     </Card>
   );
-}
-
-function parseAmount(text: string): number {
-  const n = Number(text.replace(/['’\s]/g, "").replace(",", "."));
-  return Number.isFinite(n) ? n : 0;
 }
 
 /**

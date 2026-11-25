@@ -303,6 +303,12 @@ export function monthCategoryTotals(m: BudgetMonth, categories: Category[]): Mon
   return rows;
 }
 
+/** An amount as typed, e.g. "1'250.50" or "12,5"; 0 when it isn't a number. */
+export function parseAmount(text: string): number {
+  const n = Number(text.replace(/['’\s]/g, "").replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
+}
+
 const MAX_ITEMS = 200;
 const MAX_SNAPSHOTS = 100;
 const MAX_CATEGORIES = 50;

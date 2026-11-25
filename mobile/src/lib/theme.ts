@@ -14,6 +14,12 @@ const palettes = {
     up: "#0d8048",
     down: "#c93434",
     warn: "#b7791f",
+    // Chart series, as --series-* in globals.css: income, fixed costs, flexible spending, investing, the rest.
+    income: "#1baf7a",
+    fixed: "#eb6834",
+    variable: "#eda100",
+    invest: "#2a78d6",
+    other: "#a1a1aa",
   },
   dark: {
     bg: "#0b0d0c",
@@ -27,10 +33,15 @@ const palettes = {
     up: "#3ddc84",
     down: "#ff6b6b",
     warn: "#f0b429",
+    income: "#199e70",
+    fixed: "#d95926",
+    variable: "#c98500",
+    invest: "#3987e5",
+    other: "#6d7570",
   },
 };
 
-export type Palette = (typeof palettes)["light"];
+export type Palette = { [K in keyof (typeof palettes)["light"]]: string };
 
 export function useColors(): Palette {
   return palettes[useColorScheme() === "dark" ? "dark" : "light"];
