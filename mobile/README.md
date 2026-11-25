@@ -7,9 +7,10 @@ The fnnzhrn tools as a native app, built with [Expo](https://expo.dev) (React Na
 | Sign-in | Email and password. Sign-up and password reset open fnnzhrn.ch |
 | Depot | Net worth, today's change, total return, cash and the positions, per depot or all added up. Read-only; pull to refresh |
 | Finanzen | **Monat**: frei verfügbar, Einkommen, Fixkosten, Investieren und Ausgaben gegen das Budget; Ausgaben erfassen (Name, Betrag, Kategorie) und mit langem Drücken löschen; die Fixkosten aus dem Plan. **Plan**: pro Monat oder Jahr, wohin das Einkommen geht, und alle Einträge. Changes save right away to `/api/budget`; the plan itself is edited on the website |
+| Cockpit | Märkte (Heute bis 1 Jahr, mit Verlauf), Marktstimmung (Fear & Greed, VIX, Put/Call), Tagesgewinner und -verlierer pro Markt, Makro (Rohstoffe, Krypto, Währungen), News zu den eigenen Aktien und die nächsten Quartalszahlen. Eigene Titel sind hervorgehoben. Same `/api/cockpit/*` routes as the web Cockpit; the lists in `src/lib/cockpit.ts` mirror `src/app/cockpit/cockpit.html` |
 | Konto | Who is signed in, a link to the website, sign out |
 
-Editing the Finanzen plan, the Cockpit and the assistant are still website-only.
+Editing the Finanzen plan, the Cockpit's other tiles (radar, value, Buffett, takeovers, watchlist) and the assistant are still website-only.
 
 ## How it fits together
 
