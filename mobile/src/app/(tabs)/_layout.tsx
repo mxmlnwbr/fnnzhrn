@@ -14,6 +14,10 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Label>Finanzen</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: "banknote", selected: "banknote.fill" }} md="account_balance_wallet" />
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="cockpit">
+        <NativeTabs.Trigger.Label>Cockpit</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: "gauge.with.dots.needle.50percent", selected: "gauge.with.dots.needle.50percent" }} md="speed" />
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="konto">
         <NativeTabs.Trigger.Label>Konto</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: "person.crop.circle", selected: "person.crop.circle.fill" }} md="account_circle" />
