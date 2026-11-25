@@ -39,6 +39,8 @@ FNNZHRN_PERSONAL_TEAM=1 npx expo run:ios --device --configuration Release
 
 On the iPhone, trust the certificate once under Settings → General → VPN & Device Management. Apps from a personal team stop opening after 7 days; install again then. Password AutoFill only suggests fnnzhrn.ch's passwords in builds with Associated Domains; without them, pick the password from the key in the keyboard's bar.
 
+The icons in `assets/images/` are drawn from the logo by `python3 scripts/make-icons.py` (needs ImageMagick).
+
 `ios/` and `android/` are generated (Expo's Continuous Native Generation) and not committed. Change native settings in `app.json`.
 
 ## Publishing
@@ -47,7 +49,6 @@ Builds and uploads run on [EAS](https://docs.expo.dev/eas/) (`eas.json`). One-ti
 
 1. An [Apple Developer Program](https://developer.apple.com/programs/) membership (99 USD a year) and, for Android, a [Google Play Console](https://play.google.com/console) account (25 USD once).
 2. `npx eas-cli@latest login` and `npx eas-cli@latest init` (links the project to an Expo account and adds its id to `app.json`).
-3. Replace the placeholder icons in `assets/` with fnnzhrn's.
 
 Then for each release:
 
