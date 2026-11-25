@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
-import { authErrorMessage } from "./auth-errors";
+import { authErrorMessage } from "@/lib/auth-errors";
 
 /** Sets a new password from the emailed reset link, then sends the user to sign in with it. */
 export function ResetPasswordForm({ token, next }: { token: string | null; next: string }) {

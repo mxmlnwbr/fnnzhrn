@@ -10,6 +10,8 @@
 | `/cockpit` | Cockpit: market dashboard (depot, markets, news, opportunities) | members |
 | `/budget` | Finanzen: income, fixed costs and how much of it to invest | members |
 
+There is also an iOS and Android app in [`mobile/`](mobile/README.md) (Expo), with the Depot so far. It uses this app's API and sign-in.
+
 The Depot used to be a separate repository on `depot.fnnzhrn.ch`. Its full history is merged into this one, and the old subdomain redirects to `/depot`.
 
 ## Getting started

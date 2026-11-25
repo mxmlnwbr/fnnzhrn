@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
-import { authErrorMessage } from "./auth-errors";
+import { authErrorMessage } from "@/lib/auth-errors";
 
 type Mode = "signin" | "signup" | "forgot";
 

@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The iOS and Android app has its own tooling (Expo).
+    "mobile/**",
   ]),
 ]);
 

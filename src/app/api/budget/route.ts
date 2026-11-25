@@ -1,9 +1,16 @@
-import { requireUser } from "@/lib/auth";
+import { requireMemberUser, requireUser } from "@/lib/auth";
 import { normalizeBudget } from "@/lib/budget";
-import { saveBudget } from "@/lib/budget-store";
+import { loadBudget, saveBudget } from "@/lib/budget-store";
 
 // Room for years of months with their expenses.
 const MAX_BYTES = 2_000_000;
+
+/** The signed-in user's financial overview, as the Finanzen page loads it; for the mobile app. */
+export async function GET(request: Request) {
+  const user = await requireMemberUser(request);
+  if (user instanceof Response) return user;
+  return Response.json({ data: await loadBudget(user.id, user.email) });
+}
 
 /** Replaces the signed-in user's financial overview. Body: `{ data: Budget }`. */
 export async function PUT(request: Request) {
