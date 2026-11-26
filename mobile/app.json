@@ -47,6 +47,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "owner": "weber-studio",
+    "extra": {
+      "eas": {
+        "projectId": "27176215-2fca-4559-9f6b-17f643685d9c"
+      }
     }
   }
 }
