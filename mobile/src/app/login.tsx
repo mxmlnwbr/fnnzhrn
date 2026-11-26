@@ -33,6 +33,8 @@ export default function Login() {
     // On success the session changes and the root layout shows the tools.
   }
 
+  // The fields are uncontrolled (no `value`): iOS Password AutoFill writes into them natively, and a
+  // controlled field could be reset by a render before React has seen that text.
   const input = [styles.input, { color: colors.fg, backgroundColor: colors.card, borderColor: colors.line }];
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.bg }]}>
@@ -50,7 +52,6 @@ export default function Login() {
           autoComplete="username"
           keyboardType="email-address"
           textContentType="username"
-          value={email}
           onChangeText={setEmail}
           returnKeyType="next"
         />
@@ -61,7 +62,6 @@ export default function Login() {
           secureTextEntry
           autoComplete="current-password"
           textContentType="password"
-          value={password}
           onChangeText={setPassword}
           returnKeyType="go"
           onSubmitEditing={signIn}
