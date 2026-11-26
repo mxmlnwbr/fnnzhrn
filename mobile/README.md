@@ -50,7 +50,7 @@ The icons in `assets/images/` are drawn from the logo by `python3 scripts/make-i
 Builds and uploads run on [EAS](https://docs.expo.dev/eas/) (`eas.json`). One-time setup:
 
 1. An [Apple Developer Program](https://developer.apple.com/programs/) membership (99 USD a year) and, for Android, a [Google Play Console](https://play.google.com/console) account (25 USD once).
-2. `npx eas-cli@latest login` and `npx eas-cli@latest init` (links the project to an Expo account and adds its id to `app.json`).
+2. `npx eas-cli@latest login`. The project is already linked to the Expo account `weber-studio` (`owner` and `extra.eas.projectId` in `app.json`), at https://expo.dev/accounts/weber-studio/projects/fnnzhrn.
 
 Then for each release:
 
