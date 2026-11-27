@@ -1,19 +1,27 @@
 import { cashCurrencies, loadMarketData, type MarketData } from "@core/market";
 import { summarize } from "@core/portfolio";
-import { ALL_DEPOTS_ID, combineDepots, EMPTY_STORE, normalizeStore } from "@core/sync";
-import type { Depot, DepotStore, Holding } from "@core/types";
+import { ALL_DEPOTS_ID, combineDepots, depotIdOf } from "@core/sync";
+import type { Depot, DepotStore, Holding, Transaction } from "@core/types";
+import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Card } from "@/components/ui";
 import { ApiError, getJson } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
+import { loadStore as fetchStore, removeTransaction, swissDate } from "@/lib/depot";
 import { formatMoney, formatPercent, formatQuantity, formatSignedMoney } from "@/lib/format";
 import { signColor, useColors, type Palette } from "@/lib/theme";
 
+/** How many of the latest transactions the Depot lists. */
+const RECENT = 10;
+
+const TYPE_LABEL: Record<Transaction["type"], string> = { buy: "Kauf", sell: "Verkauf", dividend: "Dividende", fee: "Depotgebühr" };
+
 /**
- * The Depot, read-only: the same depots as on fnnzhrn.ch, with today's prices. Totals and holdings
- * come from the web app's own calculation (src/lib/portfolio.ts).
+ * The Depot: the same depots as on fnnzhrn.ch, with today's prices. Totals and holdings come from the
+ * web app's own calculation (src/lib/portfolio.ts). New transactions are entered in /transaktion; the
+ * latest ones are listed here and deleted with a long press.
  */
 export default function DepotScreen() {
   const colors = useColors();
@@ -32,17 +40,19 @@ export default function DepotScreen() {
 
   const loadStore = useCallback(async () => {
     try {
-      const { data } = await getJson<{ data: Partial<DepotStore> | null }>("/api/portfolio");
-      setStore(data ? normalizeStore(data) : EMPTY_STORE);
+      setStore(await fetchStore());
       setError(null);
     } catch (e) {
       fail(e);
     }
   }, [fail]);
 
-  useEffect(() => {
-    loadStore();
-  }, [loadStore]);
+  // Also when coming back from entering a transaction.
+  useFocusEffect(
+    useCallback(() => {
+      loadStore();
+    }, [loadStore]),
+  );
 
   const depot = store ? pickDepot(store, active) : null;
   const key = depot ? JSON.stringify([depot.id, depot.data.transactions.length, depot.data.settings.baseCurrency, reload]) : "";
@@ -68,7 +78,33 @@ export default function DepotScreen() {
     setRefreshing(false);
   }
 
+  function remove(t: Transaction) {
+    if (!depot) return;
+    // In "Alle Depots" an id carries its depot after an @.
+    const combined = depot.id === ALL_DEPOTS_ID;
+    const depotId = combined ? depotIdOf(t.id) : depot.id;
+    const id = combined ? t.id.slice(0, t.id.lastIndexOf("@")) : t.id;
+    const what = t.type === "fee" ? `Depotgebühr vom ${swissDate(t.date)}` : `${TYPE_LABEL[t.type]} von ${t.symbol}`;
+    Alert.alert(`${what} löschen?`, "Das lässt sich nicht rückgängig machen.", [
+      { text: "Abbrechen", style: "cancel" },
+      {
+        text: "Löschen",
+        style: "destructive",
+        onPress: () =>
+          removeTransaction(depotId, id)
+            .then((next) => {
+              setStore(next);
+              setError(null);
+            })
+            .catch(fail),
+      },
+    ]);
+  }
+
   const base = depot?.data.settings.baseCurrency ?? "CHF";
+  const recent = depot
+    ? [...depot.data.transactions].sort((a, b) => b.date.localeCompare(a.date)).slice(0, RECENT)
+    : [];
   const current = market?.key === key ? market.data : null;
   const summary = depot && current ? summarize(depot.data.transactions, current.quotes, current.fx, depot.data.cash) : null;
 
@@ -78,7 +114,19 @@ export default function DepotScreen() {
       contentInsetAdjustmentBehavior="automatic"
       contentContainerStyle={styles.body}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.muted} />}>
-      <Text style={[styles.title, { color: colors.fg }]}>Depot</Text>
+      <View style={styles.titleRow}>
+        <Text style={[styles.title, { color: colors.fg }]}>Depot</Text>
+        {store && (
+          <Pressable
+            onPress={() => router.push({ pathname: "/transaktion", params: { depot: depot?.id ?? active } })}
+            accessibilityRole="button"
+            accessibilityLabel="Transaktion erfassen"
+            hitSlop={8}
+            style={({ pressed }) => [styles.add, { backgroundColor: colors.accentSoft, opacity: pressed ? 0.6 : 1 }]}>
+            <Text style={[styles.addText, { color: colors.accent }]}>+</Text>
+          </Pressable>
+        )}
+      </View>
 
       {store && store.depots.length > 1 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
@@ -126,13 +174,24 @@ export default function DepotScreen() {
 
           <Text style={[styles.section, { color: colors.fg }]}>Positionen</Text>
           {summary.holdings.length === 0 ? (
-            <Text style={{ color: colors.muted, fontSize: 15 }}>Noch keine Positionen. Erfasse Käufe auf fnnzhrn.ch.</Text>
+            <Text style={{ color: colors.muted, fontSize: 15 }}>Noch keine Positionen. Tippe oben auf +, um einen Kauf zu erfassen.</Text>
           ) : (
             <Card style={styles.list}>
               {summary.holdings.map((h, i) => (
                 <HoldingRow key={h.symbol} holding={h} base={base} colors={colors} first={i === 0} />
               ))}
             </Card>
+          )}
+          {recent.length > 0 && (
+            <>
+              <Text style={[styles.section, { color: colors.fg }]}>Letzte Transaktionen</Text>
+              <Card style={styles.list}>
+                {recent.map((t, i) => (
+                  <TransactionRow key={t.id} transaction={t} colors={colors} first={i === 0} onLongPress={() => remove(t)} />
+                ))}
+              </Card>
+              <Text style={[styles.footnote, { color: colors.muted }]}>Lange drücken zum Löschen</Text>
+            </>
           )}
           {current?.updatedAt && (
             <Text style={[styles.footnote, { color: colors.muted }]}>
@@ -161,6 +220,47 @@ function Stat({ label, text, value, colors }: { label: string; text: string; val
   );
 }
 
+function TransactionRow({
+  transaction: t,
+  colors,
+  first,
+  onLongPress,
+}: {
+  transaction: Transaction;
+  colors: Palette;
+  first: boolean;
+  onLongPress: () => void;
+}) {
+  const fee = t.type === "fee";
+  const total = fee || t.type === "dividend" ? t.price : t.quantity * t.price;
+  // Amounts are in the security's own currency, which only a custody fee names.
+  const amount = new Intl.NumberFormat("de-CH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(total);
+  return (
+    <Pressable
+      onLongPress={onLongPress}
+      accessibilityHint="Lange drücken zum Löschen"
+      style={({ pressed }) => [
+        styles.tx,
+        !first && { borderTopColor: colors.line, borderTopWidth: StyleSheet.hairlineWidth },
+        pressed && { opacity: 0.6 },
+      ]}>
+      <View style={styles.holdingMain}>
+        <Text style={[styles.txName, { color: colors.fg }]} numberOfLines={1}>
+          {TYPE_LABEL[t.type]}
+          {fee ? "" : ` · ${t.symbol}`}
+        </Text>
+        <Text style={[styles.txAmount, { color: t.type === "sell" || t.type === "dividend" ? colors.up : colors.fg }]}>
+          {fee ? `${t.currency ?? ""} ${amount}`.trim() : amount}
+        </Text>
+      </View>
+      <Text style={[styles.meta, { color: colors.muted }]}>
+        {swissDate(t.date)}
+        {t.type === "buy" || t.type === "sell" ? ` · ${formatQuantity(t.quantity)} × ${t.price}` : ""}
+      </Text>
+    </Pressable>
+  );
+}
+
 function HoldingRow({ holding: h, base, colors, first }: { holding: Holding; base: string; colors: Palette; first: boolean }) {
   return (
     <View style={[styles.holding, !first && { borderTopColor: colors.line, borderTopWidth: StyleSheet.hairlineWidth }]}>
@@ -186,7 +286,13 @@ function HoldingRow({ holding: h, base, colors, first }: { holding: Holding; bas
 
 const styles = StyleSheet.create({
   body: { padding: 20, gap: 16, paddingBottom: 40 },
+  titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   title: { fontSize: 34, fontWeight: "700", letterSpacing: -0.5 },
+  add: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  addText: { fontSize: 26, lineHeight: 30, fontWeight: "500" },
+  tx: { paddingVertical: 11, gap: 3 },
+  txName: { flex: 1, fontSize: 16, fontWeight: "500" },
+  txAmount: { fontSize: 16, fontVariant: ["tabular-nums"] },
   chips: { gap: 8 },
   chip: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 7 },
   chipText: { fontSize: 15, fontWeight: "500" },
