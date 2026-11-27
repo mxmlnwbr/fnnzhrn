@@ -21,6 +21,7 @@ import { authClient } from "@/lib/auth-client";
 import { useDiscreet } from "@/lib/discreet";
 import { formatMoney } from "@/lib/format";
 import { useColors, type Palette } from "@/lib/theme";
+import { useAndroidTop } from "@/lib/insets";
 
 type View_ = "overview" | "month";
 type Period = "month" | "year";
@@ -44,6 +45,7 @@ const newId = () => `${Date.now().toString(36)}-${Math.random().toString(36).sli
  */
 export default function Finanzen() {
   const colors = useColors();
+  const top = useAndroidTop();
   const [budget, setBudget] = useState<Budget | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -103,7 +105,7 @@ export default function Finanzen() {
       style={{ backgroundColor: colors.bg }}
       contentInsetAdjustmentBehavior="automatic"
       keyboardShouldPersistTaps="handled"
-      contentContainerStyle={styles.body}
+      contentContainerStyle={[styles.body, top]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.muted} />}>
       <View style={styles.titleRow}>
         <Text style={[styles.title, { color: colors.fg }]}>Finanzen</Text>

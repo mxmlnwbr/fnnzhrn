@@ -5,19 +5,21 @@ import { Button, Card } from "@/components/ui";
 import { authClient } from "@/lib/auth-client";
 import { API_URL } from "@/lib/config";
 import { useColors } from "@/lib/theme";
+import { useAndroidTop } from "@/lib/insets";
 
 export default function Konto() {
   const colors = useColors();
+  const top = useAndroidTop();
   const { data: session } = authClient.useSession();
   return (
-    <ScrollView style={{ backgroundColor: colors.bg }} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.body}>
+    <ScrollView style={{ backgroundColor: colors.bg }} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={[styles.body, top]}>
       <Text style={[styles.title, { color: colors.fg }]}>Konto</Text>
       <Card>
         <Text style={[styles.label, { color: colors.muted }]}>Angemeldet als</Text>
         <Text style={[styles.value, { color: colors.fg }]}>{session?.user.email}</Text>
       </Card>
       <Text style={[styles.note, { color: colors.muted }]}>
-        Transaktionen erfassen, Bankexporte importieren, den Finanzplan ändern und die übrigen Cockpit-Kacheln gibt es vorerst auf der Website.
+        Bankexporte importieren, den Finanzplan ändern und die übrigen Cockpit-Kacheln gibt es vorerst auf der Website.
       </Text>
       <View style={styles.actions}>
         <Button title="fnnzhrn.ch öffnen" variant="secondary" onPress={() => WebBrowser.openBrowserAsync(`${API_URL}/depot`)} />

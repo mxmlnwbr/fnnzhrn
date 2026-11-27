@@ -13,6 +13,7 @@ import { loadStore as fetchStore, removeTransaction, swissDate } from "@/lib/dep
 import { useDiscreet } from "@/lib/discreet";
 import { formatMoney, formatPercent, formatQuantity, formatSignedMoney } from "@/lib/format";
 import { signColor, useColors, type Palette } from "@/lib/theme";
+import { useAndroidTop } from "@/lib/insets";
 
 /** How many of the latest transactions the Depot lists. */
 const RECENT = 10;
@@ -26,6 +27,7 @@ const TYPE_LABEL: Record<Transaction["type"], string> = { buy: "Kauf", sell: "Ve
  */
 export default function DepotScreen() {
   const colors = useColors();
+  const top = useAndroidTop();
   const discreet = useDiscreet();
   const [store, setStore] = useState<DepotStore | null>(null);
   const [active, setActive] = useState(ALL_DEPOTS_ID);
@@ -114,7 +116,7 @@ export default function DepotScreen() {
     <ScrollView
       style={{ backgroundColor: colors.bg }}
       contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={styles.body}
+      contentContainerStyle={[styles.body, top]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.muted} />}>
       <View style={styles.titleRow}>
         <Text style={[styles.title, { color: colors.fg }]}>Depot</Text>
