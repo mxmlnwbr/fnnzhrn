@@ -87,7 +87,9 @@ export function DiscreetToggle() {
         styles.round,
         { backgroundColor: discreet ? colors.accentSoft : colors.card, opacity: pressed ? 0.6 : 1 },
       ]}>
-      <SymbolView name={discreet ? "eye.slash" : "eye"} size={19} tintColor={discreet ? colors.accent : colors.muted} />
+      <SymbolView
+        name={discreet ? { ios: "eye.slash", android: "visibility_off" } : { ios: "eye", android: "visibility" }}
+        size={19} tintColor={discreet ? colors.accent : colors.muted} />
     </Pressable>
   );
 }

@@ -1,5 +1,3 @@
-import { DatePicker, Host } from "@expo/ui/swift-ui";
-import { datePickerStyle, labelsHidden } from "@expo/ui/swift-ui/modifiers";
 import { parseAmount } from "@core/budget";
 import { BASE_CURRENCIES } from "@core/currency";
 import { ALL_DEPOTS_ID } from "@core/sync";
@@ -19,6 +17,7 @@ import {
   type ViewStyle,
 } from "react-native";
 
+import { DateField } from "@/components/DateField";
 import { Button, Card, Segmented } from "@/components/ui";
 import { ApiError, getJson } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
@@ -219,14 +218,7 @@ export default function TransactionScreen() {
 
           <View style={styles.dateRow}>
             <Text style={[styles.label, { color: colors.muted }]}>Datum</Text>
-            <Host matchContents>
-              <DatePicker
-                selection={date}
-                range={{ end: new Date() }}
-                onDateChange={setDate}
-                modifiers={[datePickerStyle("compact"), labelsHidden()]}
-              />
-            </Host>
+            <DateField value={date} onChange={setDate} maximumDate={new Date()} />
           </View>
 
           <View style={styles.row}>
