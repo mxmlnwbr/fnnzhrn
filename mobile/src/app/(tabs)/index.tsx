@@ -6,10 +6,11 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { Card } from "@/components/ui";
+import { Card, DiscreetToggle } from "@/components/ui";
 import { ApiError, getJson } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { loadStore as fetchStore, removeTransaction, swissDate } from "@/lib/depot";
+import { useDiscreet } from "@/lib/discreet";
 import { formatMoney, formatPercent, formatQuantity, formatSignedMoney } from "@/lib/format";
 import { signColor, useColors, type Palette } from "@/lib/theme";
 
@@ -25,6 +26,7 @@ const TYPE_LABEL: Record<Transaction["type"], string> = { buy: "Kauf", sell: "Ve
  */
 export default function DepotScreen() {
   const colors = useColors();
+  const discreet = useDiscreet();
   const [store, setStore] = useState<DepotStore | null>(null);
   const [active, setActive] = useState(ALL_DEPOTS_ID);
   const [market, setMarket] = useState<{ key: string; data: MarketData } | null>(null);
@@ -117,14 +119,17 @@ export default function DepotScreen() {
       <View style={styles.titleRow}>
         <Text style={[styles.title, { color: colors.fg }]}>Depot</Text>
         {store && (
-          <Pressable
-            onPress={() => router.push({ pathname: "/transaktion", params: { depot: depot?.id ?? active } })}
-            accessibilityRole="button"
-            accessibilityLabel="Transaktion erfassen"
-            hitSlop={8}
-            style={({ pressed }) => [styles.add, { backgroundColor: colors.accentSoft, opacity: pressed ? 0.6 : 1 }]}>
-            <Text style={[styles.addText, { color: colors.accent }]}>+</Text>
-          </Pressable>
+          <View style={styles.actions}>
+            <DiscreetToggle />
+            <Pressable
+              onPress={() => router.push({ pathname: "/transaktion", params: { depot: depot?.id ?? active } })}
+              accessibilityRole="button"
+              accessibilityLabel="Transaktion erfassen"
+              hitSlop={8}
+              style={({ pressed }) => [styles.add, { backgroundColor: colors.accentSoft, opacity: pressed ? 0.6 : 1 }]}>
+              <Text style={[styles.addText, { color: colors.accent }]}>+</Text>
+            </Pressable>
+          </View>
         )}
       </View>
 
@@ -159,18 +164,38 @@ export default function DepotScreen() {
         !error && <ActivityIndicator style={styles.loading} color={colors.muted} />
       ) : (
         <>
-          <Card>
-            <Text style={[styles.label, { color: colors.muted }]}>Vermögen</Text>
-            <Text style={[styles.big, { color: colors.fg }]}>{formatMoney(summary.netWorth, base)}</Text>
-            <View style={styles.row}>
-              <Stat label="Heute" colors={colors} value={summary.dayChange} text={`${formatSignedMoney(summary.dayChange, base)} · ${formatPercent(summary.dayChangePercent)}`} />
-              <Stat label="Gesamtrendite" colors={colors} value={summary.totalReturn} text={formatPercent(summary.totalReturnPercent)} />
-            </View>
-            <View style={styles.row}>
-              <Stat label="Aktien" colors={colors} text={formatMoney(summary.marketValue, base)} />
-              <Stat label="Bargeld" colors={colors} text={formatMoney(summary.cash, base)} />
-            </View>
-          </Card>
+          {discreet ? (
+            <Card>
+              <Text style={[styles.label, { color: colors.muted }]}>Gesamtrendite</Text>
+              <Text style={[styles.big, { color: signColor(colors, summary.totalReturn) }]}>{formatPercent(summary.totalReturnPercent)}</Text>
+              <View style={styles.row}>
+                <Stat label="Heute" colors={colors} value={summary.dayChange} text={formatPercent(summary.dayChangePercent)} />
+                <Stat
+                  label="Gewinn/Verlust"
+                  colors={colors}
+                  value={summary.unrealizedPL}
+                  text={summary.costBasis ? formatPercent(summary.unrealizedPL / summary.costBasis) : "–"}
+                />
+              </View>
+              <View style={styles.row}>
+                <Stat label="Aktien" colors={colors} text={share(summary.marketValue, summary.netWorth)} />
+                <Stat label="Bargeld" colors={colors} text={share(summary.cash, summary.netWorth)} />
+              </View>
+            </Card>
+          ) : (
+            <Card>
+              <Text style={[styles.label, { color: colors.muted }]}>Vermögen</Text>
+              <Text style={[styles.big, { color: colors.fg }]}>{formatMoney(summary.netWorth, base)}</Text>
+              <View style={styles.row}>
+                <Stat label="Heute" colors={colors} value={summary.dayChange} text={`${formatSignedMoney(summary.dayChange, base)} · ${formatPercent(summary.dayChangePercent)}`} />
+                <Stat label="Gesamtrendite" colors={colors} value={summary.totalReturn} text={formatPercent(summary.totalReturnPercent)} />
+              </View>
+              <View style={styles.row}>
+                <Stat label="Aktien" colors={colors} text={formatMoney(summary.marketValue, base)} />
+                <Stat label="Bargeld" colors={colors} text={formatMoney(summary.cash, base)} />
+              </View>
+            </Card>
+          )}
 
           <Text style={[styles.section, { color: colors.fg }]}>Positionen</Text>
           {summary.holdings.length === 0 ? (
@@ -178,7 +203,7 @@ export default function DepotScreen() {
           ) : (
             <Card style={styles.list}>
               {summary.holdings.map((h, i) => (
-                <HoldingRow key={h.symbol} holding={h} base={base} colors={colors} first={i === 0} />
+                <HoldingRow key={h.symbol} holding={h} base={base} colors={colors} first={i === 0} discreet={discreet} />
               ))}
             </Card>
           )}
@@ -187,7 +212,7 @@ export default function DepotScreen() {
               <Text style={[styles.section, { color: colors.fg }]}>Letzte Transaktionen</Text>
               <Card style={styles.list}>
                 {recent.map((t, i) => (
-                  <TransactionRow key={t.id} transaction={t} colors={colors} first={i === 0} onLongPress={() => remove(t)} />
+                  <TransactionRow key={t.id} transaction={t} colors={colors} first={i === 0} discreet={discreet} onLongPress={() => remove(t)} />
                 ))}
               </Card>
               <Text style={[styles.footnote, { color: colors.muted }]}>Lange drücken zum Löschen</Text>
@@ -205,6 +230,9 @@ export default function DepotScreen() {
 }
 
 /** The chosen depot; "all" adds them up, and with a single depot there's nothing to add. */
+/** `part` as a share of `whole`, without a sign. */
+const share = (part: number, whole: number) => (whole ? formatPercent(part / whole).replace("+", "") : "–");
+
 function pickDepot(store: DepotStore, active: string): Depot {
   if (store.depots.length === 1) return store.depots[0];
   if (active === ALL_DEPOTS_ID) return combineDepots(store);
@@ -224,11 +252,13 @@ function TransactionRow({
   transaction: t,
   colors,
   first,
+  discreet,
   onLongPress,
 }: {
   transaction: Transaction;
   colors: Palette;
   first: boolean;
+  discreet: boolean;
   onLongPress: () => void;
 }) {
   const fee = t.type === "fee";
@@ -249,37 +279,52 @@ function TransactionRow({
           {TYPE_LABEL[t.type]}
           {fee ? "" : ` · ${t.symbol}`}
         </Text>
-        <Text style={[styles.txAmount, { color: t.type === "sell" || t.type === "dividend" ? colors.up : colors.fg }]}>
-          {fee ? `${t.currency ?? ""} ${amount}`.trim() : amount}
-        </Text>
+        {!discreet && (
+          <Text style={[styles.txAmount, { color: t.type === "sell" || t.type === "dividend" ? colors.up : colors.fg }]}>
+            {fee ? `${t.currency ?? ""} ${amount}`.trim() : amount}
+          </Text>
+        )}
       </View>
       <Text style={[styles.meta, { color: colors.muted }]}>
         {swissDate(t.date)}
-        {t.type === "buy" || t.type === "sell" ? ` · ${formatQuantity(t.quantity)} × ${t.price}` : ""}
+        {!discreet && (t.type === "buy" || t.type === "sell") ? ` · ${formatQuantity(t.quantity)} × ${t.price}` : ""}
       </Text>
     </Pressable>
   );
 }
 
-function HoldingRow({ holding: h, base, colors, first }: { holding: Holding; base: string; colors: Palette; first: boolean }) {
+function HoldingRow({
+  holding: h,
+  base,
+  colors,
+  first,
+  discreet,
+}: {
+  holding: Holding;
+  base: string;
+  colors: Palette;
+  first: boolean;
+  discreet: boolean;
+}) {
+  const weight = formatPercent(h.weight).replace("+", "");
   return (
     <View style={[styles.holding, !first && { borderTopColor: colors.line, borderTopWidth: StyleSheet.hairlineWidth }]}>
       <View style={styles.holdingMain}>
         <Text style={[styles.holdingName, { color: colors.fg }]} numberOfLines={1}>
           {h.name}
         </Text>
-        <Text style={[styles.holdingValue, { color: colors.fg }]}>{formatMoney(h.marketValue, base)}</Text>
+        <Text style={[styles.holdingValue, { color: colors.fg }]}>{discreet ? weight : formatMoney(h.marketValue, base)}</Text>
       </View>
       <View style={styles.holdingMain}>
         <Text style={[styles.meta, { color: colors.muted }]} numberOfLines={1}>
-          {formatQuantity(h.quantity)} × {h.symbol} · Einstand {formatMoney(h.costBasis, base)}
+          {discreet ? h.symbol : `${formatQuantity(h.quantity)} × ${h.symbol} · Einstand ${formatMoney(h.costBasis, base)}`}
         </Text>
         <Text style={[styles.meta, { color: signColor(colors, h.unrealizedPL) }]}>{formatPercent(h.unrealizedPLPercent)}</Text>
       </View>
       <View style={[styles.bar, { backgroundColor: colors.line }]}>
         <View style={[styles.barFill, { backgroundColor: colors.accent, width: `${Math.max(h.weight * 100, 1)}%` }]} />
       </View>
-      <Text style={[styles.meta, { color: colors.muted }]}>Anteil {formatPercent(h.weight).replace("+", "")}</Text>
+      {!discreet && <Text style={[styles.meta, { color: colors.muted }]}>Anteil {weight}</Text>}
     </View>
   );
 }
@@ -287,6 +332,7 @@ function HoldingRow({ holding: h, base, colors, first }: { holding: Holding; bas
 const styles = StyleSheet.create({
   body: { padding: 20, gap: 16, paddingBottom: 40 },
   titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  actions: { flexDirection: "row", alignItems: "center", gap: 10 },
   title: { fontSize: 34, fontWeight: "700", letterSpacing: -0.5 },
   add: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   addText: { fontSize: 26, lineHeight: 30, fontWeight: "500" },

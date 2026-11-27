@@ -15,9 +15,10 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, type TextInputInstance, View } from "react-native";
 
-import { Button, Card, Segmented } from "@/components/ui";
+import { Button, Card, DiscreetToggle, Segmented } from "@/components/ui";
 import { ApiError, getJson, putJson } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
+import { useDiscreet } from "@/lib/discreet";
 import { formatMoney } from "@/lib/format";
 import { useColors, type Palette } from "@/lib/theme";
 
@@ -106,7 +107,10 @@ export default function Finanzen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.muted} />}>
       <View style={styles.titleRow}>
         <Text style={[styles.title, { color: colors.fg }]}>Finanzen</Text>
-        <SaveStatus state={save} colors={colors} onRetry={() => latest.current && upload(latest.current)} />
+        <View style={styles.actions}>
+          <SaveStatus state={save} colors={colors} onRetry={() => latest.current && upload(latest.current)} />
+          <DiscreetToggle />
+        </View>
       </View>
       <Segmented
         options={[
@@ -173,7 +177,9 @@ function MonthView({
     : [...budget.months.map((m) => m.month), selected].sort();
   const index = keys.indexOf(selected);
   const s = summarizeMonth(month);
-  const money = (v: number) => formatMoney(v, budget.currency);
+  const discreet = useDiscreet();
+  // Discreet: amounts as a share of the month's income instead.
+  const money = (v: number) => (discreet ? (s.income > 0 ? percent(v / s.income) : "–") : formatMoney(v, budget.currency));
   const categoryName = (id?: string) => budget.categories.find((c) => c.id === id)?.name || "Ohne Kategorie";
 
   const remove = (e: MonthExpense) =>
@@ -321,9 +327,11 @@ function AddExpense({ categories, colors, onAdd }: { categories: Category[]; col
 
 function PlanView({ budget, period, onPeriod, colors }: { budget: Budget; period: Period; onPeriod: (p: Period) => void; colors: Palette }) {
   const summary = summarizeBudget(budget);
-  const money = (v: number) => formatMoney(v, budget.currency);
   const income = summary.income[period];
   const share = (v: number) => (income > 0 ? percent(v / income) : "–");
+  // Discreet: amounts as a share of the income instead.
+  const discreet = useDiscreet();
+  const money = (v: number) => (discreet ? share(v) : formatMoney(v, budget.currency));
   const parts = [
     { label: "Fixkosten", value: summary.fixed[period], color: colors.fixed },
     { label: "Flexibel", value: summary.variable[period], color: colors.variable },
@@ -404,6 +412,7 @@ function SectionList({
   money: (v: number) => string;
   colors: Palette;
 }) {
+  const discreet = useDiscreet();
   if (items.length === 0) return null;
   const total = items.reduce((s, i) => s + amounts(i)[period], 0);
   return (
@@ -423,7 +432,13 @@ function SectionList({
                 </Text>
                 {item.interval !== "month" && (
                   <Text style={[styles.small, { color: colors.muted }]}>
-                    {item.interval === "year" ? `jährlich ${money(item.amount)}` : `13× ${money(item.amount)}`}
+                    {discreet
+                      ? item.interval === "year"
+                        ? "jährlich"
+                        : "13× pro Jahr"
+                      : item.interval === "year"
+                        ? `jährlich ${money(item.amount)}`
+                        : `13× ${money(item.amount)}`}
                   </Text>
                 )}
               </View>
@@ -485,7 +500,8 @@ function NavButton({ label, hint, disabled, onPress, colors }: { label: string; 
 
 const styles = StyleSheet.create({
   body: { padding: 20, gap: 14, paddingBottom: 40 },
-  titleRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
+  titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  actions: { flexDirection: "row", alignItems: "center", gap: 10 },
   title: { fontSize: 34, fontWeight: "700", letterSpacing: -0.5 },
   status: { fontSize: 13 },
   loading: { marginTop: 40 },
