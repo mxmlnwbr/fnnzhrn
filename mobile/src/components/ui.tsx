@@ -1,6 +1,8 @@
+import { SymbolView } from "expo-symbols";
 import type { ReactNode } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 
+import { setDiscreet, useDiscreet } from "@/lib/discreet";
 import { useColors } from "@/lib/theme";
 
 export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
@@ -70,7 +72,28 @@ export function Segmented<T extends string>({
   );
 }
 
+/** The eye that switches discreet mode on and off: amounts hidden, only percentages shown. */
+export function DiscreetToggle() {
+  const colors = useColors();
+  const discreet = useDiscreet();
+  return (
+    <Pressable
+      onPress={() => setDiscreet(!discreet)}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: discreet }}
+      accessibilityLabel={discreet ? "Beträge zeigen" : "Beträge verbergen"}
+      hitSlop={8}
+      style={({ pressed }) => [
+        styles.round,
+        { backgroundColor: discreet ? colors.accentSoft : colors.card, opacity: pressed ? 0.6 : 1 },
+      ]}>
+      <SymbolView name={discreet ? "eye.slash" : "eye"} size={19} tintColor={discreet ? colors.accent : colors.muted} />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
+  round: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   segmented: { flexDirection: "row", borderRadius: 10, borderWidth: StyleSheet.hairlineWidth, padding: 2 },
   segment: { flex: 1, alignItems: "center", paddingVertical: 7, borderRadius: 8 },
   segmentText: { fontSize: 14, fontWeight: "600" },
