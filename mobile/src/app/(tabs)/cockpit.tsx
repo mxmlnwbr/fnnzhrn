@@ -33,6 +33,7 @@ import {
 } from "@/lib/cockpit";
 import { API_URL } from "@/lib/config";
 import { useColors, type Palette } from "@/lib/theme";
+import { useAndroidTop } from "@/lib/insets";
 
 /** The symbols and names held in any depot, for the news and for marking own titles. */
 interface Mine {
@@ -48,6 +49,7 @@ interface Mine {
  */
 export default function Cockpit() {
   const colors = useColors();
+  const top = useAndroidTop();
   const [reload, setReload] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const mine = useLoad(loadMine, "mine", reload);
@@ -65,7 +67,7 @@ export default function Cockpit() {
     <ScrollView
       style={{ backgroundColor: colors.bg }}
       contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={styles.body}
+      contentContainerStyle={[styles.body, top]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.muted} />}>
       <Text style={[styles.title, { color: colors.fg }]}>Cockpit</Text>
 

@@ -1,5 +1,3 @@
-import { DatePicker, Host } from "@expo/ui/swift-ui";
-import { datePickerStyle, labelsHidden } from "@expo/ui/swift-ui/modifiers";
 import { parseAmount } from "@core/budget";
 import { BASE_CURRENCIES } from "@core/currency";
 import { ALL_DEPOTS_ID } from "@core/sync";
@@ -19,11 +17,13 @@ import {
   type ViewStyle,
 } from "react-native";
 
+import { DateField } from "@/components/DateField";
 import { Button, Card, Segmented } from "@/components/ui";
 import { ApiError, getJson } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { addTransaction, isoDate, loadStore, newId } from "@/lib/depot";
 import { useColors, type Palette } from "@/lib/theme";
+import { useAndroidTop } from "@/lib/insets";
 
 interface SearchResult {
   symbol: string;
@@ -52,6 +52,7 @@ const SUBMIT: Record<TransactionType, string> = {
  */
 export default function TransactionScreen() {
   const colors = useColors();
+  const top = useAndroidTop();
   const params = useLocalSearchParams<{ depot?: string }>();
   const [store, setStore] = useState<DepotStore | null>(null);
   const [depotId, setDepotId] = useState(params.depot && params.depot !== ALL_DEPOTS_ID ? params.depot : "");
@@ -140,7 +141,7 @@ export default function TransactionScreen() {
       style={{ backgroundColor: colors.bg }}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="interactive"
-      contentContainerStyle={styles.body}>
+      contentContainerStyle={[styles.body, top]}>
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.fg }]}>Transaktion erfassen</Text>
         <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={10}>
@@ -219,14 +220,7 @@ export default function TransactionScreen() {
 
           <View style={styles.dateRow}>
             <Text style={[styles.label, { color: colors.muted }]}>Datum</Text>
-            <Host matchContents>
-              <DatePicker
-                selection={date}
-                range={{ end: new Date() }}
-                onDateChange={setDate}
-                modifiers={[datePickerStyle("compact"), labelsHidden()]}
-              />
-            </Host>
+            <DateField value={date} onChange={setDate} maximumDate={new Date()} />
           </View>
 
           <View style={styles.row}>

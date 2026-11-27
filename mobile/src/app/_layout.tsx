@@ -1,5 +1,6 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import { useColorScheme } from "react-native";
 
@@ -25,6 +26,8 @@ export default function RootLayout() {
   if (signedIn === null) return null;
   return (
     <ThemeProvider value={scheme === "dark" ? DarkTheme : DefaultTheme}>
+      {/* Dark icons on light screens and the reverse; Android otherwise keeps them white on white. */}
+      <StatusBar style="auto" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Protected guard={signedIn}>
           <Stack.Screen name="(tabs)" />
